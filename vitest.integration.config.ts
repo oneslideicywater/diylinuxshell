@@ -1,33 +1,28 @@
 import { defineConfig } from 'vitest/config'
-import vue from '@vitejs/plugin-vue'
 import path from 'path'
 
 /**
- * Vitest集成测试配置
+ * Vitest 集成测试配置
+ * 用于测试 IPC 通信和模块间交互
  */
 export default defineConfig({
-  plugins: [vue()],
   test: {
     globals: true,
     environment: 'node',
-    include: ['src/main/**/*.integration.{test,spec}.{js,ts}'],
-    exclude: ['node_modules', 'out', 'e2e/**/*'],
-    testTimeout: 30000,
-    hookTimeout: 30000,
+    include: ['tests/integration/**/*.integration.test.ts'],
+    exclude: ['node_modules', 'out', 'e2e/**/*', 'src/**/*'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       exclude: [
         'node_modules/',
-        'src/renderer/',
-        'src/preload/',
         '**/*.d.ts',
         '**/*.test.ts',
-        '**/*.spec.ts',
-        '**/*.integration.test.ts',
-        '**/*.integration.spec.ts'
+        '**/*.spec.ts'
       ]
-    }
+    },
+    testTimeout: 10000,
+    hookTimeout: 10000
   },
   resolve: {
     alias: {

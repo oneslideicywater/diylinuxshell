@@ -1,5 +1,6 @@
 /**
  * 会话类型定义
+ * 仅存储会话配置信息，不包含连接状态
  */
 export interface Session {
   /** 会话ID */
@@ -20,8 +21,6 @@ export interface Session {
   keyPath?: string
   /** 密钥密码 */
   keyPassphrase?: string
-  /** 会话状态 */
-  status: 'connected' | 'connecting' | 'disconnected'
   /** 所属分组ID */
   groupId?: string
   /** 创建时间 */
@@ -34,12 +33,14 @@ export interface Session {
  * 会话分组类型定义
  */
 export interface SessionGroup {
-  /** 分组ID */
+  /** 分组 ID */
   id: string
   /** 分组名称 */
   name: string
   /** 分组图标 */
   icon?: string
+  /** 展开/折叠状态 */
+  expanded?: boolean
   /** 排序顺序 */
   order: number
   /** 创建时间 */
@@ -50,6 +51,7 @@ export interface SessionGroup {
 
 /**
  * 标签页类型定义
+ * 包含连接状态信息
  */
 export interface Tab {
   /** 标签页ID */
@@ -58,6 +60,8 @@ export interface Tab {
   title: string
   /** 关联的会话ID */
   sessionId: string
+  /** 连接状态 */
+  status: ConnectionStatus
   /** 终端进程ID */
   terminalId?: string
 }

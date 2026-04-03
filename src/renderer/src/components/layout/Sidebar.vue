@@ -11,6 +11,7 @@
       <div class="section-header">
         <span class="section-title">会话列表</span>
         <button class="add-btn" @click="handleAddSession" title="新建会话">
+          <!-- + 图标 -->
           <svg width="14" height="14" viewBox="0 0 14 14">
             <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" />
           </svg>
@@ -37,6 +38,8 @@
     <!-- 底部设置按钮 -->
     <div class="sidebar-footer">
       <button class="settings-btn" @click="handleOpenSettings" title="设置">
+
+        <!-- 齿轮图标 -->
         <svg width="16" height="16" viewBox="0 0 16 16">
           <path
             d="M8 10a2 2 0 100-4 2 2 0 000 4z"

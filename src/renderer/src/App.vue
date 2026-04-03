@@ -1,6 +1,11 @@
 <template>
   <div class="app-container">
-    <router-view />
+    <!-- 修复 BUG-008: 使用 keep-alive 保持路由组件状态，防止标签页消失 -->
+    <router-view v-slot="{ Component }">
+      <keep-alive>
+        <component :is="Component" />
+      </keep-alive>
+    </router-view>
   </div>
 </template>
 

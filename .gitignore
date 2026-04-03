@@ -37,3 +37,6 @@ playwright/.cache/
 # Temporary
 *.tmp
 *.temp
+
+# Application data (config, sessions, etc.)
+data/

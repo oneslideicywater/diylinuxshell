@@ -13,7 +13,8 @@
       </div>
       <div class="header-center">
         <!-- 标签页区域 -->
-        <TerminalTabs />
+        <!-- 修复 BUG-009: 监听 new-tab 事件，触发新建会话流程 -->
+        <TerminalTabs @new-tab="emit('add-session')" />
       </div>
       <div class="header-right">
         <!-- 窗口控制按钮 -->
@@ -52,9 +53,15 @@
       <main class="app-main">
         <slot>
           <!-- 默认内容：终端区域 -->
+          <!-- 为每个标签页创建独立的终端实例，切换时保持各自的状态和历史记录 -->
           <div class="terminal-area">
-            <XTerminal v-if="activeTab" :tab="activeTab" />
-            <div v-else class="empty-state">
+            <template v-for="tab in tabs" :key="tab.id">
+              <XTerminal 
+                v-show="tab.id === activeTabId" 
+                :tab="tab" 
+              />
+            </template>
+            <div v-if="tabs.length === 0" class="empty-state">
               <p>请选择或创建一个会话</p>
             </div>
           </div>
@@ -81,6 +88,12 @@ const emit = defineEmits<{
   (e: 'edit-session', session: Session): void
   (e: 'open-settings'): void
 }>()
+
+// 所有标签页
+const tabs = computed(() => terminalStore.tabs)
+
+// 当前激活的标签页ID
+const activeTabId = computed(() => terminalStore.activeTabId)
 
 // 当前激活的标签页
 const activeTab = computed(() => terminalStore.activeTab)
@@ -172,7 +185,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   overflow: hidden;
-  -webkit-app-region: no-drag;
+  -webkit-app-region: drag;
 }
 
 .header-right {
@@ -236,6 +249,16 @@ onUnmounted(() => {
   flex: 1;
   display: flex;
   overflow: hidden;
+  position: relative;
+}
+
+/* 每个终端实例占满整个区域，通过 v-show 控制显示 */
+.terminal-area :deep(.x-terminal) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 /* 空状态 */

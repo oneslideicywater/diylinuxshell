@@ -42,6 +42,11 @@ import TerminalTab from './TerminalTab.vue'
 const terminalStore = useTerminalStore()
 const sessionStore = useSessionStore()
 
+// 定义事件
+const emit = defineEmits<{
+  (e: 'new-tab'): void
+}>()
+
 // 标签页列表
 const tabs = computed(() => terminalStore.tabs)
 
@@ -61,19 +66,19 @@ const handleSelectTab = (tabId: string) => {
 const handleCloseTab = async (tabId: string) => {
   const tab = terminalStore.getTabById(tabId)
   if (tab) {
-    // 断开会话连接
-    await window.api.session.disconnect(tab.sessionId)
-    sessionStore.updateSessionStatus(tab.sessionId, 'disconnected')
+    // 断开该标签页的连接
+    await window.api.session.disconnect(tabId)
   }
   terminalStore.closeTab(tabId)
 }
 
 /**
  * 新建标签页
+ * 修复 BUG-009: 点击+按钮触发新建会话流程
  */
 const handleNewTab = () => {
-  // TODO: 打开会话选择对话框
-  console.log('New tab')
+  // 触发新建会话事件，让父组件处理
+  emit('new-tab')
 }
 </script>
 

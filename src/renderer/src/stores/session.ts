@@ -1,13 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Session } from '@shared/types'
+import type { Session, SessionGroup } from '@shared/types'
 
 /**
  * 会话状态管理Store
+ * 管理会话配置信息和分组
  */
 export const useSessionStore = defineStore('session', () => {
   // 会话列表
   const sessions = ref<Session[]>([])
+
+  // 会话分组列表
+  const sessionGroups = ref<SessionGroup[]>([])
 
   // 当前激活的会话ID
   const activeSessionId = ref<string>('')
@@ -17,9 +21,9 @@ export const useSessionStore = defineStore('session', () => {
     return sessions.value.find(s => s.id === activeSessionId.value)
   })
 
-  // 计算属性：已连接的会话
-  const connectedSessions = computed(() => {
-    return sessions.value.filter(s => s.status === 'connected')
+  // 计算属性：未分组的会话
+  const ungroupedSessions = computed(() => {
+    return sessions.value.filter(s => !s.groupId)
   })
 
   /**
@@ -68,13 +72,6 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   /**
-   * 更新会话状态
-   */
-  function updateSessionStatus(id: string, status: Session['status']): void {
-    updateSession(id, { status })
-  }
-
-  /**
    * 清空所有会话
    */
   function clearSessions(): void {
@@ -82,17 +79,81 @@ export const useSessionStore = defineStore('session', () => {
     activeSessionId.value = ''
   }
 
+  /**
+   * 获取分组中的会话
+   */
+  function getGroupSessions(groupId: string): Session[] {
+    return sessions.value.filter(s => s.groupId === groupId)
+  }
+
+  /**
+   * 添加会话分组
+   */
+  function addSessionGroup(group: SessionGroup): void {
+    sessionGroups.value.push(group)
+  }
+
+  /**
+   * 移除会话分组
+   */
+  function removeSessionGroup(id: string): void {
+    const index = sessionGroups.value.findIndex(g => g.id === id)
+    if (index !== -1) {
+      sessionGroups.value.splice(index, 1)
+      // 将该分组下的会话移至未分组
+      sessions.value.forEach(s => {
+        if (s.groupId === id) {
+          s.groupId = undefined
+        }
+      })
+    }
+  }
+
+  /**
+   * 更新会话分组
+   */
+  function updateSessionGroup(id: string, updates: Partial<SessionGroup>): void {
+    const group = sessionGroups.value.find(g => g.id === id)
+    if (group) {
+      Object.assign(group, updates, { updatedAt: Date.now() })
+    }
+  }
+
+  /**
+   * 根据ID获取会话分组
+   */
+  function getSessionGroupById(id: string): SessionGroup | undefined {
+    return sessionGroups.value.find(g => g.id === id)
+  }
+
+  /**
+   * 清空所有会话分组
+   */
+  function clearSessionGroups(): void {
+    sessionGroups.value = []
+    // 将所有会话移至未分组
+    sessions.value.forEach(s => {
+      s.groupId = undefined
+    })
+  }
+
   return {
     sessions,
+    sessionGroups,
     activeSessionId,
     activeSession,
-    connectedSessions,
+    ungroupedSessions,
     addSession,
     removeSession,
     updateSession,
     setActiveSession,
     getSessionById,
-    updateSessionStatus,
-    clearSessions
+    clearSessions,
+    getGroupSessions,
+    addSessionGroup,
+    removeSessionGroup,
+    updateSessionGroup,
+    getSessionGroupById,
+    clearSessionGroups
   }
 })

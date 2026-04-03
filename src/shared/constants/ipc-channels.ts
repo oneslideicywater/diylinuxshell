@@ -27,7 +27,9 @@ export const IPC_CHANNELS = {
     /** 断开会话 */
     DISCONNECT: 'session:disconnect',
     /** 获取连接状态 */
-    GET_STATUS: 'session:get-status'
+    GET_STATUS: 'session:get-status',
+    /** 测试连接 */
+    TEST_CONNECTION: 'session:test-connection'
   },
 
   /**

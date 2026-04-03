@@ -4,7 +4,8 @@
  * @module ipc/index
  */
 
-import { registerSessionHandlers, registerSessionGroupHandlers } from './session'
+import { registerSessionHandlers } from './session'
+import { registerSessionGroupHandlers } from './session-group'
 import { registerTerminalHandlers } from './terminal'
 import { registerConfigHandlers } from './config'
 
@@ -26,6 +27,7 @@ export function registerAllHandlers(): void {
 }
 
 // 导出各个处理器，方便单独使用
-export { registerSessionHandlers, registerSessionGroupHandlers } from './session'
+export { registerSessionHandlers } from './session'
+export { registerSessionGroupHandlers } from './session-group'
 export { registerTerminalHandlers } from './terminal'
 export { registerConfigHandlers } from './config'

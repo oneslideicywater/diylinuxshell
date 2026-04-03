@@ -73,17 +73,21 @@ const api: CustomAPI = {
     delete: (id: string): Promise<boolean> => 
       ipcRenderer.invoke(IPC_CHANNELS.SESSION.DELETE, id),
     
-    // 连接会话
-    connect: (id: string): Promise<{ success: boolean; sessionId: string }> => 
-      ipcRenderer.invoke(IPC_CHANNELS.SESSION.CONNECT, id),
+    // 连接会话（为指定标签页创建独立连接）
+    connect: (tabId: string, sessionId: string): Promise<{ success: boolean; tabId: string }> => 
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION.CONNECT, tabId, sessionId),
     
-    // 断开会话
-    disconnect: (id: string): Promise<boolean> => 
-      ipcRenderer.invoke(IPC_CHANNELS.SESSION.DISCONNECT, id),
+    // 断开标签页连接
+    disconnect: (tabId: string): Promise<boolean> => 
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION.DISCONNECT, tabId),
     
-    // 获取连接状态
-    getStatus: (id: string): Promise<string | null> => 
-      ipcRenderer.invoke(IPC_CHANNELS.SESSION.GET_STATUS, id)
+    // 获取标签页连接状态
+    getStatus: (tabId: string): Promise<string | null> => 
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION.GET_STATUS, tabId),
+    
+    // 测试连接
+    testConnection: (sessionData: Partial<Session>): Promise<boolean> => 
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION.TEST_CONNECTION, sessionData)
   },
 
   /**
@@ -112,27 +116,27 @@ const api: CustomAPI = {
    */
   terminal: {
     // 写入数据
-    write: (sessionId: string, data: string): void => 
-      ipcRenderer.send(IPC_CHANNELS.TERMINAL.WRITE, sessionId, data),
+    write: (tabId: string, data: string): void => 
+      ipcRenderer.send(IPC_CHANNELS.TERMINAL.WRITE, tabId, data),
     
     // 调整大小
-    resize: (sessionId: string, size: TerminalSize): void => 
-      ipcRenderer.send(IPC_CHANNELS.TERMINAL.RESIZE, sessionId, size),
+    resize: (tabId: string, size: TerminalSize): void => 
+      ipcRenderer.send(IPC_CHANNELS.TERMINAL.RESIZE, tabId, size),
     
     // 监听数据事件
-    onData: (callback: (event: unknown, data: { sessionId: string; data: string }) => void): (() => void) => {
+    onData: (callback: (event: unknown, data: { tabId: string; data: string }) => void): (() => void) => {
       ipcRenderer.on(IPC_CHANNELS.TERMINAL.DATA, callback)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.TERMINAL.DATA, callback)
     },
     
     // 监听关闭事件
-    onClose: (callback: (event: unknown, data: { sessionId: string }) => void): (() => void) => {
+    onClose: (callback: (event: unknown, data: { tabId: string }) => void): (() => void) => {
       ipcRenderer.on(IPC_CHANNELS.TERMINAL.CLOSE, callback)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.TERMINAL.CLOSE, callback)
     },
     
     // 监听错误事件
-    onError: (callback: (event: unknown, data: { sessionId: string; error: string }) => void): (() => void) => {
+    onError: (callback: (event: unknown, data: { tabId: string; error: string }) => void): (() => void) => {
       ipcRenderer.on(IPC_CHANNELS.TERMINAL.ERROR, callback)
       return () => ipcRenderer.removeListener(IPC_CHANNELS.TERMINAL.ERROR, callback)
     }

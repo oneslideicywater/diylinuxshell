@@ -183,3 +183,26 @@ ipcMain.handle('window-is-maximized', event => {
   const win = BrowserWindow.fromWebContents(event.sender)
   return win?.isMaximized() ?? false
 })
+
+/**
+ * IPC处理：打开开发者工具
+ * 打开当前窗口的开发者工具，用于审查元素
+ * 如果提供了坐标参数，则定位到指定位置的元素
+ * @param event - IPC 事件对象
+ * @param data - 可选的坐标数据 { x: number, y: number }
+ */
+ipcMain.on('open-devtools', (event, data?: { x: number; y: number }) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (win) {
+    // 打开开发者工具
+    win.webContents.openDevTools()
+    
+    // 如果提供了坐标，则检查指定位置的元素
+    if (data && typeof data.x === 'number' && typeof data.y === 'number') {
+      // 延迟一点时间，等待开发者工具打开
+      setTimeout(() => {
+        win.webContents.inspectElement(data.x, data.y)
+      }, 100)
+    }
+  }
+})

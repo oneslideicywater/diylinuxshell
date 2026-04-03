@@ -10,10 +10,42 @@ export async function startApp(): Promise<{ app: ElectronApplication; page: Page
     env: {
       ...process.env,
       NODE_ENV: 'test'
+    },
+    // 捕获主进程的标准输出和错误输出
+    stdio: 'pipe'
+  })
+
+  // 监听主进程标准输出
+  if (electronApp.process().stdout) {
+    electronApp.process().stdout?.on('data', (data) => {
+      console.log('[Main stdout]', data.toString())
+    })
+  }
+
+  // 监听主进程错误输出
+  if (electronApp.process().stderr) {
+    electronApp.process().stderr?.on('data', (data) => {
+      console.error('[Main stderr]', data.toString())
+    })
+  }
+
+  const page = await electronApp.firstWindow()
+
+  // 监听渲染进程日志
+  page.on('console', (msg) => {
+    const type = msg.type()
+    const text = msg.text()
+    if (type === 'error') {
+      console.error('[Renderer error]', text)
+    } else {
+      console.log('[Renderer]', type, text)
     }
   })
 
-  const page = await electronApp.firstWindow()
+  // 监听页面错误
+  page.on('pageerror', (error) => {
+    console.error('[Renderer pageerror]', error.message)
+  })
 
   // 等待应用加载完成
   await page.waitForLoadState('domcontentloaded')

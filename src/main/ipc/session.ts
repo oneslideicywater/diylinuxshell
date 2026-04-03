@@ -72,73 +72,101 @@ export function registerSessionHandlers(): void {
    * 删除会话
    */
   ipcMain.handle(IPC_CHANNELS.SESSION.DELETE, async (_event, id: string) => {
-    // 先断开连接
-    if (SSHManager.hasConnection(id)) {
-      await SSHManager.disconnect(id)
-    }
+    // 断开所有使用该会话ID的连接
+    await SSHManager.disconnectBySessionId(id)
     StoreService.deleteSession(id)
     return true
   })
 
   /**
-   * 连接会话
+   * 连接会话（为指定标签页创建独立连接）
    */
-  ipcMain.handle(IPC_CHANNELS.SESSION.CONNECT, async (event, id: string) => {
-    const session = StoreService.getSessionById(id)
+  ipcMain.handle(IPC_CHANNELS.SESSION.CONNECT, async (event, tabId: string, sessionId: string) => {
+    const session = StoreService.getSessionById(sessionId)
     if (!session) {
       throw new Error('Session not found')
     }
 
     try {
-      // 更新状态为连接中
-      StoreService.updateSession(id, { status: 'connecting' })
-
-      // 建立SSH连接
-      await SSHManager.connect(session)
-
-      // 更新状态为已连接
-      StoreService.updateSession(id, { status: 'connected' })
+      // 建立SSH连接（使用tabId作为连接标识）
+      await SSHManager.connect(tabId, session)
 
       // 注册数据监听器
       const win = BrowserWindow.fromWebContents(event.sender)
       if (win) {
-        SSHManager.onData(id, (data: string) => {
-          win.webContents.send(IPC_CHANNELS.TERMINAL.DATA, { sessionId: id, data })
+        SSHManager.onData(tabId, (data: string) => {
+          win.webContents.send(IPC_CHANNELS.TERMINAL.DATA, { tabId, data })
         })
 
-        SSHManager.onClose(id, () => {
-          StoreService.updateSession(id, { status: 'disconnected' })
-          win.webContents.send(IPC_CHANNELS.TERMINAL.CLOSE, { sessionId: id })
+        SSHManager.onClose(tabId, () => {
+          win.webContents.send(IPC_CHANNELS.TERMINAL.CLOSE, { tabId })
         })
 
-        SSHManager.onError(id, (error: Error) => {
-          StoreService.updateSession(id, { status: 'disconnected' })
-          win.webContents.send(IPC_CHANNELS.TERMINAL.ERROR, { sessionId: id, error: error.message })
+        SSHManager.onError(tabId, (error: Error) => {
+          win.webContents.send(IPC_CHANNELS.TERMINAL.ERROR, { tabId, error: error.message })
         })
       }
 
-      return { success: true, sessionId: id }
+      return { success: true, tabId }
     } catch (error) {
-      // 更新状态为断开
-      StoreService.updateSession(id, { status: 'disconnected' })
       throw error
     }
   })
 
   /**
-   * 断开会话连接
+   * 断开标签页连接
    */
-  ipcMain.handle(IPC_CHANNELS.SESSION.DISCONNECT, async (_event, id: string) => {
-    await SSHManager.disconnect(id)
-    StoreService.updateSession(id, { status: 'disconnected' })
+  ipcMain.handle(IPC_CHANNELS.SESSION.DISCONNECT, async (_event, tabId: string) => {
+    await SSHManager.disconnect(tabId)
     return true
   })
 
   /**
-   * 获取会话连接状态
+   * 获取标签页连接状态
    */
-  ipcMain.handle(IPC_CHANNELS.SESSION.GET_STATUS, (_event, id: string) => {
-    return SSHManager.getStatus(id)
+  ipcMain.handle(IPC_CHANNELS.SESSION.GET_STATUS, (_event, tabId: string) => {
+    return SSHManager.getStatus(tabId)
+  })
+
+  /**
+   * 测试连接
+   */
+  ipcMain.handle(IPC_CHANNELS.SESSION.TEST_CONNECTION, async (_event, sessionData: Partial<Session>) => {
+    try {
+      // 验证必填字段
+      if (!sessionData.host || !sessionData.username) {
+        throw new Error('缺少必填字段：主机地址和用户名')
+      }
+
+      // 创建一个临时会话用于测试
+      const testSession: Session = {
+        id: 'test-' + Date.now(),
+        name: sessionData.name || 'Test Connection',
+        host: sessionData.host,
+        port: sessionData.port || 22,
+        username: sessionData.username,
+        authType: sessionData.authType || 'password',
+        // 注意：测试连接时传入的是明文密码，不需要解密
+        password: sessionData.password,
+        keyPath: sessionData.keyPath,
+        keyPassphrase: sessionData.keyPassphrase,
+        groupId: undefined,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }
+
+      // 尝试连接
+      const testTabId = 'test-' + Date.now()
+      await SSHManager.connect(testTabId, testSession, true) // 传入 true 表示这是测试连接，使用明文密码
+
+      // 连接成功后立即断开
+      await SSHManager.disconnect(testTabId)
+
+      return true
+    } catch (error) {
+      console.error('Test connection failed:', error)
+      throw error
+    }
   })
 }
 

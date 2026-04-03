@@ -22,9 +22,9 @@ export interface CustomAPI {
     create: (data: Omit<Session, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Session>
     update: (id: string, updates: Partial<Session>) => Promise<Session | undefined>
     delete: (id: string) => Promise<boolean>
-    connect: (id: string) => Promise<{ success: boolean; sessionId: string }>
-    disconnect: (id: string) => Promise<boolean>
-    getStatus: (id: string) => Promise<string | null>
+    connect: (tabId: string, sessionId: string) => Promise<{ success: boolean; tabId: string }>
+    disconnect: (tabId: string) => Promise<boolean>
+    getStatus: (tabId: string) => Promise<string | null>
   }
 
   // 会话分组管理
@@ -37,11 +37,11 @@ export interface CustomAPI {
 
   // 终端操作
   terminal: {
-    write: (sessionId: string, data: string) => void
-    resize: (sessionId: string, size: TerminalSize) => void
-    onData: (callback: (event: unknown, data: { sessionId: string; data: string }) => void) => () => void
-    onClose: (callback: (event: unknown, data: { sessionId: string }) => void) => () => void
-    onError: (callback: (event: unknown, data: { sessionId: string; error: string }) => void) => () => void
+    write: (tabId: string, data: string) => void
+    resize: (tabId: string, size: TerminalSize) => void
+    onData: (callback: (event: unknown, data: { tabId: string; data: string }) => void) => () => void
+    onClose: (callback: (event: unknown, data: { tabId: string }) => void) => () => void
+    onError: (callback: (event: unknown, data: { tabId: string; error: string }) => void) => () => void
   }
 
   // 配置管理

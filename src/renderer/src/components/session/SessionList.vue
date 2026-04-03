@@ -12,31 +12,39 @@
     </div>
 
     <!-- 空状态 -->
-    <div v-else-if="sessions.length === 0" class="empty-state">
+    <div v-else-if="sessions.length === 0" class="empty-state" @contextmenu.prevent="handleListContextMenu">
       <p>暂无会话</p>
       <p class="hint">点击上方 + 按钮创建新会话</p>
     </div>
 
     <!-- 会话列表 -->
-    <div v-else class="session-groups">
+    <div v-else class="session-groups" @contextmenu.prevent="handleListContextMenu">
       <!-- 未分组会话 -->
-      <div v-if="ungroupedSessions.length > 0" class="session-group">
+      <div v-if="ungroupedSessions.length > 0" class="session-group" @contextmenu.prevent="handleListContextMenu">
         <SessionItem
           v-for="session in ungroupedSessions"
           :key="session.id"
           :session="session"
           :active="session.id === activeSessionId"
           @click="handleSelect(session)"
+          @dblclick="handleConnect(session)"
           @connect="handleConnect(session)"
-          @disconnect="handleDisconnect(session)"
           @edit="handleEdit(session)"
           @delete="handleDelete(session)"
+          @duplicate="handleDuplicate(session)"
+          @properties="handleProperties(session)"
+          @contextmenu.prevent="handleSessionContextMenu($event, session)"
         />
       </div>
 
       <!-- 分组会话 -->
-      <div v-for="group in sessionGroups" :key="group.id" class="session-group">
-        <div class="group-header" @click="toggleGroup(group.id)">
+      <div v-for="group in sessionGroups" :key="group.id" class="session-group" @contextmenu.prevent="handleListContextMenu">
+        <div
+          class="group-header"
+          @click="toggleGroup(group.id)"
+          @contextmenu.prevent="handleGroupContextMenu($event, group)"
+          :title="expandedGroups.has(group.id) ? '点击折叠分组，精简会话列表' : '点击展开分组，查看会话列表'"
+        >
           <svg
             class="expand-icon"
             :class="{ expanded: expandedGroups.has(group.id) }"
@@ -56,33 +64,212 @@
             :session="session"
             :active="session.id === activeSessionId"
             @click="handleSelect(session)"
+            @dblclick="handleConnect(session)"
             @connect="handleConnect(session)"
-            @disconnect="handleDisconnect(session)"
             @edit="handleEdit(session)"
             @delete="handleDelete(session)"
+            @duplicate="handleDuplicate(session)"
+            @properties="handleProperties(session)"
+            @contextmenu.prevent="handleSessionContextMenu($event, session)"
           />
         </div>
       </div>
+      
+      <!-- 空白占位区域，用于捕获右键点击 -->
+      <div 
+        class="session-list-spacer" 
+        @contextmenu.prevent="handleListContextMenu"
+      ></div>
     </div>
+
+    <!-- 列表右键菜单（新建分组） -->
+    <div
+      v-show="listContextMenuVisible"
+      class="context-menu"
+      :style="listContextMenuStyle"
+      @click.stop
+    >
+      <div class="menu-item" @click="handleCreateGroup" title="创建会话分组，归类管理远程主机连接">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>新建分组</span>
+      </div>
+    </div>
+
+    <!-- 分组管理右键菜单 -->
+    <div
+      v-if="groupContextMenuVisible"
+      class="context-menu"
+      :style="groupContextMenuStyle"
+      @click.stop
+    >
+      <div class="menu-item" @click="handleAddSessionToGroup" title="添加会话到此分组">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <circle cx="11" cy="3" r="2" fill="currentColor"/>
+        </svg>
+        <span>添加会话到此分组</span>
+      </div>
+      <div class="menu-divider"></div>
+      <div class="menu-item" @click="handleEditGroup" title="双击分组名称，可修改分组名">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M10 2L12 4L4.5 11.5H2.5V9.5L10 2Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>编辑分组</span>
+      </div>
+      <div class="menu-item danger" @click="handleDeleteGroup" title="删除分组将会话移至未分组，操作不可逆">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M2 4H12M5 4V3C5 2.44772 5.44772 2 6 2H8C8.55228 2 9 2.44772 9 3V4M11 4V11C11 11.5523 10.5523 12 10 12H4C3.44772 12 3 11.5523 3 11V4H11Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>删除分组</span>
+      </div>
+    </div>
+
+    <!-- 会话右键菜单（移动到分组） -->
+    <div
+      v-if="sessionContextMenuVisible"
+      class="context-menu"
+      :style="sessionContextMenuStyle"
+      @click.stop
+    >
+      <div class="menu-item has-submenu" @click="handleMoveToGroup" title="将当前会话移动到指定分组">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M12 11C12 11.8284 11.3284 12.5 10.5 12.5H3.5C2.67157 12.5 2 11.8284 2 10.5V3.5C2 2.67157 2.67157 2 3.5 2H6L7 3.5H10.5C11.3284 3.5 12 4.17157 12 5V11Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>移动到分组</span>
+        <svg class="submenu-arrow" width="10" height="10" viewBox="0 0 10 10" fill="none">
+          <path d="M4 2L7 5L4 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        
+        <!-- 子菜单 -->
+        <div class="submenu" v-if="showGroupSubmenu">
+          <div class="menu-item" @click.stop="handleMoveToSpecificGroup('')" title="将当前会话移至未分组">
+            <span>未分组</span>
+          </div>
+          <div
+            v-for="group in sessionGroups"
+            :key="group.id"
+            class="menu-item"
+            :class="{ active: selectedSessionForMove?.groupId === group.id }"
+            @click.stop="handleMoveToSpecificGroup(group.id)"
+            :title="`将当前会话移动到 ${group.name} 分组`"
+          >
+            <span>{{ group.name }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 分组表单对话框 -->
+    <SessionGroupForm
+      :visible="groupFormVisible"
+      :group="editingGroup"
+      @close="handleCloseGroupForm"
+      @submit="handleSubmitGroupForm"
+    />
+
+    <!-- 确认对话框 -->
+    <ConfirmDialog
+      :visible="confirmDialogVisible"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      :is-warning="confirmDialogIsWarning"
+      @close="handleConfirmDialogClose"
+      @confirm="handleConfirmDialogConfirm"
+      @cancel="handleConfirmDialogCancel"
+    />
+
+    <!-- 连接错误对话框 -->
+    <ErrorDialog
+      :visible="errorDialogVisible"
+      :title="errorDialogTitle"
+      :message="errorDialogMessage"
+      :session-id="errorDialogSessionId"
+      :show-retry="true"
+      :show-edit="true"
+      @close="handleCloseErrorDialog"
+      @retry="handleRetryConnect"
+      @edit="handleEditFromError"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSessionStore } from '@/stores/session'
 import { useTerminalStore } from '@/stores/terminal'
+import { useErrorDialogStore } from '@/stores/errorDialog'
 import SessionItem from './SessionItem.vue'
+import SessionGroupForm from './SessionGroupForm.vue'
+import ErrorDialog from '@/components/common/ErrorDialog.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import type { Session, SessionGroup } from '@shared/types'
 
 // 状态管理
 const sessionStore = useSessionStore()
 const terminalStore = useTerminalStore()
+const errorDialogStore = useErrorDialogStore()
 
 // 加载状态
 const loading = ref(false)
 
 // 展开的分组
 const expandedGroups = ref<Set<string>>(new Set())
+
+// 本地存储的 key
+const EXPANDED_GROUPS_STORAGE_KEY = 'session-expanded-groups'
+
+/**
+ * 从 localStorage 加载展开状态
+ */
+const loadExpandedGroups = () => {
+  try {
+    const stored = localStorage.getItem(EXPANDED_GROUPS_STORAGE_KEY)
+    if (stored) {
+      const groupIds = JSON.parse(stored)
+      expandedGroups.value = new Set(groupIds)
+    }
+  } catch (error) {
+    console.error('Failed to load expanded groups:', error)
+  }
+}
+
+/**
+ * 保存展开状态到 localStorage
+ */
+const saveExpandedGroups = () => {
+  try {
+    const groupIds = Array.from(expandedGroups.value)
+    localStorage.setItem(EXPANDED_GROUPS_STORAGE_KEY, JSON.stringify(groupIds))
+  } catch (error) {
+    console.error('Failed to save expanded groups:', error)
+  }
+}
+
+// 分组管理相关状态
+const groupContextMenuVisible = ref(false)
+const groupContextMenuStyle = ref({})
+const selectedGroup = ref<SessionGroup | null>(null)
+const groupFormVisible = ref(false)
+const editingGroup = ref<SessionGroup | null>(null)
+
+// 列表右键菜单状态
+const listContextMenuVisible = ref(false)
+const listContextMenuStyle = ref({})
+
+// 会话右键菜单状态
+const sessionContextMenuVisible = ref(false)
+const sessionContextMenuStyle = ref({})
+const selectedSessionForMove = ref<Session | null>(null)
+const showGroupSubmenu = ref(false)
+
+// 确认对话框状态
+const confirmDialogVisible = ref(false)
+const confirmDialogTitle = ref('')
+const confirmDialogMessage = ref('')
+const confirmDialogIsWarning = ref(false)
+let confirmDialogResolve: ((value: boolean) => void) | null = null
 
 // 会话列表
 const sessions = computed(() => sessionStore.sessions)
@@ -92,9 +279,7 @@ const activeSessionId = computed(() => sessionStore.activeSessionId)
 
 // 会话分组列表
 const sessionGroups = computed(() => {
-  const groups: SessionGroup[] = []
-  // TODO: 从 store 获取分组
-  return groups
+  return sessionStore.sessionGroups
 })
 
 // 未分组的会话
@@ -109,6 +294,59 @@ const emit = defineEmits<{
 }>()
 
 /**
+ * 显示确认对话框
+ */
+const showConfirmDialog = (
+  title: string,
+  message: string,
+  isWarning: boolean = false
+): Promise<boolean> => {
+  return new Promise((resolve) => {
+    confirmDialogTitle.value = title
+    confirmDialogMessage.value = message
+    confirmDialogIsWarning.value = isWarning
+    confirmDialogVisible.value = true
+    confirmDialogResolve = resolve
+  })
+}
+
+/**
+ * 处理确认对话框的确认操作
+ */
+const handleConfirmDialogConfirm = () => {
+  if (confirmDialogResolve) {
+    confirmDialogResolve(true)
+    confirmDialogResolve = null
+  }
+  // 关闭对话框
+  confirmDialogVisible.value = false
+}
+
+/**
+ * 处理确认对话框的取消操作
+ */
+const handleConfirmDialogCancel = () => {
+  if (confirmDialogResolve) {
+    confirmDialogResolve(false)
+    confirmDialogResolve = null
+  }
+  // 关闭对话框
+  confirmDialogVisible.value = false
+}
+
+/**
+ * 处理确认对话框的关闭操作（点击遮罩层）
+ */
+const handleConfirmDialogClose = () => {
+  if (confirmDialogResolve) {
+    confirmDialogResolve(false)
+    confirmDialogResolve = null
+  }
+  // 关闭对话框
+  confirmDialogVisible.value = false
+}
+
+/**
  * 切换分组展开状态
  */
 const toggleGroup = (groupId: string) => {
@@ -117,6 +355,8 @@ const toggleGroup = (groupId: string) => {
   } else {
     expandedGroups.value.add(groupId)
   }
+  // 保存展开状态
+  saveExpandedGroups()
 }
 
 /**
@@ -130,7 +370,231 @@ const getGroupSessionCount = (groupId: string): number => {
  * 获取分组会话列表
  */
 const getGroupSessions = (groupId: string): Session[] => {
-  return sessions.value.filter(s => s.groupId === groupId)
+  return sessionStore.getGroupSessions(groupId)
+}
+
+/**
+ * 处理分组右键菜单
+ */
+const handleGroupContextMenu = (event: MouseEvent, group: SessionGroup) => {
+  // 阻止默认浏览器右键菜单
+  event.preventDefault()
+  event.stopPropagation()
+  
+  // 关闭其他菜单
+  closeAllContextMenus()
+  
+  selectedGroup.value = group
+  groupContextMenuVisible.value = true
+  
+  // 计算菜单位置
+  const x = event.clientX
+  const y = event.clientY
+  
+  groupContextMenuStyle.value = {
+    position: 'fixed',
+    left: `${x}px`,
+    top: `${y}px`,
+    zIndex: 1000
+  }
+}
+
+/**
+ * 处理列表右键菜单（新建分组）
+ */
+const handleListContextMenu = (event: MouseEvent) => {
+  // 阻止默认浏览器右键菜单
+  event.preventDefault()
+  event.stopPropagation()
+  
+  // 关闭其他菜单
+  closeAllContextMenus()
+  
+  listContextMenuVisible.value = true
+  
+  // 计算菜单位置
+  const x = event.clientX
+  const y = event.clientY
+  
+  listContextMenuStyle.value = {
+    position: 'fixed',
+    left: `${x}px`,
+    top: `${y}px`,
+    zIndex: 1000
+  }
+}
+
+/**
+ * 处理会话右键菜单（移动到分组）
+ */
+const handleSessionContextMenu = (event: MouseEvent, session: Session) => {
+  // 阻止默认浏览器右键菜单
+  event.preventDefault()
+  event.stopPropagation()
+  
+  // 关闭其他菜单
+  closeAllContextMenus()
+  
+  selectedSessionForMove.value = session
+  sessionContextMenuVisible.value = true
+  showGroupSubmenu.value = false
+  
+  // 计算菜单位置
+  const x = event.clientX
+  const y = event.clientY
+  
+  sessionContextMenuStyle.value = {
+    position: 'fixed',
+    left: `${x}px`,
+    top: `${y}px`,
+    zIndex: 1000
+  }
+}
+
+/**
+ * 关闭所有上下文菜单
+ */
+const closeAllContextMenus = () => {
+  groupContextMenuVisible.value = false
+  listContextMenuVisible.value = false
+  sessionContextMenuVisible.value = false
+  showGroupSubmenu.value = false
+}
+
+/**
+ * 创建新分组
+ */
+const handleCreateGroup = () => {
+  editingGroup.value = null
+  groupFormVisible.value = true
+  listContextMenuVisible.value = false
+}
+
+/**
+ * 添加会话到分组
+ */
+const handleAddSessionToGroup = () => {
+  // TODO: 打开会话选择对话框
+  // 暂时先打开会话表单
+  alert('请通过编辑会话来将其添加到此分组')
+  groupContextMenuVisible.value = false
+}
+
+/**
+ * 编辑分组
+ */
+const handleEditGroup = () => {
+  if (selectedGroup.value) {
+    editingGroup.value = selectedGroup.value
+    groupFormVisible.value = true
+    groupContextMenuVisible.value = false
+  }
+}
+
+/**
+ * 删除分组
+ */
+const handleDeleteGroup = async () => {
+  if (selectedGroup.value) {
+    const sessionCount = getGroupSessionCount(selectedGroup.value.id)
+    
+    // 根据分组内是否有会话显示不同的确认对话框
+    if (sessionCount > 0) {
+      // 有会话时需要二次确认
+      const confirmed = await showConfirmDialog(
+        '删除分组确认',
+        `该分组包含 ${sessionCount} 个会话，删除分组将会话移至未分组，确定继续？`,
+        true // 显示警告样式
+      )
+      
+      if (!confirmed) {
+        groupContextMenuVisible.value = false
+        return
+      }
+    } else {
+      // 没有会话时简单确认
+      const confirmed = await showConfirmDialog(
+        '删除分组确认',
+        `确定要删除分组 "${selectedGroup.value.name}" 吗？`
+      )
+      
+      if (!confirmed) {
+        groupContextMenuVisible.value = false
+        return
+      }
+    }
+    
+    try {
+      await window.api.sessionGroup.delete(selectedGroup.value.id)
+      sessionStore.removeSessionGroup(selectedGroup.value.id)
+    } catch (error) {
+      console.error('Failed to delete group:', error)
+      alert('删除分组失败')
+    }
+    groupContextMenuVisible.value = false
+  }
+}
+
+/**
+ * 关闭分组表单
+ */
+const handleCloseGroupForm = () => {
+  groupFormVisible.value = false
+  editingGroup.value = null
+}
+
+/**
+ * 提交分组表单
+ */
+const handleSubmitGroupForm = async (data: { name: string; icon?: string }) => {
+  try {
+    if (editingGroup.value) {
+      // 更新分组
+      await window.api.sessionGroup.update(editingGroup.value.id, data)
+      sessionStore.updateSessionGroup(editingGroup.value.id, data)
+    } else {
+      // 创建分组
+      const group = await window.api.sessionGroup.create(data)
+      sessionStore.addSessionGroup(group)
+    }
+    handleCloseGroupForm()
+  } catch (error) {
+    console.error('Failed to save group:', error)
+    alert('保存分组失败')
+  }
+}
+
+/**
+ * 显示移动到分组的子菜单
+ */
+const handleMoveToGroup = () => {
+  showGroupSubmenu.value = !showGroupSubmenu.value
+}
+
+/**
+ * 移动会话到指定分组
+ */
+const handleMoveToSpecificGroup = async (groupId: string) => {
+  if (!selectedSessionForMove.value) return
+  
+  try {
+    // 更新会话的分组
+    await window.api.session.update(selectedSessionForMove.value.id, { 
+      groupId: groupId || undefined 
+    })
+    
+    // 更新本地状态
+    const session = sessionStore.sessions.find(s => s.id === selectedSessionForMove.value!.id)
+    if (session) {
+      session.groupId = groupId || undefined
+    }
+    
+    // 关闭菜单
+    closeAllContextMenus()
+  } catch (error) {
+    console.error('Failed to move session:', error)
+    alert('移动会话失败')
+  }
 }
 
 /**
@@ -143,32 +607,33 @@ const handleSelect = (session: Session) => {
 
 /**
  * 连接会话
+ * 双击会话时创建标签页并连接
  */
 const handleConnect = async (session: Session) => {
   try {
-    // 创建标签页
-    terminalStore.createTab(session.name, session.id)
+    // 创建标签页（初始状态为disconnected）
+    const tab = terminalStore.createTab(session.name, session.id)
     
-    // 连接会话
-    await window.api.session.connect(session.id)
+    // 更新标签页状态为连接中
+    terminalStore.updateTabStatus(tab.id, 'connecting')
     
-    // 更新会话状态
-    sessionStore.updateSessionStatus(session.id, 'connected')
-  } catch (error) {
+    // 连接会话（使用tabId作为连接标识）
+    await window.api.session.connect(tab.id, session.id)
+    
+    // 更新标签页状态为已连接
+    terminalStore.updateTabStatus(tab.id, 'connected')
+  } catch (error: unknown) {
     console.error('Failed to connect:', error)
-    sessionStore.updateSessionStatus(session.id, 'disconnected')
-  }
-}
-
-/**
- * 断开会话
- */
-const handleDisconnect = async (session: Session) => {
-  try {
-    await window.api.session.disconnect(session.id)
-    sessionStore.updateSessionStatus(session.id, 'disconnected')
-  } catch (error) {
-    console.error('Failed to disconnect:', error)
+    
+    // 连接失败，更新标签页状态为错误
+    const tab = terminalStore.tabs.find(t => t.sessionId === session.id)
+    if (tab) {
+      terminalStore.updateTabStatus(tab.id, 'error')
+    }
+    
+    // 显示错误对话框
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    showErrorDialog('连接失败', errorMessage, session.id)
   }
 }
 
@@ -189,17 +654,111 @@ const handleDelete = async (session: Session) => {
   }
 }
 
-// 初始化加载会话列表
+/**
+ * 复制会话
+ */
+const handleDuplicate = async (session: Session) => {
+  try {
+    // 创建新会话配置
+    const newSession = {
+      ...session,
+      id: undefined,
+      name: `${session.name} (副本)`
+    }
+    
+    // 保存新会话
+    const createdSession = await window.api.session.create(newSession)
+    sessionStore.addSession(createdSession)
+  } catch (error) {
+    console.error('Failed to duplicate session:', error)
+  }
+}
+
+/**
+ * 显示会话属性
+ */
+const handleProperties = (session: Session) => {
+  // TODO: 实现属性对话框
+  emit('edit', session)
+}
+
+/**
+ * 显示错误对话框
+ * @param title - 错误标题
+ * @param message - 错误信息
+ * @param sessionId - 会话ID
+ */
+const showErrorDialog = (title: string, message: string, sessionId: string): void => {
+  errorDialogStore.showError(title, message, sessionId)
+}
+
+/**
+ * 关闭错误对话框
+ */
+const handleCloseErrorDialog = (): void => {
+  errorDialogStore.closeError()
+}
+
+/**
+ * 重试连接
+ * 从错误对话框中点击"重新输入密码"
+ */
+const handleRetryConnect = (sessionId: string): void => {
+  // 找到对应的会话
+  const session = sessions.value.find(s => s.id === sessionId)
+  if (session) {
+    // 打开编辑表单，让用户重新输入密码
+    emit('edit', session)
+  }
+}
+
+/**
+ * 从错误对话框中编辑会话
+ */
+const handleEditFromError = (sessionId: string): void => {
+  // 找到对应的会话
+  const session = sessions.value.find(s => s.id === sessionId)
+  if (session) {
+    // 打开编辑表单
+    emit('edit', session)
+  }
+}
+
+// 初始化加载会话列表和分组
 onMounted(async () => {
   loading.value = true
   try {
+    // 加载会话列表
     const sessionList = await window.api.session.getAll()
     sessionStore.sessions = sessionList
+
+    // 加载会话分组
+    const groups = await window.api.sessionGroup.getAll()
+    sessionStore.sessionGroups = groups
+    
+    // 加载展开状态
+    loadExpandedGroups()
   } catch (error) {
     console.error('Failed to load sessions:', error)
   } finally {
     loading.value = false
   }
+})
+
+/**
+ * 点击外部关闭菜单
+ */
+const handleClickOutside = (event: MouseEvent) => {
+  closeAllContextMenus()
+}
+
+// 添加和移除全局点击事件监听
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 </script>
 
@@ -228,6 +787,16 @@ onMounted(async () => {
 
 .session-groups {
   padding: 4px 0;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.session-list-spacer {
+  flex: 1;
+  min-height: 100px;
+  pointer-events: auto;
 }
 
 .session-group {
@@ -269,4 +838,152 @@ onMounted(async () => {
 .group-sessions {
   padding-left: 12px;
 }
+
+/* 右键菜单样式 */
+.context-menu {
+  position: fixed;
+  background: var(--bg-secondary, #2a2a2a);
+  border: 1px solid var(--border-color, #3a3a3a);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+  min-width: 160px;
+  z-index: 1000;
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--text-primary, #e0e0e0);
+  font-size: 13px;
+  transition: background-color 0.15s;
+}
+
+.menu-item:hover {
+  background-color: var(--hover-bg, #3a3a3a);
+}
+
+.menu-item.danger {
+  color: #ff6b6b;
+}
+
+.menu-item.danger:hover {
+  background-color: rgba(255, 107, 107, 0.1);
+}
+
+.menu-item svg {
+  flex-shrink: 0;
+}
+
+/* 菜单分隔线 */
+.menu-divider {
+  height: 1px;
+  background: var(--border-color, #3a3a3a);
+  margin: 4px 0;
+}
+
+/* 子菜单相关 */
+.menu-item.has-submenu {
+  position: relative;
+}
+
+.submenu-arrow {
+  margin-left: auto;
+  opacity: 0.6;
+}
+
+.menu-item.has-submenu:hover .submenu-arrow {
+  opacity: 1;
+}
+
+.submenu {
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  background: var(--bg-secondary, #2a2a2a);
+  border: 1px solid var(--border-color, #3a3a3a);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  padding: 4px 0;
+  min-width: 140px;
+  margin-left: 4px;
+  animation: slideIn 0.15s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.submenu .menu-item {
+  padding: 8px 12px;
+}
+
+.submenu .menu-item.active {
+  background: var(--primary-color, #0e639c);
+  color: white;
+}
+
+
+/* 深色主题 */
+[data-theme='dark'] .context-menu {
+  background: #2a2a2a;
+  border-color: #3a3a3a;
+}
+
+/* 浅色主题 */
+[data-theme='light'] .context-menu {
+  background: #ffffff;
+  border-color: #e0e0e0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme='light'] .menu-item {
+  color: #333333;
+}
+
+[data-theme='light'] .menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+[data-theme='light'] .menu-item.danger:hover {
+  background-color: rgba(255, 107, 107, 0.1);
+}
+
+[data-theme='light'] .submenu {
+  background: #ffffff;
+  border-color: #e0e0e0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme='light'] .submenu .menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+[data-theme='light'] .submenu .menu-item.active {
+  background: var(--primary-color, #0e639c);
+  color: white;
+}
+
 </style>

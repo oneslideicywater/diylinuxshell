@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Tab, TerminalSize } from '@shared/types'
+import type { Tab, TerminalSize, ConnectionStatus } from '@shared/types'
 
 /**
  * 终端状态管理Store
@@ -25,12 +25,16 @@ export const useTerminalStore = defineStore('terminal', () => {
 
   /**
    * 创建新标签页
+   * @param title 标签页标题
+   * @param sessionId 关联的会话ID
+   * @returns 新创建的标签页
    */
   function createTab(title: string, sessionId: string): Tab {
     const tab: Tab = {
       id: `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       title,
-      sessionId
+      sessionId,
+      status: 'disconnected'
     }
     tabs.value.push(tab)
     activeTabId.value = tab.id
@@ -88,6 +92,18 @@ export const useTerminalStore = defineStore('terminal', () => {
   }
 
   /**
+   * 更新标签页连接状态
+   * @param id 标签页ID
+   * @param status 连接状态
+   */
+  function updateTabStatus(id: string, status: ConnectionStatus): void {
+    const tab = tabs.value.find(t => t.id === id)
+    if (tab) {
+      tab.status = status
+    }
+  }
+
+  /**
    * 根据ID获取标签页
    */
   function getTabById(id: string): Tab | undefined {
@@ -128,6 +144,7 @@ export const useTerminalStore = defineStore('terminal', () => {
     setActiveTab,
     updateTabTitle,
     updateTabTerminalId,
+    updateTabStatus,
     getTabById,
     updateTerminalSize,
     getTerminalSize,

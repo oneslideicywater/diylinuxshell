@@ -77,11 +77,20 @@ export const sessionAPI = {
 
   /**
    * 获取会话连接状态
-   * @param id - 会话ID
+   * @param id - 会话 ID
    * @returns 连接状态
    */
   getStatus: (id: string): Promise<string | null> => {
     return ipcRenderer.invoke(IPC_CHANNELS.SESSION.GET_STATUS, id)
+  },
+
+  /**
+   * 测试连接
+   * @param sessionData - 会话数据
+   * @returns 是否连接成功
+   */
+  testConnection: (sessionData: Partial<Session>): Promise<boolean> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SESSION.TEST_CONNECTION, sessionData)
   }
 }
 
