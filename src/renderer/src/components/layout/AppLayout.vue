@@ -41,13 +41,26 @@
     <!-- 主体内容区域 -->
     <div class="app-body">
       <!-- 左侧边栏 -->
-      <aside class="app-sidebar">
+      <aside 
+        class="app-sidebar" 
+        :style="{ width: `${sidebarWidth}px` }"
+      >
         <Sidebar 
           @add-session="emit('add-session')" 
           @edit-session="(s) => emit('edit-session', s)" 
           @open-settings="emit('open-settings')" 
         />
       </aside>
+
+      <!-- 拖拽调整手柄 -->
+      <div
+        class="sidebar-resize-handle"
+        :class="{ 'resizing': isResizing }"
+        @mousedown="handleResizeStart"
+        title="拖拽调整侧边栏宽度"
+      >
+        <div class="resize-line"></div>
+      </div>
 
       <!-- 主内容区 -->
       <main class="app-main">
@@ -101,6 +114,99 @@ const activeTab = computed(() => terminalStore.activeTab)
 // 窗口最大化状态
 const isMaximized = ref(false)
 
+// 侧边栏宽度相关
+const SIDEBAR_MIN_WIDTH = 200
+const SIDEBAR_MAX_WIDTH = 500
+const SIDEBAR_DEFAULT_WIDTH = 240
+const SIDEBAR_WIDTH_STORAGE_KEY = 'app-sidebar-width'
+
+const sidebarWidth = ref(SIDEBAR_DEFAULT_WIDTH)
+const isResizing = ref(false)
+
+/**
+ * 从 localStorage 加载侧边栏宽度
+ */
+const loadSidebarWidth = () => {
+  try {
+    const stored = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)
+    if (stored) {
+      const width = parseInt(stored, 10)
+      if (width >= SIDEBAR_MIN_WIDTH && width <= SIDEBAR_MAX_WIDTH) {
+        sidebarWidth.value = width
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load sidebar width:', error)
+  }
+}
+
+/**
+ * 保存侧边栏宽度到 localStorage
+ */
+const saveSidebarWidth = () => {
+  try {
+    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, sidebarWidth.value.toString())
+  } catch (error) {
+    console.error('Failed to save sidebar width:', error)
+  }
+}
+
+/**
+ * 开始调整侧边栏宽度
+ */
+const handleResizeStart = (e: MouseEvent) => {
+  console.log('[AppLayout] sidebar mousedown 事件触发', {
+    clientX: e.clientX,
+    button: e.button
+  })
+  
+  // 阻止默认行为和事件冒泡
+  e.preventDefault()
+  e.stopPropagation()
+  
+  isResizing.value = true
+  document.body.style.cursor = 'ew-resize'
+  document.body.style.userSelect = 'none'
+  
+  const startX = e.clientX
+  const startWidth = sidebarWidth.value
+  
+  console.log('[AppLayout] 初始状态', { startX, startWidth })
+  
+  // 使用闭包保存状态
+  const onMouseMove = (moveEvent: MouseEvent) => {
+    const delta = moveEvent.clientX - startX
+    let newWidth = startWidth + delta
+    
+    // 限制宽度范围
+    newWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.min(SIDEBAR_MAX_WIDTH, newWidth))
+    sidebarWidth.value = newWidth
+    
+    console.log('[AppLayout] mousemove', {
+      clientX: moveEvent.clientX,
+      delta,
+      newWidth
+    })
+  }
+  
+  const onMouseUp = () => {
+    console.log('[AppLayout] mouseup 事件触发')
+    
+    isResizing.value = false
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    saveSidebarWidth()
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+  }
+  
+  // 立即添加事件监听器
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+  
+  console.log('[AppLayout] 事件监听器已添加')
+}
+
 /**
  * 最小化窗口
  */
@@ -139,6 +245,9 @@ onMounted(async () => {
   cleanupUnmaximize = window.api.onWindowUnmaximize(() => {
     isMaximized.value = false
   })
+  
+  // 加载侧边栏宽度
+  loadSidebarWidth()
 })
 
 onUnmounted(() => {
@@ -230,10 +339,48 @@ onUnmounted(() => {
 
 /* 左侧边栏 */
 .app-sidebar {
-  width: 240px;
   background-color: var(--sidebar-bg, #252526);
   border-right: 1px solid var(--border-color, #3c3c3c);
   overflow-y: auto;
+  flex-shrink: 0;  /* 防止被压缩 */
+}
+
+/* 拖拽调整手柄 */
+.sidebar-resize-handle {
+  width: 8px;
+  height: 100%;
+  cursor: ew-resize;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+  z-index: 10;
+  flex-shrink: 0;  /* 防止被压缩 */
+}
+
+.sidebar-resize-handle:hover {
+  background-color: var(--el-color-primary-light-9, rgba(64, 158, 255, 0.1));
+}
+
+.sidebar-resize-handle.resizing {
+  background-color: var(--el-color-primary-light-9, rgba(64, 158, 255, 0.2));
+}
+
+.resize-line {
+  width: 2px;
+  height: 24px;
+  background-color: var(--el-border-color, #dcdfe6);
+  border-radius: 2px;
+  transition: background-color 0.2s;
+}
+
+.sidebar-resize-handle:hover .resize-line {
+  background-color: var(--el-color-primary, #409eff);
+}
+
+.sidebar-resize-handle.resizing .resize-line {
+  background-color: var(--el-color-primary-dark-2, #337ecc);
 }
 
 /* 主内容区 */

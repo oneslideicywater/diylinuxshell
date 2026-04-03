@@ -201,3 +201,159 @@ console.log('window.api exists:', hasApi)
 - 每个测试后清理状态
 - 使用唯一的会话名称
 - 关闭未关闭的弹窗/表单
+
+## 捕获控制台报错
+
+### 1. Playwright 配置
+
+在 `playwright.config.ts` 中添加多项目支持：
+
+```typescript
+export default defineConfig({
+  projects: [
+    {
+      name: 'electron',
+      use: { ...devices['Desktop Chrome'] }
+    },
+    {
+      name: 'chromium',  // 用于捕获 Vue 运行时警告
+      use: { ...devices['Desktop Chrome'] }
+    }
+  ]
+})
+```
+
+### 2. Electron 模式 - 捕获控制台消息
+
+```typescript
+import { test, expect, ElectronApplication } from '@playwright/test'
+import { startApp, closeApp } from './helpers/electron-app'
+
+const consoleMessages: any[] = []
+const pageErrors: any[] = []
+
+test.describe('测试', () => {
+  let page: any
+  
+  test.beforeAll(async () => {
+    const result = await startApp()
+    page = result.page
+    
+    consoleMessages.length = 0
+    pageErrors.length = 0
+    
+    // 监听控制台
+    page.on('console', (msg: any) => {
+      consoleMessages.push({
+        type: msg.type(),
+        text: msg.text(),
+        location: msg.location()
+      })
+      if (msg.type() === 'warning' || msg.type() === 'error') {
+        console.error(`[${msg.type()}] ${msg.text}`)
+      }
+    })
+    
+    // 监听页面错误
+    page.on('pageerror', (error: any) => {
+      pageErrors.push({ message: error.message, stack: error.stack })
+      console.error(`[Page Error] ${error.message}`)
+    })
+  })
+
+  test.afterAll(async () => {
+    await closeApp(page)
+  })
+
+  test('捕获错误', async () => {
+    // 执行操作
+    await page.locator('.some-element').click()
+    await page.waitForTimeout(1000)
+    
+    // 查找特定错误
+    const targetErrors = consoleMessages.filter(msg => 
+      msg.text.includes('错误关键词')
+    )
+    
+    console.log(`找到 ${targetErrors.length} 个错误`)
+    targetErrors.forEach(err => {
+      console.log(`[${err.type}] ${err.text}`)
+    })
+  })
+})
+```
+
+### 3. 浏览器模式 - 捕获 Vue 运行时警告
+
+```typescript
+import { test, expect, Page } from '@playwright/test'
+
+const consoleMessages: any[] = []
+
+test.describe('浏览器模式测试', () => {
+  let page: Page
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage()
+    consoleMessages.length = 0
+    
+    page.on('console', (msg) => {
+      consoleMessages.push({
+        type: msg.type(),
+        text: msg.text(),
+        location: msg.location()
+      })
+      if (msg.type() === 'warning' || msg.type() === 'error') {
+        console.error(`[${msg.type()}] ${msg.text}`)
+      }
+    })
+  })
+
+  test.afterAll(async () => {
+    await page.close()
+  })
+
+  test('访问开发服务器并捕获错误', async () => {
+    // 先运行：npm run dev
+    await page.goto('http://localhost:5173/', { 
+      waitUntil: 'networkidle',
+      timeout: 30000
+    })
+    
+    await page.waitForTimeout(3000)
+    
+    // 触发操作
+    await page.locator('.trigger-button').click()
+    await page.waitForTimeout(1000)
+    
+    // 查找 Vue 警告
+    const vueWarnings = consoleMessages.filter(msg =>
+      msg.text.includes('[Vue warn]')
+    )
+    
+    vueWarnings.forEach(msg => {
+      console.log(`[Vue warn] ${msg.text}`)
+      if (msg.location) {
+        console.log(`  位置：${JSON.stringify(msg.location)}`)
+      }
+    })
+  })
+})
+```
+
+### 4. 运行测试
+
+```bash
+# Electron 模式
+npx playwright test --project=electron
+
+# 浏览器模式（需先运行 npm run dev）
+npx playwright test --project=chromium
+```
+
+### 5. 关键要点
+
+- **清空消息**：测试前清空数组 `consoleMessages.length = 0`
+- **等待时间**：给足时间让错误出现 `await page.waitForTimeout(1000)`
+- **过滤错误**：按类型或关键词过滤
+- **详细输出**：输出类型、内容、位置

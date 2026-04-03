@@ -5,20 +5,21 @@
  */
 
 <template>
-  <div class="session-list">
-    <!-- 加载状态 -->
-    <div v-if="loading" class="loading-state">
-      <span>加载中...</span>
-    </div>
+  <div class="session-list-container">
+    <div class="session-list" :style="{ width: `${currentWidth}px` }">
+      <!-- 加载状态 -->
+      <div v-if="loading" class="loading-state">
+        <span>加载中...</span>
+      </div>
 
-    <!-- 空状态 -->
-    <div v-else-if="sessions.length === 0" class="empty-state" @contextmenu.prevent="handleListContextMenu">
-      <p>暂无会话</p>
-      <p class="hint">点击上方 + 按钮创建新会话</p>
-    </div>
+      <!-- 空状态 -->
+      <div v-else-if="sessions.length === 0" class="empty-state" @contextmenu.prevent="handleListContextMenu">
+        <p>暂无会话</p>
+        <p class="hint">点击上方 + 按钮创建新会话</p>
+      </div>
 
-    <!-- 会话列表 -->
-    <div v-else class="session-groups" @contextmenu.prevent="handleListContextMenu">
+      <!-- 会话列表 -->
+      <div v-else class="session-groups" @contextmenu.prevent="handleListContextMenu">
       <!-- 未分组会话 -->
       <div v-if="ungroupedSessions.length > 0" class="session-group" @contextmenu.prevent="handleListContextMenu">
         <SessionItem
@@ -217,6 +218,7 @@
         </div>
       </div>
     </div>
+  </div>
 
     <!-- 分组表单对话框 -->
     <SessionGroupForm
@@ -272,6 +274,12 @@ const errorDialogStore = useErrorDialogStore()
 
 // 加载状态
 const loading = ref(false)
+
+// 错误对话框相关计算属性
+const errorDialogVisible = computed(() => errorDialogStore.visible)
+const errorDialogTitle = computed(() => errorDialogStore.title)
+const errorDialogMessage = computed(() => errorDialogStore.message)
+const errorDialogSessionId = computed(() => errorDialogStore.sessionId)
 
 // 展开的分组
 const expandedGroups = ref<Set<string>>(new Set())
@@ -945,9 +953,17 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.session-list-container {
+  display: flex;
+  height: 100%;
+  position: relative;
+}
+
 .session-list {
-  flex: 1;
+  height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
+  flex: 1;
 }
 
 .loading-state,
@@ -1065,22 +1081,6 @@ onUnmounted(() => {
   color: var(--color-primary, #409eff);
 }
 
-.group-content {
-  display: flex;
-  flex-direction: column;
-}
-
-.group-sessions {
-  padding-left: 12px;
-}
-
-/* 子分组缩进 */
-.sub-groups {
-  padding-left: 8px;
-  border-left: 1px solid var(--border-color-light, rgba(255, 255, 255, 0.1));
-  margin-left: 4px;
-}
-
 /* 分组内容区域 */
 .group-content {
   display: flex;
@@ -1090,6 +1090,11 @@ onUnmounted(() => {
 /* 会话项容器，确保嵌套时会话项宽度正确 */
 .group-sessions {
   padding-left: 12px;
+}
+
+/* 子分组缩进 */
+.sub-groups {
+  /* 移除 padding-left 和 margin-left，仅使用动态 paddingLeft 控制缩进 */
 }
 
 /* 右键菜单样式 */

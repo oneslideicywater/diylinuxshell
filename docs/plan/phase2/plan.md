@@ -33,12 +33,32 @@
    - ✅ 错误处理
    - ✅ CSS 样式
    - ✅ E2E 测试用例
-6. **嵌套分组层级限制** - 需求已定义
+6. **嵌套分组层级限制** - 完全实现
    - ✅ 最多支持 5 级嵌套分组
    - ✅ 创建子分组时检查层级限制
    - ✅ 拖拽分组时检查层级限制
    - ✅ 超限提示文案已定义
    - ✅ UI 禁用状态设计已定义
+   - ✅ 类型定义（parentId, depth, MAX_GROUP_DEPTH）
+   - ✅ 工具函数（calculateGroupDepth, canCreateSubGroup 等）
+   - ✅ StoreService 层级验证
+   - ✅ IPC 处理器支持
+   - ✅ SessionGroupTree 递归组件
+   - ✅ 缩进优化（8px/层，共 40px）
+   - ✅ 侧边栏滚动支持
+   - ✅ E2E 测试用例
+   - ✅ Bug 修复（BUG-015-缩进过大）
+7. **侧边栏宽度调整** - 完全实现 ✅
+   - ✅ PRD 已更新
+   - ✅ 功能已实现
+     - ✅ 拖拽手柄 UI
+     - ✅ 宽度调整逻辑（handleResizeStart）
+     - ✅ 宽度范围限制（200px-500px）
+     - ✅ localStorage 记忆功能
+     - ✅ 拖拽视觉反馈
+   - ✅ 测试用例已编写
+     - ✅ 7 个 E2E 测试全部通过
+   - ✅ Bug 修复（BUG-016-拖拽失效）
 
 ### ❌ 未开始
 **命令片段功能**
@@ -168,6 +188,20 @@ export interface CommandSnippetGroup {
 - `session-group.e2e.spec.ts` - 会话分组功能测试
 - `command.e2e.spec.ts` - 命令片段功能测试
 
+### 步骤 4：侧边栏宽度调整功能
+
+#### 4.1 功能实现
+- 在 SessionList 组件中添加拖拽手柄
+- 实现宽度调整逻辑
+- 添加宽度记忆功能（localStorage）
+- 添加鼠标滚轮滚动支持
+
+#### 4.2 测试
+- 拖拽功能测试
+- 宽度范围限制测试
+- 记忆功能测试
+- 滚轮滚动测试
+
 ## 验收标准
 
 ### 会话分组（已完成 ✅）
@@ -202,6 +236,16 @@ export interface CommandSnippetGroup {
 - [ ] 命令片段支持搜索和过滤
 - [ ] 命令片段功能在深色和浅色主题下正常显示
 
+### 侧边栏宽度调整（已完成 ✅）
+- [x] 支持拖拽侧边栏右边界调整宽度
+- [x] 支持鼠标滚轮滚动查看内容
+- [x] 宽度范围限制（200px-500px）
+- [x] 宽度记忆功能
+- [x] 拖拽时光标变为 ↔ 形状
+- [x] 宽度调整平滑流畅
+- [x] 拖拽手柄视觉反馈（hover 和 resizing 状态）
+- [x] E2E 测试全部通过（7 个测试用例）
+
 ## 下一步行动
 
 ### 会话分组功能（已完成 ✅）
@@ -229,6 +273,17 @@ export interface CommandSnippetGroup {
     - ✅ 实现超限提示对话框
     - ✅ 实现目标分组禁用状态 UI
     - ✅ 添加所有相关 Tooltip 提示文案
+
+### 侧边栏宽度调整功能（已完成 ✅）
+1. ✅ 更新 PRD 文档添加需求
+2. ✅ 在 SessionList 组件中添加 container 容器
+3. ✅ 实现拖拽手柄 UI（.resize-handle）
+4. ✅ 实现宽度调整逻辑（handleResizeStart）
+5. ✅ 添加宽度范围限制（200px-500px）
+6. ✅ 实现 localStorage 记忆功能
+7. ✅ 添加拖拽视觉反馈（cursor、background-color）
+8. ✅ 编写 E2E 测试用例
+9. ✅ 7 个测试用例全部通过
 
 ### 命令片段功能（待开始）
 1. ❌ 创建类型定义

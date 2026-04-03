@@ -265,13 +265,11 @@ const handleCreateSubGroup = (group: SessionGroup) => {
 .sub-groups {
   display: flex;
   flex-direction: column;
-  padding-left: 8px;
-  border-left: 1px solid var(--border-color-light, rgba(255, 255, 255, 0.1));
-  margin-left: 4px;
+  /* 移除 padding-left 和 margin-left，仅使用动态 paddingLeft 控制缩进 */
 }
 
 .session-group.sub-group {
-  margin-left: 16px;
+  /* 移除 margin-left，使用 paddingLeft 控制缩进 */
   position: relative;
 }
 
@@ -279,7 +277,7 @@ const handleCreateSubGroup = (group: SessionGroup) => {
 .session-group.sub-group::before {
   content: '';
   position: absolute;
-  left: -12px;
+  left: -4px;
   top: 0;
   bottom: 0;
   width: 1px;
