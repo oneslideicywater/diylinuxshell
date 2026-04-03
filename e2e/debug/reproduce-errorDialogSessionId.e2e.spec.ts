@@ -4,7 +4,7 @@
  */
 
 import { test, expect, ElectronApplication } from '@playwright/test'
-import { startApp, closeApp, waitForAppReady } from './helpers/electron-app'
+import { startApp, closeApp, waitForAppReady } from '../helpers/electron-app'
 
 let electronApp: ElectronApplication
 let page: any

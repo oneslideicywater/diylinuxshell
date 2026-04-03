@@ -4,8 +4,8 @@
  */
 
 import { test, expect, beforeAll, afterAll } from '@playwright/test'
-import { startApp, closeApp, waitForAppReady } from './helpers/electron-app'
-import { testConfig, generateUniqueName } from './config/test-config'
+import { startApp, closeApp, waitForAppReady } from '../helpers/electron-app'
+import { testConfig, generateUniqueName } from '../config/test-config'
 import type { ElectronApplication, Page } from '@playwright/test'
 
 let app: ElectronApplication

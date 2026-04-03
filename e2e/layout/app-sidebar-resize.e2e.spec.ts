@@ -4,7 +4,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { startApp, closeApp } from './helpers/electron-app'
+import { startApp, closeApp } from '../helpers/electron-app'
 
 let app: any
 let page: any

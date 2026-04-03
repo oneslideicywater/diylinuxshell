@@ -5,8 +5,8 @@
 
 import { test, expect, describe, beforeAll, afterAll } from '@playwright/test'
 import { ElectronApplication, Page } from 'playwright'
-import { startApp, closeApp, waitForAppReady } from './helpers/app'
-import { generateUniqueName } from './helpers/utils'
+import { startApp, closeApp, waitForAppReady } from '../helpers/electron-app'
+import { generateUniqueName } from '../helpers/assertions'
 
 let app: ElectronApplication
 let page: Page
