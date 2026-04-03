@@ -43,11 +43,20 @@ export interface SessionGroup {
   expanded?: boolean
   /** 排序顺序 */
   order: number
+  /** 父分组 ID（支持嵌套分组） */
+  parentId?: string
+  /** 层级深度（根分组为 1，最多 5 级） */
+  depth: number
   /** 创建时间 */
   createdAt: number
   /** 更新时间 */
   updatedAt: number
 }
+
+/**
+ * 嵌套分组层级限制
+ */
+export const MAX_GROUP_DEPTH = 5
 
 /**
  * 标签页类型定义

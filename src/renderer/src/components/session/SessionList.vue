@@ -37,43 +37,89 @@
         />
       </div>
 
-      <!-- 分组会话 -->
-      <div v-for="group in sessionGroups" :key="group.id" class="session-group" @contextmenu.prevent="handleListContextMenu">
+      <!-- 分组会话（支持嵌套） -->
+      <template v-for="group in sessionGroups" :key="group.id">
         <div
-          class="group-header"
-          @click="toggleGroup(group.id)"
+          v-if="!group.parentId"
+          class="session-group"
+          :data-group-id="group.id"
+          :data-group-depth="group.depth"
           @contextmenu.prevent="handleGroupContextMenu($event, group)"
-          :title="expandedGroups.has(group.id) ? '点击折叠分组，精简会话列表' : '点击展开分组，查看会话列表'"
         >
-          <svg
-            class="expand-icon"
-            :class="{ expanded: expandedGroups.has(group.id) }"
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
+          <!-- 分组头部 -->
+          <div
+            class="group-header"
+            :class="{ 'depth-limit-reached': !canCreateSubGroupIn(group.id) }"
+            @click="toggleGroup(group.id)"
+            @contextmenu.prevent.stop="handleGroupContextMenu($event, group)"
+            :title="getGroupHeaderTooltip(group)"
           >
-            <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" />
-          </svg>
-          <span class="group-name">{{ group.name }}</span>
-          <span class="group-count">{{ getGroupSessionCount(group.id) }}</span>
+            <svg
+              class="expand-icon"
+              :class="{ expanded: expandedGroups.has(group.id) }"
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+            >
+              <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" />
+            </svg>
+            <span class="group-name">{{ group.name }}</span>
+            <span class="group-count">{{ getGroupSessionCount(group.id) }}</span>
+            <!-- 新建子分组按钮（仅在未达到层级限制时显示） -->
+            <button
+              v-if="canCreateSubGroupIn(group.id)"
+              class="add-subgroup-btn"
+              @click.stop="handleCreateSubGroup(group)"
+              title="新建子分组"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M6 1V11M1 6H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- 分组内容（包含子分组和会话） -->
+          <div v-show="expandedGroups.has(group.id)" class="group-content">
+            <!-- 递归渲染子分组 -->
+            <SessionGroupTree
+              v-if="hasSubGroups(group.id)"
+              :parent-group-id="group.id"
+              :all-groups="sessionGroups"
+              :sessions="sessions"
+              :expanded-groups="expandedGroups"
+              :active-session-id="activeSessionId"
+              @toggle-group="toggleGroup"
+              @select-session="handleSelect"
+              @connect-session="handleConnect"
+              @edit-session="handleEdit"
+              @delete-session="handleDelete"
+              @duplicate-session="handleDuplicate"
+              @properties-session="handleProperties"
+              @group-contextmenu="handleGroupContextMenu"
+              @session-contextmenu="handleSessionContextMenu"
+              @create-subgroup="handleCreateSubGroup"
+            />
+            
+            <!-- 当前分组的会话 -->
+            <div class="group-sessions">
+              <SessionItem
+                v-for="session in getDirectGroupSessions(group.id)"
+                :key="session.id"
+                :session="session"
+                :active="session.id === activeSessionId"
+                @click="handleSelect(session)"
+                @dblclick="handleConnect(session)"
+                @connect="handleConnect(session)"
+                @edit="handleEdit(session)"
+                @delete="handleDelete(session)"
+                @duplicate="handleDuplicate(session)"
+                @properties="handleProperties(session)"
+                @contextmenu.prevent="handleSessionContextMenu($event, session)"
+              />
+            </div>
+          </div>
         </div>
-        <div v-show="expandedGroups.has(group.id)" class="group-sessions">
-          <SessionItem
-            v-for="session in getGroupSessions(group.id)"
-            :key="session.id"
-            :session="session"
-            :active="session.id === activeSessionId"
-            @click="handleSelect(session)"
-            @dblclick="handleConnect(session)"
-            @connect="handleConnect(session)"
-            @edit="handleEdit(session)"
-            @delete="handleDelete(session)"
-            @duplicate="handleDuplicate(session)"
-            @properties="handleProperties(session)"
-            @contextmenu.prevent="handleSessionContextMenu($event, session)"
-          />
-        </div>
-      </div>
+      </template>
       
       <!-- 空白占位区域，用于捕获右键点击 -->
       <div 
@@ -110,6 +156,17 @@
           <circle cx="11" cy="3" r="2" fill="currentColor"/>
         </svg>
         <span>添加会话到此分组</span>
+      </div>
+      <div
+        v-if="selectedGroup && canCreateSubGroupIn(selectedGroup.id)"
+        class="menu-item"
+        @click="handleCreateSubGroupFromMenu"
+        title="在当前分组内创建子分组"
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <span>新建子分组</span>
       </div>
       <div class="menu-divider"></div>
       <div class="menu-item" @click="handleEditGroup" title="双击分组名称，可修改分组名">
@@ -204,7 +261,9 @@ import SessionItem from './SessionItem.vue'
 import SessionGroupForm from './SessionGroupForm.vue'
 import ErrorDialog from '@/components/common/ErrorDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import SessionGroupTree from './SessionGroupTree.vue'
 import type { Session, SessionGroup } from '@shared/types'
+import { MAX_GROUP_DEPTH } from '@shared/types'
 
 // 状态管理
 const sessionStore = useSessionStore()
@@ -360,17 +419,99 @@ const toggleGroup = (groupId: string) => {
 }
 
 /**
- * 获取分组会话数量
+ * 获取分组会话列表（仅直接子会话，不包括子分组）
  */
-const getGroupSessionCount = (groupId: string): number => {
-  return sessions.value.filter(s => s.groupId === groupId).length
+const getDirectGroupSessions = (groupId: string): Session[] => {
+  return sessions.value.filter(s => s.groupId === groupId)
 }
 
 /**
- * 获取分组会话列表
+ * 获取分组会话数量（包括子分组）
+ */
+const getGroupSessionCount = (groupId: string): number => {
+  // 递归获取所有子分组 ID
+  const getAllSubGroupIds = (gid: string): string[] => {
+    const children = sessionStore.sessionGroups.filter(g => g.parentId === gid)
+    const ids = children.map(c => c.id)
+    return [...ids, ...children.flatMap(c => getAllSubGroupIds(c.id))]
+  }
+  
+  const subGroupIds = getAllSubGroupIds(groupId)
+  return sessions.value.filter(s => s.groupId && [groupId, ...subGroupIds].includes(s.groupId)).length
+}
+
+/**
+ * 获取分组会话列表（包括子分组）
  */
 const getGroupSessions = (groupId: string): Session[] => {
-  return sessionStore.getGroupSessions(groupId)
+  // 递归获取所有子分组 ID
+  const getAllSubGroupIds = (gid: string): string[] => {
+    const children = sessionStore.sessionGroups.filter(g => g.parentId === gid)
+    const ids = children.map(c => c.id)
+    return [...ids, ...children.flatMap(c => getAllSubGroupIds(c.id))]
+  }
+  
+  const subGroupIds = getAllSubGroupIds(groupId)
+  return sessions.value.filter(s => s.groupId && [groupId, ...subGroupIds].includes(s.groupId))
+}
+
+/**
+ * 检查是否有子分组
+ */
+const hasSubGroups = (groupId: string): boolean => {
+  return sessionStore.sessionGroups.some(g => g.parentId === groupId)
+}
+
+/**
+ * 检查是否可以在目标分组下创建子分组
+ */
+const canCreateSubGroupIn = (groupId: string): boolean => {
+  const group = sessionStore.sessionGroups.find(g => g.id === groupId)
+  if (!group) return false
+  
+  return group.depth < MAX_GROUP_DEPTH
+}
+
+/**
+ * 获取分组头部 tooltip
+ */
+const getGroupHeaderTooltip = (group: SessionGroup): string => {
+  const depthInfo = `层级：${group.depth}/${MAX_GROUP_DEPTH}`
+  const expandInfo = expandedGroups.value.has(group.id) 
+    ? '点击折叠分组，精简会话列表' 
+    : '点击展开分组，查看会话列表'
+  
+  if (!canCreateSubGroupIn(group.id)) {
+    return `${expandInfo} | ${depthInfo}（已达层级上限）`
+  }
+  
+  return `${expandInfo} | ${depthInfo}`
+}
+
+/**
+ * 创建子分组
+ */
+const handleCreateSubGroup = async (parentGroup: SessionGroup) => {
+  // 检查层级限制
+  const checkResult = await window.api.sessionGroup.checkCanCreateSubGroup(parentGroup.id)
+  if (!checkResult.canCreate) {
+    // 显示错误提示
+    showLevelLimitAlert(checkResult.error || '无法创建子分组')
+    return
+  }
+  
+  // 打开分组表单，设置父分组
+  editingGroup.value = {
+    id: '',
+    name: '',
+    parentId: parentGroup.id,
+    depth: parentGroup.depth + 1,
+    order: Date.now(),
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  }
+  groupFormVisible.value = true
+  groupContextMenuVisible.value = false
 }
 
 /**
@@ -471,6 +612,45 @@ const handleCreateGroup = () => {
 }
 
 /**
+ * 创建子分组（从右键菜单）
+ */
+const handleCreateSubGroupFromMenu = async () => {
+  if (!selectedGroup.value) return
+  
+  // 检查层级限制
+  const checkResult = await window.api.sessionGroup.checkCanCreateSubGroup(selectedGroup.value.id)
+  if (!checkResult.canCreate) {
+    // 显示错误提示
+    showLevelLimitAlert(checkResult.error || '无法创建子分组')
+    return
+  }
+  
+  // 打开分组表单，设置父分组
+  editingGroup.value = {
+    id: '',
+    name: '',
+    parentId: selectedGroup.value.id,
+    depth: selectedGroup.value.depth + 1,
+    order: Date.now(),
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  }
+  groupFormVisible.value = true
+  groupContextMenuVisible.value = false
+}
+
+/**
+ * 显示层级限制提示
+ */
+const showLevelLimitAlert = (message: string) => {
+  // 使用确认对话框显示错误信息
+  confirmDialogTitle.value = '层级限制提示'
+  confirmDialogMessage.value = message
+  confirmDialogIsWarning.value = true
+  confirmDialogVisible.value = true
+}
+
+/**
  * 添加会话到分组
  */
 const handleAddSessionToGroup = () => {
@@ -548,19 +728,21 @@ const handleCloseGroupForm = () => {
  */
 const handleSubmitGroupForm = async (data: { name: string; icon?: string }) => {
   try {
-    if (editingGroup.value) {
+    if (editingGroup.value && editingGroup.value.id) {
       // 更新分组
       await window.api.sessionGroup.update(editingGroup.value.id, data)
       sessionStore.updateSessionGroup(editingGroup.value.id, data)
     } else {
-      // 创建分组
-      const group = await window.api.sessionGroup.create(data)
+      // 创建分组（支持子分组）
+      const parentId = editingGroup.value?.parentId
+      const group = await window.api.sessionGroup.create(data, parentId)
       sessionStore.addSessionGroup(group)
     }
     handleCloseGroupForm()
   } catch (error) {
     console.error('Failed to save group:', error)
-    alert('保存分组失败')
+    const errorMessage = error instanceof Error ? error.message : '保存分组失败'
+    alert(errorMessage)
   }
 }
 
@@ -811,15 +993,27 @@ onUnmounted(() => {
   color: var(--text-secondary, #808080);
   font-size: 12px;
   transition: background-color 0.15s;
+  position: relative;
 }
 
 .group-header:hover {
   background-color: var(--hover-bg, #2a2a2a);
 }
 
+/* 层级限制达到时的样式 */
+.group-header.depth-limit-reached {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.group-header.depth-limit-reached:hover {
+  background-color: transparent;
+}
+
 .expand-icon {
   margin-right: 6px;
   transition: transform 0.15s;
+  flex-shrink: 0;
 }
 
 .expand-icon.expanded {
@@ -828,13 +1022,72 @@ onUnmounted(() => {
 
 .group-name {
   flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .group-count {
   font-size: 11px;
   color: var(--text-tertiary, #606060);
+  margin-left: 8px;
+  padding: 1px 6px;
+  background-color: var(--hover-bg, #2a2a2a);
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
 }
 
+/* 新建子分组按钮 */
+.add-subgroup-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-secondary, #808080);
+  opacity: 0;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.group-header:hover .add-subgroup-btn {
+  opacity: 1;
+}
+
+.add-subgroup-btn:hover {
+  background-color: var(--color-primary-light-9, rgba(64, 158, 255, 0.1));
+  color: var(--color-primary, #409eff);
+}
+
+.group-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.group-sessions {
+  padding-left: 12px;
+}
+
+/* 子分组缩进 */
+.sub-groups {
+  padding-left: 8px;
+  border-left: 1px solid var(--border-color-light, rgba(255, 255, 255, 0.1));
+  margin-left: 4px;
+}
+
+/* 分组内容区域 */
+.group-content {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 会话项容器，确保嵌套时会话项宽度正确 */
 .group-sessions {
   padding-left: 12px;
 }

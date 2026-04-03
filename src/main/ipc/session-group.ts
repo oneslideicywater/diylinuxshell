@@ -26,15 +26,22 @@ export function registerSessionGroupHandlers(): void {
    */
   ipcMain.handle(
     IPC_CHANNELS.SESSION_GROUP.CREATE,
-    (_event, groupData: Omit<SessionGroup, 'id' | 'createdAt' | 'updatedAt'>) => {
+    (_event, groupData: Omit<SessionGroup, 'id' | 'createdAt' | 'updatedAt' | 'depth'>) => {
       const group: SessionGroup = {
         ...groupData,
         id: CryptoService.generateGroupId(),
+        depth: 1, // 初始值，会在 StoreService 中计算
         createdAt: Date.now(),
         updatedAt: Date.now()
       }
 
-      StoreService.addSessionGroup(group)
+      const result = StoreService.addSessionGroup(group)
+      
+      // 如果创建失败，返回错误信息
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      
       return group
     }
   )
@@ -45,7 +52,13 @@ export function registerSessionGroupHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.SESSION_GROUP.UPDATE,
     (_event, id: string, updates: Partial<SessionGroup>) => {
-      StoreService.updateSessionGroup(id, updates)
+      const result = StoreService.updateSessionGroup(id, updates)
+      
+      // 如果更新失败，返回错误信息
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+      
       return StoreService.getSessionGroups().find((g) => g.id === id)
     }
   )
@@ -57,4 +70,24 @@ export function registerSessionGroupHandlers(): void {
     StoreService.deleteSessionGroup(id)
     return true
   })
+
+  /**
+   * 检查是否可以在目标分组下创建子分组
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.SESSION_GROUP.CHECK_CAN_CREATE_SUBGROUP,
+    (_event, targetGroupId: string | undefined) => {
+      return StoreService.checkCanCreateSubGroup(targetGroupId)
+    }
+  )
+
+  /**
+   * 检查是否可以将分组移动到目标分组
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.SESSION_GROUP.CHECK_CAN_MOVE,
+    (_event, sourceGroupId: string, targetGroupId: string | undefined) => {
+      return StoreService.checkCanMoveGroup(sourceGroupId, targetGroupId)
+    }
+  )
 }

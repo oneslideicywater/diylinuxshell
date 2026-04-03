@@ -43,7 +43,11 @@ export const IPC_CHANNELS = {
     /** 更新分组 */
     UPDATE: 'session-group:update',
     /** 删除分组 */
-    DELETE: 'session-group:delete'
+    DELETE: 'session-group:delete',
+    /** 检查是否可以创建子分组 */
+    CHECK_CAN_CREATE_SUBGROUP: 'session-group:check-can-create-subgroup',
+    /** 检查是否可以移动分组 */
+    CHECK_CAN_MOVE: 'session-group:check-can-move'
   },
 
   /**

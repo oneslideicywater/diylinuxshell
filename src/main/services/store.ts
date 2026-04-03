@@ -6,6 +6,14 @@
 
 import Store from 'electron-store'
 import type { Session, SessionGroup, CommandSnippet, CommandSnippetGroup, AppConfig } from '@shared/types'
+import { MAX_GROUP_DEPTH } from '@shared/types'
+import {
+  calculateGroupDepth,
+  canCreateSubGroup,
+  canMoveGroup,
+  getAllSubGroups,
+  updateAllGroupDepths
+} from '../utils/group-helpers'
 
 /**
  * 存储数据结构定义
@@ -123,10 +131,12 @@ export class StoreService {
 
   /**
    * 获取所有会话分组
-   * @returns 会话分组列表
+   * @returns 会话分组列表（包含层级深度信息）
    */
   static getSessionGroups(): SessionGroup[] {
-    return store.get('sessionGroups', [])
+    const groups = store.get('sessionGroups', [])
+    // 确保所有分组都有深度信息
+    return updateAllGroupDepths(groups)
   }
 
   /**
@@ -134,40 +144,135 @@ export class StoreService {
    * @param groups - 会话分组列表
    */
   static setSessionGroups(groups: SessionGroup[]): void {
-    store.set('sessionGroups', groups)
+    // 保存前更新所有分组的深度信息
+    const updatedGroups = updateAllGroupDepths(groups)
+    store.set('sessionGroups', updatedGroups)
   }
 
   /**
    * 添加会话分组
    * @param group - 会话分组对象
+   * @returns 添加结果，包含成功状态和错误信息
    */
-  static addSessionGroup(group: SessionGroup): void {
+  static addSessionGroup(group: SessionGroup): { success: boolean; error?: string } {
     const groups = this.getSessionGroups()
+    
+    // 检查层级限制
+    if (group.parentId && !canCreateSubGroup(group.parentId, groups)) {
+      return {
+        success: false,
+        error: `子分组嵌套层级已达上限（最多 ${MAX_GROUP_DEPTH} 级），无法继续创建下级分组。`
+      }
+    }
+    
+    // 计算新分组的深度
+    if (group.parentId) {
+      const parentDepth = calculateGroupDepth(group.parentId, groups)
+      group.depth = parentDepth + 1
+    } else {
+      group.depth = 1
+    }
+    
     groups.push(group)
     this.setSessionGroups(groups)
+    return { success: true }
   }
 
   /**
    * 更新会话分组
-   * @param id - 分组ID
+   * @param id - 分组 ID
    * @param updates - 更新内容
+   * @returns 更新结果，包含成功状态和错误信息
    */
-  static updateSessionGroup(id: string, updates: Partial<SessionGroup>): void {
+  static updateSessionGroup(id: string, updates: Partial<SessionGroup>): { success: boolean; error?: string } {
     const groups = this.getSessionGroups()
     const index = groups.findIndex(g => g.id === id)
     if (index !== -1) {
+      // 如果更新 parentId，需要检查层级限制
+      if (updates.parentId !== undefined && updates.parentId !== groups[index].parentId) {
+        if (!canMoveGroup(id, updates.parentId, groups)) {
+          return {
+            success: false,
+            error: updates.parentId 
+              ? '目标位置嵌套层级超限，无法移入该子分组下。'
+              : '无法将分组移动到根级别'
+          }
+        }
+      }
+      
       groups[index] = { ...groups[index], ...updates, updatedAt: Date.now() }
       this.setSessionGroups(groups)
+      return { success: true }
     }
+    return { success: false, error: '分组不存在' }
   }
 
   /**
    * 删除会话分组
-   * @param id - 分组ID
+   * @param id - 分组 ID
+   * @param moveSessionsToRoot - 是否将分组内会话移至未分组（默认 true）
    */
-  static deleteSessionGroup(id: string): void {
-    const groups = this.getSessionGroups().filter(g => g.id !== id)
-    this.setSessionGroups(groups)
+  static deleteSessionGroup(id: string, moveSessionsToRoot: boolean = true): void {
+    const groups = this.getSessionGroups()
+    // 获取所有子分组 ID
+    const subGroupIds = getAllSubGroups(id, groups).map(g => g.id)
+    
+    // 删除分组及其所有子分组
+    const filteredGroups = groups.filter(g => g.id !== id && !subGroupIds.includes(g.id))
+    this.setSessionGroups(filteredGroups)
+    
+    // 处理会话：如果要删除的分组包含会话，将会话移至未分组
+    if (moveSessionsToRoot) {
+      const sessions = this.getSessions()
+      const updatedSessions = sessions.map(session => {
+        if (session.groupId && (session.groupId === id || subGroupIds.includes(session.groupId))) {
+          return { ...session, groupId: undefined, updatedAt: Date.now() }
+        }
+        return session
+      })
+      this.setSessions(updatedSessions)
+    }
+  }
+
+  /**
+   * 检查是否可以在目标分组下创建子分组
+   * @param targetGroupId - 目标分组 ID，undefined 表示根级别
+   * @returns 检查结果
+   */
+  static checkCanCreateSubGroup(targetGroupId: string | undefined): { canCreate: boolean; error?: string } {
+    const groups = this.getSessionGroups()
+    const canCreate = canCreateSubGroup(targetGroupId, groups)
+    
+    if (!canCreate) {
+      return {
+        canCreate: false,
+        error: `子分组嵌套层级已达上限（最多 ${MAX_GROUP_DEPTH} 级），无法继续创建下级分组。`
+      }
+    }
+    
+    return { canCreate: true }
+  }
+
+  /**
+   * 检查是否可以将分组移动到目标分组
+   * @param sourceGroupId - 源分组 ID
+   * @param targetGroupId - 目标分组 ID，undefined 表示根级别
+   * @returns 检查结果
+   */
+  static checkCanMoveGroup(sourceGroupId: string, targetGroupId: string | undefined): { canMove: boolean; error?: string } {
+    const groups = this.getSessionGroups()
+    const canMove = canMoveGroup(sourceGroupId, targetGroupId, groups)
+    
+    if (!canMove) {
+      return {
+        canMove: false,
+        error: targetGroupId 
+          ? '目标位置嵌套层级超限，无法移入该子分组下。'
+          : '无法移动分组到该位置'
+      }
+    }
+    
+    return { canMove: true }
   }
 
   /**

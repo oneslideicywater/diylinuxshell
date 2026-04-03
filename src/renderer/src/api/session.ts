@@ -95,7 +95,7 @@ export const sessionAPI = {
 }
 
 /**
- * 会话分组API接口
+ * 会话分组 API 接口
  */
 export const sessionGroupAPI = {
   /**
@@ -109,15 +109,20 @@ export const sessionGroupAPI = {
   /**
    * 创建会话分组
    * @param data - 分组数据
+   * @param parentId - 父分组 ID（可选，用于创建子分组）
    * @returns 创建的分组对象
    */
-  create: (data: { name: string; icon?: string }): Promise<SessionGroup> => {
-    return ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.CREATE, data)
+  create: (data: { name: string; icon?: string }, parentId?: string): Promise<SessionGroup> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.CREATE, {
+      ...data,
+      parentId,
+      order: Date.now() // 使用时间戳作为默认排序
+    })
   },
 
   /**
    * 更新会话分组
-   * @param id - 分组ID
+   * @param id - 分组 ID
    * @param updates - 更新内容
    * @returns 更新后的分组对象
    */
@@ -127,10 +132,34 @@ export const sessionGroupAPI = {
 
   /**
    * 删除会话分组
-   * @param id - 分组ID
+   * @param id - 分组 ID
    * @returns 是否成功
    */
   delete: (id: string): Promise<boolean> => {
     return ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.DELETE, id)
+  },
+
+  /**
+   * 检查是否可以在目标分组下创建子分组
+   * @param targetGroupId - 目标分组 ID，undefined 表示根级别
+   * @returns 检查结果
+   */
+  checkCanCreateSubGroup: (
+    targetGroupId: string | undefined
+  ): Promise<{ canCreate: boolean; error?: string }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.CHECK_CAN_CREATE_SUBGROUP, targetGroupId)
+  },
+
+  /**
+   * 检查是否可以将分组移动到目标分组
+   * @param sourceGroupId - 源分组 ID
+   * @param targetGroupId - 目标分组 ID，undefined 表示根级别
+   * @returns 检查结果
+   */
+  checkCanMoveGroup: (
+    sourceGroupId: string,
+    targetGroupId: string | undefined
+  ): Promise<{ canMove: boolean; error?: string }> => {
+    return ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.CHECK_CAN_MOVE, sourceGroupId, targetGroupId)
   }
 }

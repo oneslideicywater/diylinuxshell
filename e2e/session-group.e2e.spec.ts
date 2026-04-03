@@ -273,4 +273,84 @@ test.describe('会话分组功能', () => {
     // 验证菜单项可见
     await expect(contextMenu.locator('.menu-item:has-text("新建分组")')).toBeVisible()
   })
+
+  test('应该能够创建子分组', async () => {
+    // 确保至少有一个分组
+    const groupHeader = page.locator('.group-header:has-text("编辑后的分组名")').first()
+    await expect(groupHeader).toBeVisible({ timeout: 5000 })
+    
+    // 右键点击分组头部
+    await groupHeader.click({ button: 'right' })
+    
+    // 等待右键菜单出现
+    const contextMenu = page.locator('.context-menu:visible').first()
+    await contextMenu.waitFor({ state: 'visible', timeout: 10000 })
+    
+    // 点击"新建子分组"
+    const createSubGroupItem = contextMenu.locator('.menu-item:has-text("新建子分组")')
+    await expect(createSubGroupItem).toBeVisible()
+    await createSubGroupItem.click()
+    
+    // 等待分组表单对话框出现
+    await page.waitForSelector('.group-form', { timeout: 10000 })
+    
+    // 输入子分组名称（使用时间戳确保唯一性）
+    const subGroupName = `子分组-${Date.now()}`
+    await page.fill('#groupName', subGroupName)
+    
+    // 选择一个图标
+    await page.click('.icon-option:first-child')
+    
+    // 提交表单
+    await page.click('.group-form .btn-primary')
+    
+    // 等待对话框关闭
+    await page.waitForSelector('.group-form', { state: 'hidden', timeout: 10000 })
+    
+    // 验证子分组已创建（应该在父分组下方显示）
+    const subGroupHeader = page.locator(`.group-header:has-text("${subGroupName}")`)
+    await expect(subGroupHeader).toBeVisible({ timeout: 10000 })
+  })
+
+  test('应该能够通过分组头部按钮创建子分组', async () => {
+    // 找到第一个分组
+    const groupHeader = page.locator('.group-header').first()
+    await expect(groupHeader).toBeVisible({ timeout: 5000 })
+    
+    // 鼠标悬停在分组头部以显示新建子分组按钮
+    await groupHeader.hover()
+    
+    // 点击新建子分组按钮
+    const addSubGroupBtn = groupHeader.locator('.add-subgroup-btn')
+    await expect(addSubGroupBtn).toBeVisible({ timeout: 5000 })
+    await addSubGroupBtn.click()
+    
+    // 等待分组表单对话框出现
+    await page.waitForSelector('.group-form', { timeout: 10000 })
+    
+    // 输入子分组名称（使用时间戳确保唯一性）
+    const subGroupName = `子分组-btn-${Date.now()}`
+    await page.fill('#groupName', subGroupName)
+    
+    // 提交表单
+    await page.click('.group-form .btn-primary')
+    
+    // 等待对话框关闭
+    await page.waitForSelector('.group-form', { state: 'hidden', timeout: 10000 })
+    
+    // 验证子分组已创建
+    const subGroupHeader = page.locator(`.group-header:has-text("${subGroupName}")`)
+    await expect(subGroupHeader).toBeVisible({ timeout: 10000 })
+  })
+
+  test('应该显示分组层级提示信息', async () => {
+    // 找到第一个分组
+    const groupHeader = page.locator('.group-header').first()
+    await expect(groupHeader).toBeVisible({ timeout: 5000 })
+    
+    // 获取 tooltip
+    const tooltip = await groupHeader.getAttribute('title')
+    expect(tooltip).toContain('层级')
+    expect(tooltip).toContain('/')
+  })
 })

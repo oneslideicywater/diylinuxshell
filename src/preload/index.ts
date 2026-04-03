@@ -99,8 +99,12 @@ const api: CustomAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.GET_ALL),
     
     // 创建分组
-    create: (data: { name: string; icon?: string }): Promise<SessionGroup> => 
-      ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.CREATE, data),
+    create: (data: { name: string; icon?: string }, parentId?: string): Promise<SessionGroup> => 
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.CREATE, {
+        ...data,
+        parentId,
+        order: Date.now()
+      }),
     
     // 更新分组
     update: (id: string, updates: Partial<SessionGroup>): Promise<SessionGroup | undefined> => 
@@ -108,7 +112,15 @@ const api: CustomAPI = {
     
     // 删除分组
     delete: (id: string): Promise<boolean> => 
-      ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.DELETE, id)
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.DELETE, id),
+    
+    // 检查是否可以创建子分组
+    checkCanCreateSubGroup: (targetGroupId: string | undefined): Promise<{ canCreate: boolean; error?: string }> => 
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.CHECK_CAN_CREATE_SUBGROUP, targetGroupId),
+    
+    // 检查是否可以移动分组
+    checkCanMoveGroup: (sourceGroupId: string, targetGroupId: string | undefined): Promise<{ canMove: boolean; error?: string }> => 
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.CHECK_CAN_MOVE, sourceGroupId, targetGroupId)
   },
 
   /**
