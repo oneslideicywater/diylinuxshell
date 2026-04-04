@@ -46,7 +46,7 @@
         :style="{ width: `${sidebarWidth}px` }"
       >
         <Sidebar 
-          @add-session="emit('add-session')" 
+          @add-session="(groupId?: string) => emit('add-session', groupId)" 
           @edit-session="(s) => emit('edit-session', s)" 
           @open-settings="emit('open-settings')" 
         />

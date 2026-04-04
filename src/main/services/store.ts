@@ -210,9 +210,9 @@ export class StoreService {
   /**
    * 删除会话分组
    * @param id - 分组 ID
-   * @param moveSessionsToRoot - 是否将分组内会话移至未分组（默认 true）
+   * @param cascadeDeleteSessions - 是否级联删除分组内所有会话（默认 true）
    */
-  static deleteSessionGroup(id: string, moveSessionsToRoot: boolean = true): void {
+  static deleteSessionGroup(id: string, cascadeDeleteSessions: boolean = true): void {
     const groups = this.getSessionGroups()
     // 获取所有子分组 ID
     const subGroupIds = getAllSubGroups(id, groups).map(g => g.id)
@@ -221,16 +221,13 @@ export class StoreService {
     const filteredGroups = groups.filter(g => g.id !== id && !subGroupIds.includes(g.id))
     this.setSessionGroups(filteredGroups)
     
-    // 处理会话：如果要删除的分组包含会话，将会话移至未分组
-    if (moveSessionsToRoot) {
+    // 处理会话：如果启用级联删除，删除该分组及其所有子分组下的会话
+    if (cascadeDeleteSessions) {
       const sessions = this.getSessions()
-      const updatedSessions = sessions.map(session => {
-        if (session.groupId && (session.groupId === id || subGroupIds.includes(session.groupId))) {
-          return { ...session, groupId: undefined, updatedAt: Date.now() }
-        }
-        return session
-      })
-      this.setSessions(updatedSessions)
+      const filteredSessions = sessions.filter(
+        session => !session.groupId || (session.groupId !== id && !subGroupIds.includes(session.groupId))
+      )
+      this.setSessions(filteredSessions)
     }
   }
 

@@ -6,20 +6,6 @@
 
 <template>
   <div class="group-tree-select">
-    <!-- 未分组选项（只在根组件显示） -->
-    <div
-      v-if="isRootComponent"
-      class="tree-option"
-      :class="{ active: modelValue === '' }"
-      @click="handleSelect('')"
-      :style="{ paddingLeft: '12px' }"
-    >
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-        <circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1.5" />
-      </svg>
-      <span>未分组</span>
-    </div>
-
     <!-- 分组列表 -->
     <template v-for="group in rootGroups" :key="group.id">
       <!-- 分组选项 -->
@@ -84,13 +70,6 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'toggle', groupId: string): void
 }>()
-
-/**
- * 判断是否是根组件（没有父分组 ID）
- */
-const isRootComponent = computed(() => {
-  return !props.parentGroupId
-})
 
 /**
  * 获取根分组或指定父分组的直接子分组（去重）

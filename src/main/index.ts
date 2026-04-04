@@ -9,6 +9,8 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerAllHandlers } from './ipc'
 import { SSHManager } from './services/ssh-manager'
+import { StoreService } from './services/store'
+import { CryptoService } from './services/crypto'
 
 /**
  * 创建主窗口
@@ -108,6 +110,9 @@ app.whenReady().then(() => {
   // 注册所有 IPC 处理器
   registerAllHandlers()
 
+  // 创建默认分组（如果不存在）
+  createDefaultGroup()
+
   // 监听新窗口创建，注册快捷键优化
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -123,6 +128,36 @@ app.whenReady().then(() => {
     }
   })
 })
+
+/**
+ * 创建默认分组
+ * 如果不存在"默认分组"，则创建它
+ */
+function createDefaultGroup(): void {
+  try {
+    const groups = StoreService.getSessionGroups()
+    // 检查是否已存在默认分组
+    const hasDefaultGroup = groups.some(g => g.name === '默认分组')
+    
+    if (!hasDefaultGroup) {
+      // 创建默认分组
+      const defaultGroup = {
+        id: CryptoService.generateId(),
+        name: '默认分组',
+        icon: 'folder',
+        order: 0,
+        depth: 1,
+        parentId: null,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }
+      StoreService.addSessionGroup(defaultGroup)
+      console.log('[Main] 创建默认分组:', defaultGroup.name)
+    }
+  } catch (error) {
+    console.error('[Main] 创建默认分组失败:', error)
+  }
+}
 
 /**
  * 监听所有窗口关闭事件

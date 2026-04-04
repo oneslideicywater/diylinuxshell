@@ -91,12 +91,11 @@
 
       <!-- 分组管理右键菜单 -->
       <div v-if="groupContextMenuVisible" class="context-menu" :style="groupContextMenuStyle" @click.stop>
-        <div class="menu-item" @click="handleAddSessionToGroup" title="添加会话到此分组">
+        <div class="menu-item" @click="handleNewSessionFromMenu" title="添加会话到当前分组">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-            <circle cx="11" cy="3" r="2" fill="currentColor" />
           </svg>
-          <span>添加会话到此分组</span>
+          <span>添加会话</span>
         </div>
         <div v-if="selectedGroup && canCreateSubGroupIn(selectedGroup.id)" class="menu-item"
           @click="handleCreateSubGroupFromMenu" title="在当前分组内创建子分组">
@@ -113,7 +112,7 @@
           </svg>
           <span>编辑分组</span>
         </div>
-        <div class="menu-item danger" @click="handleDeleteGroup" title="删除分组将会话移至未分组，操作不可逆">
+        <div class="menu-item danger" @click="handleDeleteGroup" title="删除分组将会话全部删除，操作不可逆">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path
               d="M2 4H12M5 4V3C5 2.44772 5.44772 2 6 2H8C8.55228 2 9 2.44772 9 3V4M11 4V11C11 11.5523 10.5523 12 10 12H4C3.44772 12 3 11.5523 3 11V4H11Z"
@@ -132,11 +131,11 @@
 
       <!-- 会话右键菜单（完整菜单项） -->
       <div v-if="sessionContextMenuVisible" class="context-menu" :style="sessionContextMenuStyle" @click.stop>
-        <div class="menu-item" @click="handleNewSessionFromMenu" title="创建新的会话配置">
+        <div class="menu-item" @click="handleNewSessionFromMenu" title="添加会话到当前分组">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
           </svg>
-          <span>新增会话</span>
+          <span>添加会话</span>
         </div>
         <div class="menu-item" @click="handleConnectFromMenu" title="连接到当前会话">
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -346,8 +345,8 @@ const ungroupedSessions = computed(() => {
 // 定义事件
 const emit = defineEmits<{
   (e: 'select', session: Session): void
-  (e: 'edit', session: Session): void
-  (e: 'add-session'): void
+  (e: 'add-session', groupId?: string): void
+  (e: 'edit-session', session: Session): void
 }>()
 
 /**
@@ -524,6 +523,7 @@ const handleGroupContextMenu = (event: MouseEvent, group: SessionGroup) => {
   closeAllContextMenus()
 
   selectedGroup.value = group
+  currentRightClickGroupId.value = group.id
   groupContextMenuVisible.value = true
 
   // 保存右键点击坐标
@@ -643,13 +643,19 @@ const handlePropertiesFromMenu = () => {
   }
 }
 
+// 当前右键点击的分组 ID（用于添加会话）
+const currentRightClickGroupId = ref<string | undefined>(undefined)
+
 /**
- * 从右键菜单新增会话
+ * 从右键菜单添加会话
  */
 const handleNewSessionFromMenu = () => {
   sessionContextMenuVisible.value = false
   showGroupSubmenu.value = false
-  emit('add-session')
+  
+  // 传递当前右键点击的分组 ID，如果未指定则传到默认分组
+  emit('add-session', currentRightClickGroupId.value)
+  currentRightClickGroupId.value = undefined
 }
 
 /**
@@ -663,6 +669,9 @@ const handleListContextMenu = (event: MouseEvent) => {
   // 关闭其他菜单
   closeAllContextMenus()
 
+  // 空白区域右键，清除分组 ID，这样新增会话时会使用默认分组
+  currentRightClickGroupId.value = undefined
+  
   listContextMenuVisible.value = true
 
   // 计算菜单位置
@@ -798,7 +807,7 @@ const handleDeleteGroup = async () => {
       // 有会话时需要二次确认
       const confirmed = await showConfirmDialog(
         '删除分组确认',
-        `该分组包含 ${sessionCount} 个会话，删除分组将会话移至未分组，确定继续？`,
+        `该分组包含 ${sessionCount} 个会话，删除分组将会话全部删除，确定继续？`,
         true // 显示警告样式
       )
 

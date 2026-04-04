@@ -31,6 +31,11 @@
    - ✅ E2E 测试全部通过（7 个测试用例）
    - ✅ 树形分组选择器实现
    - ✅ SessionForm 集成树形分组选择器
+   - ✅ 默认分组功能
+     - ✅ 应用启动时创建默认分组
+     - ✅ 未指定分组时自动添加到默认分组
+     - ✅ 默认分组不可删除
+     - ✅ 删除分组时会话移至默认分组
 5. **测试连接功能** - 完全实现
    - ✅ 测试连接按钮 UI
    - ✅ 字段验证逻辑
@@ -231,7 +236,7 @@ export interface CommandSnippetGroup {
 - [x] 分组头部显示会话数量
 - [x] 支持为分组选择不同图标
 - [x] 右键菜单层级正确（空白区域、分组、会话）
-- [x] 删除分组后，会话自动移至未分组
+- [x] 删除分组后，级联删除分组内所有会话
 - [x] 所有分组操作有 Tooltip 提示
 - [x] 界面轻量化，无冗余操作
 - [x] 会话侧边栏右键菜单支持新建分组
@@ -255,7 +260,7 @@ export interface CommandSnippetGroup {
   - [x] 支持展开/折叠分组查看子分组
   - [x] 显示分组层级缩进
   - [x] 支持选择任意层级的分组
-  - [x] 未分组选项始终显示在顶部
+  - [x] 默认分组选项始终显示在顶部
   - [x] 深色和浅色主题下正常显示
   - [x] 滚动支持（分组过多时）
 
@@ -352,7 +357,7 @@ export interface Session {
   host: string
   port: number
   username: string
-  groupId?: string  // undefined 表示未分组
+  groupId?: string  // 所属分组 ID，默认为默认分组
   createdAt: number
   updatedAt: number
 }
@@ -411,17 +416,10 @@ export function registerSessionGroupHandlers(): void {
     }
   )
 
-  // 删除分组（会话移至未分组）
+  // 删除分组（级联删除会话）
   ipcMain.handle(IPC_CHANNELS.SESSION_GROUP.DELETE, (_event, id: string) => {
-    // 将该分组下的会话移至未分组
-    const sessions = StoreService.getSessions()
-    sessions.forEach(session => {
-      if (session.groupId === id) {
-        StoreService.updateSession(session.id, { groupId: undefined })
-      }
-    })
-    
-    StoreService.deleteSessionGroup(id)
+    // 级联删除该分组下的所有会话
+    StoreService.deleteSessionGroup(id, true)
     return true
   })
 }
@@ -465,7 +463,7 @@ async function deleteSessionGroup(id: string) {
   
   if (groupSessions.length > 0) {
     const confirmed = await showConfirmDialog(
-      `该分组包含 ${groupSessions.length} 个会话，删除分组将会话移至未分组，确定继续？`
+      `该分组包含 ${groupSessions.length} 个会话，删除分组将会话全部删除，确定继续？`
     )
     if (!confirmed) return
   }
@@ -473,10 +471,8 @@ async function deleteSessionGroup(id: string) {
   await sessionGroupApi.delete(id)
   sessionGroups.value = sessionGroups.value.filter(g => g.id !== id)
   
-  // 将该分组下的会话移至未分组
-  groupSessions.forEach(session => {
-    session.groupId = undefined
-  })
+  // 级联删除该分组下的会话（已在主进程中处理）
+  sessions.value = sessions.value.filter(s => s.groupId !== id)
 }
 
 // 按分组获取会话
@@ -484,7 +480,7 @@ function getGroupSessions(groupId: string): Session[] {
   return sessions.value.filter(s => s.groupId === groupId)
 }
 
-// 获取未分组会话
+// 获取默认分组会话
 function getUngroupedSessions(): Session[] {
   return sessions.value.filter(s => !s.groupId)
 }

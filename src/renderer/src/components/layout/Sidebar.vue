@@ -69,7 +69,7 @@ const router = useRouter()
 
 // 定义事件
 const emit = defineEmits<{
-  (e: 'add-session'): void
+  (e: 'add-session', groupId?: string): void
   (e: 'edit-session', session: Session): void
   (e: 'open-settings'): void
 }>()
@@ -77,8 +77,8 @@ const emit = defineEmits<{
 /**
  * 添加新会话
  */
-const handleAddSession = () => {
-  emit('add-session')
+const handleAddSession = (groupId?: string) => {
+  emit('add-session', groupId)
 }
 
 /**

@@ -344,10 +344,12 @@ import GroupTreeSelect from './GroupTreeSelect.vue'
  */
 interface Props {
   session?: Session | null
+  defaultGroupId?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  session: null
+  session: null,
+  defaultGroupId: null
 })
 
 // 状态管理
@@ -435,6 +437,12 @@ watch(
         keyPath: session.keyPath || '',
         keyPassphrase: session.keyPassphrase || ''
       }
+    } else if (props.defaultGroupId) {
+      // 新增会话且有默认分组 ID，使用默认分组
+      formData.value.groupId = props.defaultGroupId
+    } else {
+      // 新增会话且未指定分组，清空 groupId（后端会自动分配到默认分组）
+      formData.value.groupId = ''
     }
   },
   { immediate: true }

@@ -54,8 +54,19 @@ export function registerSessionHandlers(): void {
    * 创建会话
    */
   ipcMain.handle(IPC_CHANNELS.SESSION.CREATE, (_event, sessionData: Omit<Session, 'id' | 'createdAt' | 'updatedAt'>) => {
+    // 如果未指定分组，则获取默认分组 ID
+    let groupId = sessionData.groupId
+    if (!groupId) {
+      const groups = StoreService.getSessionGroups()
+      const defaultGroup = groups.find(g => g.name === '默认分组')
+      if (defaultGroup) {
+        groupId = defaultGroup.id
+      }
+    }
+    
     const session: Session = {
       ...sessionData,
+      groupId,
       id: CryptoService.generateSessionId(),
       createdAt: Date.now(),
       updatedAt: Date.now()

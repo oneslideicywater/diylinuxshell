@@ -67,6 +67,18 @@ export function registerSessionGroupHandlers(): void {
    * 删除会话分组
    */
   ipcMain.handle(IPC_CHANNELS.SESSION_GROUP.DELETE, (_event, id: string) => {
+    // 检查是否是默认分组
+    const groups = StoreService.getSessionGroups()
+    const group = groups.find(g => g.id === id)
+    
+    if (!group) {
+      throw new Error('分组不存在')
+    }
+    
+    if (group.name === '默认分组') {
+      throw new Error('默认分组不可删除')
+    }
+    
     StoreService.deleteSessionGroup(id)
     return true
   })

@@ -1,10 +1,11 @@
 <template>
-  <AppLayout @add-session="showSessionForm = true" @edit-session="handleEditSession" @open-settings="handleOpenSettings" />
+  <AppLayout @add-session="handleAddSession" @edit-session="handleEditSession" @open-settings="handleOpenSettings" />
   
   <!-- 会话表单对话框 -->
   <SessionForm
     v-if="showSessionForm"
     :session="editingSession"
+    :default-group-id="defaultGroupId"
     @close="handleCloseSessionForm"
     @save="handleSaveSession"
   />
@@ -34,8 +35,19 @@ const errorDialogStore = useErrorDialogStore()
 // 会话表单显示状态
 const showSessionForm = ref(false)
 
+// 默认分组 ID（新增会话时使用）
+const defaultGroupId = ref<string | undefined>(undefined)
+
 // 正在编辑的会话
 const editingSession = ref<Session | undefined>(undefined)
+
+/**
+ * 添加新会话
+ */
+const handleAddSession = (groupId?: string) => {
+  defaultGroupId.value = groupId
+  showSessionForm.value = true
+}
 
 /**
  * 编辑会话
