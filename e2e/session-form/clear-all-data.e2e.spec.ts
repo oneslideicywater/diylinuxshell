@@ -25,15 +25,19 @@ test.describe('Clear All Data - 清空所有数据', () => {
   test('清空所有会话和分组', async () => {
     console.log('=== 清空所有数据 ===')
     
-    // 通过 IPC 清空所有分组
+    // 通过 IPC 清空所有分组（除了默认分组）
     await page.evaluate(async () => {
       if (window.api && window.api.sessionGroup) {
         const groups = await window.api.sessionGroup.getAll()
         console.log(`找到 ${groups.length} 个分组，开始删除...`)
         
         for (const group of groups) {
-          await window.api.sessionGroup.delete(group.id)
-          console.log(`删除分组：${group.name}`)
+          if (group.name !== '默认分组') {
+            await window.api.sessionGroup.delete(group.id)
+            console.log(`删除分组：${group.name}`)
+          } else {
+            console.log(`跳过默认分组：${group.name}`)
+          }
         }
       }
       

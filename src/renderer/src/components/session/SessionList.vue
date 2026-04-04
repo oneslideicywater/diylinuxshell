@@ -650,8 +650,8 @@ const currentRightClickGroupId = ref<string | undefined>(undefined)
  * 从右键菜单添加会话
  */
 const handleNewSessionFromMenu = () => {
-  sessionContextMenuVisible.value = false
-  showGroupSubmenu.value = false
+  // 关闭所有右键菜单
+  closeAllContextMenus()
   
   // 传递当前右键点击的分组 ID，如果未指定则传到默认分组
   emit('add-session', currentRightClickGroupId.value)
