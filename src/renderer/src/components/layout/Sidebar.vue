@@ -17,7 +17,7 @@
           </svg>
         </button>
       </div>
-      <SessionList @select="handleSelectSession" @edit="handleEditSession" />
+      <SessionList @select="handleSelectSession" @edit="handleEditSession" @add-session="handleAddSession" />
     </div>
 
     <!-- 快捷命令区域 -->

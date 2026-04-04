@@ -132,6 +132,18 @@ test.describe('Session - 会话管理', () => {
   test('会话分组右键菜单调试', async () => {
     // 测试在 session/debug-session-group-contextmenu.e2e.spec.ts 中定义
   })
+
+  test('五层嵌套子分组', async () => {
+    // 测试在 session/five-level-nested-groups.e2e.spec.ts 中定义
+  })
+
+  test('子分组缩进验证', async () => {
+    // 测试在 session/subgroup-padding-validation.e2e.spec.ts 中定义
+  })
+
+  test('最后一层分组文字显示效果修复验证', async () => {
+    // 测试在 session/last-level-group-display-fix.e2e.spec.ts 中定义
+  })
 })
 
 /**
@@ -144,6 +156,10 @@ test.describe('Session Form - 会话表单', () => {
 
   test('会话表单模态行为', async () => {
     // 测试在 session-form/session-form-modal.e2e.spec.ts 中定义
+  })
+
+  test('树形分组选择器控制台报错捕获', async () => {
+    // 测试在 session-form/tree-group-select-console-error.e2e.spec.ts 中定义
   })
 })
 

@@ -40,8 +40,15 @@ const editingSession = ref<Session | undefined>(undefined)
 /**
  * 编辑会话
  */
-const handleEditSession = (session: Session) => {
-  editingSession.value = session
+const handleEditSession = async (session: Session) => {
+  // 重新从后端获取会话，确保密码是解密后的
+  // 因为 sessionStore 中可能存储的是旧的加密密码
+  const freshSession = await window.api.session.getById(session.id)
+  if (freshSession) {
+    editingSession.value = freshSession
+  } else {
+    editingSession.value = session
+  }
   showSessionForm.value = true
 }
 
@@ -97,22 +104,22 @@ const handleCloseErrorDialog = (): void => {
 /**
  * 从错误对话框中重试连接
  */
-const handleRetryFromError = (sessionId: string): void => {
-  // 找到对应的会话并打开编辑表单
-  const session = sessionStore.sessions.find(s => s.id === sessionId)
-  if (session) {
-    handleEditSession(session)
+const handleRetryFromError = async (sessionId: string): void => {
+  // 重新从后端获取会话，确保密码是解密后的
+  const freshSession = await window.api.session.getById(sessionId)
+  if (freshSession) {
+    handleEditSession(freshSession)
   }
 }
 
 /**
  * 从错误对话框中编辑会话
  */
-const handleEditFromError = (sessionId: string): void => {
-  // 找到对应的会话并打开编辑表单
-  const session = sessionStore.sessions.find(s => s.id === sessionId)
-  if (session) {
-    handleEditSession(session)
+const handleEditFromError = async (sessionId: string): void => {
+  // 重新从后端获取会话，确保密码是解密后的
+  const freshSession = await window.api.session.getById(sessionId)
+  if (freshSession) {
+    handleEditSession(freshSession)
   }
 }
 </script>

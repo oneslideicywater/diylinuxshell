@@ -37,8 +37,11 @@ e2e/
 │   └── tabs.e2e.spec.ts
 ├── session/                        # 会话管理测试
 │   ├── debug-session-group-contextmenu.e2e.spec.ts
+│   ├── five-level-nested-groups.e2e.spec.ts
+│   ├── last-level-group-display-fix.e2e.spec.ts
 │   ├── session-group.e2e.spec.ts
-│   └── subgroup-indent.e2e.spec.ts
+│   ├── subgroup-indent.e2e.spec.ts
+│   └── subgroup-padding-validation.e2e.spec.ts
 ├── session-form/                   # 会话表单测试
 │   ├── session-form-enhancement.e2e.spec.ts
 │   └── session-form-modal.e2e.spec.ts
@@ -162,13 +165,16 @@ npx playwright show-report
 | [tab-persistence.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\layout\tab-persistence.e2e.spec.ts) | 标签页持久化测试 |
 | [tabs.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\layout\tabs.e2e.spec.ts) | 多标签页功能测试 |
 
-### Session - 会话管理 (3 个文件)
+### Session - 会话管理 (6 个文件)
 
 | 文件名 | 描述 |
 |--------|------|
 | [session-group.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\session-group.e2e.spec.ts) | 会话分组功能测试 |
 | [subgroup-indent.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\subgroup-indent.e2e.spec.ts) | 子分组缩进测试 |
 | [debug-session-group-contextmenu.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\debug-session-group-contextmenu.e2e.spec.ts) | 会话分组右键菜单调试 |
+| [five-level-nested-groups.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\five-level-nested-groups.e2e.spec.ts) | 五层嵌套子分组测试 |
+| [subgroup-padding-validation.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\subgroup-padding-validation.e2e.spec.ts) | 子分组缩进验证测试 |
+| [last-level-group-display-fix.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\last-level-group-display-fix.e2e.spec.ts) | 最后一层分组文字显示效果修复验证测试 |
 
 ### Session Form - 会话表单 (2 个文件)
 

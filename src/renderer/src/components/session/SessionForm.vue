@@ -126,19 +126,19 @@
 
           <!-- 会话分组 -->
           <div class="form-group">
-            <label for="groupId">
+            <label>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                 <path d="M12 11C12 11.8284 11.3284 12.5 10.5 12.5H3.5C2.67157 12.5 2 11.8284 2 10.5V3.5C2 2.67157 2.67157 2 3.5 2H6L7 3.5H10.5C11.3284 3.5 12 4.17157 12 5V11Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
               <span>会话分组（可选）</span>
             </label>
-            <div class="input-wrapper">
-              <select id="groupId" v-model="formData.groupId" class="group-select">
-                <option value="">未分组</option>
-                <option v-for="group in sessionGroups" :key="group.id" :value="group.id">
-                  {{ group.name }}
-                </option>
-              </select>
+            <div class="group-tree-container">
+              <GroupTreeSelect
+                v-model="formData.groupId"
+                :all-groups="sessionGroups"
+                :expanded-groups="expandedGroups"
+                @toggle="handleToggleGroup"
+              />
             </div>
           </div>
 
@@ -337,6 +337,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useSessionStore } from '@/stores/session'
 import type { Session } from '@shared/types'
+import GroupTreeSelect from './GroupTreeSelect.vue'
 
 /**
  * Props 定义
@@ -396,6 +397,28 @@ const isShaking = ref(false)
 const showPassword = ref(false)
 const showKeyPassphrase = ref(false)
 
+// 展开的分组 ID 集合
+const expandedGroups = ref<Set<string>>(new Set())
+
+/**
+ * 处理分组展开/折叠
+ */
+const handleToggleGroup = (groupId: string): void => {
+  console.log('[SessionForm] handleToggleGroup:', groupId)
+  console.log('[SessionForm] 当前 expandedGroups:', Array.from(expandedGroups.value))
+  
+  if (expandedGroups.value.has(groupId)) {
+    console.log('[SessionForm] 折叠分组')
+    expandedGroups.value.delete(groupId)
+  } else {
+    console.log('[SessionForm] 展开分组')
+    expandedGroups.value.add(groupId)
+  }
+  // 创建新的 Set 以触发响应式更新
+  expandedGroups.value = new Set(expandedGroups.value)
+  console.log('[SessionForm] 更新后 expandedGroups:', Array.from(expandedGroups.value))
+}
+
 // 监听 session 变化，填充表单
 watch(
   () => props.session,
@@ -408,9 +431,9 @@ watch(
         username: session.username,
         groupId: session.groupId || '',
         authType: session.authType,
-        password: '',
+        password: session.password || '',
         keyPath: session.keyPath || '',
-        keyPassphrase: ''
+        keyPassphrase: session.keyPassphrase || ''
       }
     }
   },
@@ -800,41 +823,26 @@ const handleTestConnection = async () => {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-/* 分组选择下拉框 */
-.group-select {
-  width: 100%;
-  padding: 10px 14px;
+/* 分组树形选择器容器 */
+.group-tree-container {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.05);
-  color: var(--text-color, #e0e0e0);
-  font-size: 14px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  outline: none;
-  cursor: pointer;
+  padding: 8px;
+  max-height: 200px;
+  overflow-y: auto;
   transition: all 0.2s ease;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg width='12' height='12' viewBox='0 0 12 12' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5L6 8L9 5' stroke='%23808080' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 36px;
 }
 
-.group-select:hover {
+.group-tree-container:hover {
   border-color: rgba(255, 255, 255, 0.2);
   background-color: rgba(255, 255, 255, 0.07);
 }
 
-.group-select:focus {
+.group-tree-container:focus-within {
   border-color: var(--primary-color, #0e639c);
   background-color: rgba(14, 99, 156, 0.05);
   box-shadow: 0 0 0 3px rgba(14, 99, 156, 0.1);
-}
-
-.group-select option {
-  background: var(--bg-secondary, #1e1e1e);
-  color: var(--text-color, #e0e0e0);
-  padding: 8px;
 }
 
 
@@ -1207,15 +1215,21 @@ const handleTestConnection = async () => {
   background-color: rgba(0, 0, 0, 0.03);
 }
 
-[data-theme="light"] .group-select:focus {
+/* 浅色主题下的分组树形选择器容器 */
+[data-theme="light"] .group-tree-container {
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="light"] .group-tree-container:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  background-color: rgba(255, 255, 255, 1);
+}
+
+[data-theme="light"] .group-tree-container:focus-within {
   border-color: var(--primary-color, #0e639c);
   background-color: rgba(14, 99, 156, 0.03);
   box-shadow: 0 0 0 3px rgba(14, 99, 156, 0.08);
-}
-
-[data-theme="light"] .group-select option {
-  background: #ffffff;
-  color: var(--text-color, #222222);
 }
 
 [data-theme="light"] .password-toggle {

@@ -31,6 +31,9 @@ const api: CustomAPI = {
   // 获取窗口最大化状态（异步）
   windowIsMaximized: () => ipcRenderer.invoke('window-is-maximized'),
 
+  // 打开开发者工具（可选传入坐标来定位元素）
+  openDevTools: (data?: { x: number; y: number }) => ipcRenderer.send('open-devtools', data),
+
   /**
    * 窗口事件监听方法
    * 用于在渲染进程中监听窗口状态变化

@@ -1,12 +1,12 @@
 /**
- * 会话列表组件
- * 显示所有会话，支持分组显示
- * @module components/session/SessionList
- */
+* 会话列表组件
+* 显示所有会话，支持分组显示
+* @module components/session/SessionList
+*/
 
 <template>
   <div class="session-list-container">
-    <div class="session-list" :style="{ width: `${currentWidth}px` }">
+    <div class="session-list">
       <!-- 加载状态 -->
       <div v-if="loading" class="loading-state">
         <span>加载中...</span>
@@ -20,237 +20,224 @@
 
       <!-- 会话列表 -->
       <div v-else class="session-groups" @contextmenu.prevent="handleListContextMenu">
-      <!-- 未分组会话 -->
-      <div v-if="ungroupedSessions.length > 0" class="session-group" @contextmenu.prevent="handleListContextMenu">
-        <SessionItem
-          v-for="session in ungroupedSessions"
-          :key="session.id"
-          :session="session"
-          :active="session.id === activeSessionId"
-          @click="handleSelect(session)"
-          @dblclick="handleConnect(session)"
-          @connect="handleConnect(session)"
-          @edit="handleEdit(session)"
-          @delete="handleDelete(session)"
-          @duplicate="handleDuplicate(session)"
-          @properties="handleProperties(session)"
-          @contextmenu.prevent="handleSessionContextMenu($event, session)"
-        />
+        <!-- 未分组会话 -->
+        <div v-if="ungroupedSessions.length > 0" class="session-group" @contextmenu.prevent="handleListContextMenu">
+          <SessionItem v-for="session in ungroupedSessions" :key="session.id" :session="session"
+            :active="session.id === activeSessionId" @click="handleSelect(session)" @dblclick="handleConnect(session)"
+            @connect="handleConnect(session)" @edit="handleEdit(session)" @delete="handleDelete(session)"
+            @duplicate="handleDuplicate(session)" @properties="handleProperties(session)"
+            @contextmenu.prevent="handleSessionContextMenu($event, session)" />
+        </div>
+
+        <!-- 分组会话（支持嵌套） -->
+        <template v-for="group in sessionGroups" :key="group.id">
+          <div v-if="!group.parentId" class="session-group" :data-group-id="group.id" :data-group-depth="group.depth"
+            @contextmenu.prevent="handleGroupContextMenu($event, group)">
+            <!-- 分组头部 -->
+            <div class="group-header" :class="{ 'depth-limit-reached': !canCreateSubGroupIn(group.id) }"
+              @click="toggleGroup(group.id)" @contextmenu.prevent.stop="handleGroupContextMenu($event, group)"
+              :title="getGroupHeaderTooltip(group)">
+              <svg class="expand-icon" :class="{ expanded: expandedGroups.has(group.id) }" width="12" height="12"
+                viewBox="0 0 12 12">
+                <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" />
+              </svg>
+              <span class="group-name">{{ group.name }}</span>
+              <span class="group-count">{{ getGroupSessionCount(group.id) }}</span>
+              <!-- 新建子分组按钮（仅在未达到层级限制时显示） -->
+              <button v-if="canCreateSubGroupIn(group.id)" class="add-subgroup-btn"
+                @click.stop="handleCreateSubGroup(group)" title="新建子分组">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M6 1V11M1 6H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            <!-- 分组内容（包含子分组和会话） -->
+            <div v-show="expandedGroups.has(group.id)" class="group-content">
+              <!-- 递归渲染子分组 -->
+              <SessionGroupTree v-if="hasSubGroups(group.id)" :parent-group-id="group.id" :all-groups="sessionGroups"
+                :sessions="sessions" :expanded-groups="expandedGroups" :active-session-id="activeSessionId"
+                @toggle-group="toggleGroup" @select-session="handleSelect" @connect-session="handleConnect"
+                @edit-session="handleEdit" @delete-session="handleDelete" @duplicate-session="handleDuplicate"
+                @properties-session="handleProperties" @group-contextmenu="handleGroupContextMenu"
+                @session-contextmenu="handleSessionContextMenu" @create-subgroup="handleCreateSubGroup" />
+
+              <!-- 当前分组的会话 -->
+              <div class="group-sessions">
+                <SessionItem v-for="session in getDirectGroupSessions(group.id)" :key="session.id" :session="session"
+                  :active="session.id === activeSessionId" @click="handleSelect(session)"
+                  @dblclick="handleConnect(session)" @connect="handleConnect(session)" @edit="handleEdit(session)"
+                  @delete="handleDelete(session)" @duplicate="handleDuplicate(session)"
+                  @properties="handleProperties(session)"
+                  @contextmenu.prevent="handleSessionContextMenu($event, session)" />
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- 空白占位区域，用于捕获右键点击 -->
+        <div class="session-list-spacer" @contextmenu.prevent="handleListContextMenu"></div>
       </div>
 
-      <!-- 分组会话（支持嵌套） -->
-      <template v-for="group in sessionGroups" :key="group.id">
-        <div
-          v-if="!group.parentId"
-          class="session-group"
-          :data-group-id="group.id"
-          :data-group-depth="group.depth"
-          @contextmenu.prevent="handleGroupContextMenu($event, group)"
-        >
-          <!-- 分组头部 -->
-          <div
-            class="group-header"
-            :class="{ 'depth-limit-reached': !canCreateSubGroupIn(group.id) }"
-            @click="toggleGroup(group.id)"
-            @contextmenu.prevent.stop="handleGroupContextMenu($event, group)"
-            :title="getGroupHeaderTooltip(group)"
-          >
-            <svg
-              class="expand-icon"
-              :class="{ expanded: expandedGroups.has(group.id) }"
-              width="12"
-              height="12"
-              viewBox="0 0 12 12"
-            >
-              <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" />
-            </svg>
-            <span class="group-name">{{ group.name }}</span>
-            <span class="group-count">{{ getGroupSessionCount(group.id) }}</span>
-            <!-- 新建子分组按钮（仅在未达到层级限制时显示） -->
-            <button
-              v-if="canCreateSubGroupIn(group.id)"
-              class="add-subgroup-btn"
-              @click.stop="handleCreateSubGroup(group)"
-              title="新建子分组"
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M6 1V11M1 6H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-            </button>
-          </div>
-          
-          <!-- 分组内容（包含子分组和会话） -->
-          <div v-show="expandedGroups.has(group.id)" class="group-content">
-            <!-- 递归渲染子分组 -->
-            <SessionGroupTree
-              v-if="hasSubGroups(group.id)"
-              :parent-group-id="group.id"
-              :all-groups="sessionGroups"
-              :sessions="sessions"
-              :expanded-groups="expandedGroups"
-              :active-session-id="activeSessionId"
-              @toggle-group="toggleGroup"
-              @select-session="handleSelect"
-              @connect-session="handleConnect"
-              @edit-session="handleEdit"
-              @delete-session="handleDelete"
-              @duplicate-session="handleDuplicate"
-              @properties-session="handleProperties"
-              @group-contextmenu="handleGroupContextMenu"
-              @session-contextmenu="handleSessionContextMenu"
-              @create-subgroup="handleCreateSubGroup"
+      <!-- 列表右键菜单（新建分组） -->
+      <div v-show="listContextMenuVisible" class="context-menu" :style="listContextMenuStyle" @click.stop>
+        <div class="menu-item" @click="handleCreateGroup" title="创建会话分组，归类管理远程主机连接">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          <span>新建分组</span>
+        </div>
+      </div>
+
+      <!-- 分组管理右键菜单 -->
+      <div v-if="groupContextMenuVisible" class="context-menu" :style="groupContextMenuStyle" @click.stop>
+        <div class="menu-item" @click="handleAddSessionToGroup" title="添加会话到此分组">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            <circle cx="11" cy="3" r="2" fill="currentColor" />
+          </svg>
+          <span>添加会话到此分组</span>
+        </div>
+        <div v-if="selectedGroup && canCreateSubGroupIn(selectedGroup.id)" class="menu-item"
+          @click="handleCreateSubGroupFromMenu" title="在当前分组内创建子分组">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          <span>新建子分组</span>
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" @click="handleEditGroup" title="双击分组名称，可修改分组名">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M10 2L12 4L4.5 11.5H2.5V9.5L10 2Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+          <span>编辑分组</span>
+        </div>
+        <div class="menu-item danger" @click="handleDeleteGroup" title="删除分组将会话移至未分组，操作不可逆">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path
+              d="M2 4H12M5 4V3C5 2.44772 5.44772 2 6 2H8C8.55228 2 9 2.44772 9 3V4M11 4V11C11 11.5523 10.5523 12 10 12H4C3.44772 12 3 11.5523 3 11V4H11Z"
+              stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span>删除分组</span>
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" @click="handleInspectElement" title="打开开发者工具并审查当前元素">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M1 13L5 9M3 3H5L12 10V12H10L3 3Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span>审查元素</span>
+        </div>
+      </div>
+
+      <!-- 会话右键菜单（完整菜单项） -->
+      <div v-if="sessionContextMenuVisible" class="context-menu" :style="sessionContextMenuStyle" @click.stop>
+        <div class="menu-item" @click="handleNewSessionFromMenu" title="创建新的会话配置">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          <span>新增会话</span>
+        </div>
+        <div class="menu-item" @click="handleConnectFromMenu" title="连接到当前会话">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path
+              d="M12 2L7 7M12 2l-1 5-2-2M12 2l-5 1 2 2M5 9l-3 3M4 10l-1 1"
+              stroke="currentColor"
+              stroke-width="1.2"
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
             />
-            
-            <!-- 当前分组的会话 -->
-            <div class="group-sessions">
-              <SessionItem
-                v-for="session in getDirectGroupSessions(group.id)"
-                :key="session.id"
-                :session="session"
-                :active="session.id === activeSessionId"
-                @click="handleSelect(session)"
-                @dblclick="handleConnect(session)"
-                @connect="handleConnect(session)"
-                @edit="handleEdit(session)"
-                @delete="handleDelete(session)"
-                @duplicate="handleDuplicate(session)"
-                @properties="handleProperties(session)"
-                @contextmenu.prevent="handleSessionContextMenu($event, session)"
-              />
+          </svg>
+          <span>连接</span>
+        </div>
+        <div class="menu-item" @click="handleEditFromMenu" title="编辑当前会话配置">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path
+              d="M10.5 2l1.5 1.5-6 6H4V8l6-6zM3 12h8"
+              stroke="currentColor"
+              stroke-width="1.5"
+              fill="none"
+            />
+          </svg>
+          <span>编辑</span>
+        </div>
+        <div class="menu-item" @click="handleDuplicateFromMenu" title="复制当前会话">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <rect x="1" y="3" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
+            <path d="M4 7h8M4 10h5" stroke="currentColor" stroke-width="1" />
+          </svg>
+          <span>复制会话</span>
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-item has-submenu" @click="handleMoveToGroup" title="将当前会话移动到指定分组">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path
+              d="M12 11C12 11.8284 11.3284 12.5 10.5 12.5H3.5C2.67157 12.5 2 11.8284 2 10.5V3.5C2 2.67157 2.67157 2 3.5 2H6L7 3.5H10.5C11.3284 3.5 12 4.17157 12 5V11Z"
+              stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span>移动到分组</span>
+          <svg class="submenu-arrow" width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M4 2L7 5L4 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"
+              stroke-linejoin="round" />
+          </svg>
+
+          <!-- 子菜单 -->
+          <div class="submenu" v-if="showGroupSubmenu">
+            <div class="menu-item" @click.stop="handleMoveToSpecificGroup('')" title="将当前会话移至未分组">
+              <span>未分组</span>
+            </div>
+            <div v-for="group in sessionGroups" :key="group.id" class="menu-item"
+              :class="{ active: selectedSessionForMove?.groupId === group.id }"
+              @click.stop="handleMoveToSpecificGroup(group.id)" :title="`将当前会话移动到 ${group.name} 分组`">
+              <span>{{ group.name }}</span>
             </div>
           </div>
         </div>
-      </template>
-      
-      <!-- 空白占位区域，用于捕获右键点击 -->
-      <div 
-        class="session-list-spacer" 
-        @contextmenu.prevent="handleListContextMenu"
-      ></div>
-    </div>
-
-    <!-- 列表右键菜单（新建分组） -->
-    <div
-      v-show="listContextMenuVisible"
-      class="context-menu"
-      :style="listContextMenuStyle"
-      @click.stop
-    >
-      <div class="menu-item" @click="handleCreateGroup" title="创建会话分组，归类管理远程主机连接">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <span>新建分组</span>
-      </div>
-    </div>
-
-    <!-- 分组管理右键菜单 -->
-    <div
-      v-if="groupContextMenuVisible"
-      class="context-menu"
-      :style="groupContextMenuStyle"
-      @click.stop
-    >
-      <div class="menu-item" @click="handleAddSessionToGroup" title="添加会话到此分组">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <circle cx="11" cy="3" r="2" fill="currentColor"/>
-        </svg>
-        <span>添加会话到此分组</span>
-      </div>
-      <div
-        v-if="selectedGroup && canCreateSubGroupIn(selectedGroup.id)"
-        class="menu-item"
-        @click="handleCreateSubGroupFromMenu"
-        title="在当前分组内创建子分组"
-      >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <span>新建子分组</span>
-      </div>
-      <div class="menu-divider"></div>
-      <div class="menu-item" @click="handleEditGroup" title="双击分组名称，可修改分组名">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M10 2L12 4L4.5 11.5H2.5V9.5L10 2Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>编辑分组</span>
-      </div>
-      <div class="menu-item danger" @click="handleDeleteGroup" title="删除分组将会话移至未分组，操作不可逆">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M2 4H12M5 4V3C5 2.44772 5.44772 2 6 2H8C8.55228 2 9 2.44772 9 3V4M11 4V11C11 11.5523 10.5523 12 10 12H4C3.44772 12 3 11.5523 3 11V4H11Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>删除分组</span>
-      </div>
-    </div>
-
-    <!-- 会话右键菜单（移动到分组） -->
-    <div
-      v-if="sessionContextMenuVisible"
-      class="context-menu"
-      :style="sessionContextMenuStyle"
-      @click.stop
-    >
-      <div class="menu-item has-submenu" @click="handleMoveToGroup" title="将当前会话移动到指定分组">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M12 11C12 11.8284 11.3284 12.5 10.5 12.5H3.5C2.67157 12.5 2 11.8284 2 10.5V3.5C2 2.67157 2.67157 2 3.5 2H6L7 3.5H10.5C11.3284 3.5 12 4.17157 12 5V11Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>移动到分组</span>
-        <svg class="submenu-arrow" width="10" height="10" viewBox="0 0 10 10" fill="none">
-          <path d="M4 2L7 5L4 8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        
-        <!-- 子菜单 -->
-        <div class="submenu" v-if="showGroupSubmenu">
-          <div class="menu-item" @click.stop="handleMoveToSpecificGroup('')" title="将当前会话移至未分组">
-            <span>未分组</span>
-          </div>
-          <div
-            v-for="group in sessionGroups"
-            :key="group.id"
-            class="menu-item"
-            :class="{ active: selectedSessionForMove?.groupId === group.id }"
-            @click.stop="handleMoveToSpecificGroup(group.id)"
-            :title="`将当前会话移动到 ${group.name} 分组`"
-          >
-            <span>{{ group.name }}</span>
-          </div>
+        <div class="menu-divider"></div>
+        <div class="menu-item danger" @click="handleDeleteFromMenu" title="删除当前会话">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path
+              d="M2 4H12M5 4V3C5 2.44772 5.44772 2 6 2H8C8.55228 2 9 2.44772 9 3V4M11 4V11C11 11.5523 10.5523 12 10 12H4C3.44772 12 3 11.5523 3 11V4H11Z"
+              stroke="currentColor"
+              stroke-width="1.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <span>删除</span>
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" @click="handlePropertiesFromMenu" title="查看和修改会话属性">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="7" cy="7" r="3" stroke="currentColor" stroke-width="1.5" />
+            <path d="M7 1v2M7 11v2M1 7h2M11 7h2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          <span>属性</span>
+        </div>
+        <div class="menu-divider"></div>
+        <div class="menu-item" @click="handleSessionInspectElement" title="打开开发者工具并审查当前元素">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M1 13L5 9M3 3H5L12 10V12H10L3 3Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+          <span>审查元素</span>
         </div>
       </div>
     </div>
-  </div>
 
     <!-- 分组表单对话框 -->
-    <SessionGroupForm
-      :visible="groupFormVisible"
-      :group="editingGroup"
-      @close="handleCloseGroupForm"
-      @submit="handleSubmitGroupForm"
-    />
+    <SessionGroupForm :visible="groupFormVisible" :group="editingGroup" @close="handleCloseGroupForm"
+      @submit="handleSubmitGroupForm" />
 
     <!-- 确认对话框 -->
-    <ConfirmDialog
-      :visible="confirmDialogVisible"
-      :title="confirmDialogTitle"
-      :message="confirmDialogMessage"
-      :is-warning="confirmDialogIsWarning"
-      @close="handleConfirmDialogClose"
-      @confirm="handleConfirmDialogConfirm"
-      @cancel="handleConfirmDialogCancel"
-    />
+    <ConfirmDialog :visible="confirmDialogVisible" :title="confirmDialogTitle" :message="confirmDialogMessage"
+      :is-warning="confirmDialogIsWarning" @close="handleConfirmDialogClose" @confirm="handleConfirmDialogConfirm"
+      @cancel="handleConfirmDialogCancel" />
 
     <!-- 连接错误对话框 -->
-    <ErrorDialog
-      :visible="errorDialogVisible"
-      :title="errorDialogTitle"
-      :message="errorDialogMessage"
-      :session-id="errorDialogSessionId"
-      :show-retry="true"
-      :show-edit="true"
-      @close="handleCloseErrorDialog"
-      @retry="handleRetryConnect"
-      @edit="handleEditFromError"
-    />
+    <ErrorDialog :visible="errorDialogVisible" :title="errorDialogTitle" :message="errorDialogMessage"
+      :session-id="errorDialogSessionId" :show-retry="true" :show-edit="true" @close="handleCloseErrorDialog"
+      @retry="handleRetryConnect" @edit="handleEditFromError" />
   </div>
 </template>
 
@@ -318,6 +305,7 @@ const saveExpandedGroups = () => {
 const groupContextMenuVisible = ref(false)
 const groupContextMenuStyle = ref({})
 const selectedGroup = ref<SessionGroup | null>(null)
+const contextMenuPosition = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const groupFormVisible = ref(false)
 const editingGroup = ref<SessionGroup | null>(null)
 
@@ -328,6 +316,7 @@ const listContextMenuStyle = ref({})
 // 会话右键菜单状态
 const sessionContextMenuVisible = ref(false)
 const sessionContextMenuStyle = ref({})
+const sessionContextMenuPosition = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const selectedSessionForMove = ref<Session | null>(null)
 const showGroupSubmenu = ref(false)
 
@@ -358,6 +347,7 @@ const ungroupedSessions = computed(() => {
 const emit = defineEmits<{
   (e: 'select', session: Session): void
   (e: 'edit', session: Session): void
+  (e: 'add-session'): void
 }>()
 
 /**
@@ -443,7 +433,7 @@ const getGroupSessionCount = (groupId: string): number => {
     const ids = children.map(c => c.id)
     return [...ids, ...children.flatMap(c => getAllSubGroupIds(c.id))]
   }
-  
+
   const subGroupIds = getAllSubGroupIds(groupId)
   return sessions.value.filter(s => s.groupId && [groupId, ...subGroupIds].includes(s.groupId)).length
 }
@@ -458,7 +448,7 @@ const getGroupSessions = (groupId: string): Session[] => {
     const ids = children.map(c => c.id)
     return [...ids, ...children.flatMap(c => getAllSubGroupIds(c.id))]
   }
-  
+
   const subGroupIds = getAllSubGroupIds(groupId)
   return sessions.value.filter(s => s.groupId && [groupId, ...subGroupIds].includes(s.groupId))
 }
@@ -476,7 +466,7 @@ const hasSubGroups = (groupId: string): boolean => {
 const canCreateSubGroupIn = (groupId: string): boolean => {
   const group = sessionStore.sessionGroups.find(g => g.id === groupId)
   if (!group) return false
-  
+
   return group.depth < MAX_GROUP_DEPTH
 }
 
@@ -485,14 +475,14 @@ const canCreateSubGroupIn = (groupId: string): boolean => {
  */
 const getGroupHeaderTooltip = (group: SessionGroup): string => {
   const depthInfo = `层级：${group.depth}/${MAX_GROUP_DEPTH}`
-  const expandInfo = expandedGroups.value.has(group.id) 
-    ? '点击折叠分组，精简会话列表' 
+  const expandInfo = expandedGroups.value.has(group.id)
+    ? '点击折叠分组，精简会话列表'
     : '点击展开分组，查看会话列表'
-  
+
   if (!canCreateSubGroupIn(group.id)) {
     return `${expandInfo} | ${depthInfo}（已达层级上限）`
   }
-  
+
   return `${expandInfo} | ${depthInfo}`
 }
 
@@ -507,7 +497,7 @@ const handleCreateSubGroup = async (parentGroup: SessionGroup) => {
     showLevelLimitAlert(checkResult.error || '无法创建子分组')
     return
   }
-  
+
   // 打开分组表单，设置父分组
   editingGroup.value = {
     id: '',
@@ -529,17 +519,20 @@ const handleGroupContextMenu = (event: MouseEvent, group: SessionGroup) => {
   // 阻止默认浏览器右键菜单
   event.preventDefault()
   event.stopPropagation()
-  
+
   // 关闭其他菜单
   closeAllContextMenus()
-  
+
   selectedGroup.value = group
   groupContextMenuVisible.value = true
-  
+
+  // 保存右键点击坐标
+  contextMenuPosition.value = { x: event.clientX, y: event.clientY }
+
   // 计算菜单位置
   const x = event.clientX
   const y = event.clientY
-  
+
   groupContextMenuStyle.value = {
     position: 'fixed',
     left: `${x}px`,
@@ -549,22 +542,133 @@ const handleGroupContextMenu = (event: MouseEvent, group: SessionGroup) => {
 }
 
 /**
+ * 处理审查元素
+ */
+const handleInspectElement = () => {
+  console.log('[Renderer] handleInspectElement called')
+  console.log('[Renderer] contextMenuPosition:', contextMenuPosition.value)
+  console.log('[Renderer] window.api exists:', typeof window.api !== 'undefined')
+  if (window.api) {
+    console.log('[Renderer] window.api.openDevTools exists:', typeof window.api.openDevTools !== 'undefined')
+  }
+  
+  groupContextMenuVisible.value = false
+  
+  if (window.api && window.api.openDevTools) {
+    console.log('[Renderer] Calling window.api.openDevTools with:', contextMenuPosition.value)
+    // 将响应式 Proxy 对象转换为普通对象，避免 IPC 克隆错误
+    const plainPosition = { ...contextMenuPosition.value }
+    window.api.openDevTools(plainPosition)
+  } else {
+    console.error('[Renderer] window.api.openDevTools is not available')
+  }
+}
+
+/**
+ * 处理会话审查元素
+ */
+const handleSessionInspectElement = () => {
+  console.log('[Renderer] handleSessionInspectElement called')
+  console.log('[Renderer] sessionContextMenuPosition:', sessionContextMenuPosition.value)
+  console.log('[Renderer] window.api exists:', typeof window.api !== 'undefined')
+  if (window.api) {
+    console.log('[Renderer] window.api.openDevTools exists:', typeof window.api.openDevTools !== 'undefined')
+  }
+  
+  sessionContextMenuVisible.value = false
+  showGroupSubmenu.value = false
+  
+  if (window.api && window.api.openDevTools) {
+    console.log('[Renderer] Calling window.api.openDevTools with:', sessionContextMenuPosition.value)
+    // 将响应式 Proxy 对象转换为普通对象，避免 IPC 克隆错误
+    const plainPosition = { ...sessionContextMenuPosition.value }
+    window.api.openDevTools(plainPosition)
+  } else {
+    console.error('[Renderer] window.api.openDevTools is not available')
+  }
+}
+
+/**
+ * 从右键菜单连接会话
+ */
+const handleConnectFromMenu = () => {
+  if (selectedSessionForMove.value) {
+    handleConnect(selectedSessionForMove.value)
+    sessionContextMenuVisible.value = false
+    showGroupSubmenu.value = false
+  }
+}
+
+/**
+ * 从右键菜单编辑会话
+ */
+const handleEditFromMenu = () => {
+  if (selectedSessionForMove.value) {
+    handleEdit(selectedSessionForMove.value)
+    sessionContextMenuVisible.value = false
+    showGroupSubmenu.value = false
+  }
+}
+
+/**
+ * 从右键菜单复制会话
+ */
+const handleDuplicateFromMenu = () => {
+  if (selectedSessionForMove.value) {
+    handleDuplicate(selectedSessionForMove.value)
+    sessionContextMenuVisible.value = false
+    showGroupSubmenu.value = false
+  }
+}
+
+/**
+ * 从右键菜单删除会话
+ */
+const handleDeleteFromMenu = () => {
+  if (selectedSessionForMove.value) {
+    handleDelete(selectedSessionForMove.value)
+    sessionContextMenuVisible.value = false
+    showGroupSubmenu.value = false
+  }
+}
+
+/**
+ * 从右键菜单查看属性
+ */
+const handlePropertiesFromMenu = () => {
+  if (selectedSessionForMove.value) {
+    handleProperties(selectedSessionForMove.value)
+    sessionContextMenuVisible.value = false
+    showGroupSubmenu.value = false
+  }
+}
+
+/**
+ * 从右键菜单新增会话
+ */
+const handleNewSessionFromMenu = () => {
+  sessionContextMenuVisible.value = false
+  showGroupSubmenu.value = false
+  emit('add-session')
+}
+
+/**
  * 处理列表右键菜单（新建分组）
  */
 const handleListContextMenu = (event: MouseEvent) => {
   // 阻止默认浏览器右键菜单
   event.preventDefault()
   event.stopPropagation()
-  
+
   // 关闭其他菜单
   closeAllContextMenus()
-  
+
   listContextMenuVisible.value = true
-  
+
   // 计算菜单位置
   const x = event.clientX
   const y = event.clientY
-  
+
   listContextMenuStyle.value = {
     position: 'fixed',
     left: `${x}px`,
@@ -580,18 +684,21 @@ const handleSessionContextMenu = (event: MouseEvent, session: Session) => {
   // 阻止默认浏览器右键菜单
   event.preventDefault()
   event.stopPropagation()
-  
+
   // 关闭其他菜单
   closeAllContextMenus()
-  
+
   selectedSessionForMove.value = session
   sessionContextMenuVisible.value = true
   showGroupSubmenu.value = false
-  
+
   // 计算菜单位置
   const x = event.clientX
   const y = event.clientY
-  
+
+  // 保存右键点击的全局坐标（用于审查元素）
+  sessionContextMenuPosition.value = { x, y }
+
   sessionContextMenuStyle.value = {
     position: 'fixed',
     left: `${x}px`,
@@ -624,7 +731,7 @@ const handleCreateGroup = () => {
  */
 const handleCreateSubGroupFromMenu = async () => {
   if (!selectedGroup.value) return
-  
+
   // 检查层级限制
   const checkResult = await window.api.sessionGroup.checkCanCreateSubGroup(selectedGroup.value.id)
   if (!checkResult.canCreate) {
@@ -632,7 +739,7 @@ const handleCreateSubGroupFromMenu = async () => {
     showLevelLimitAlert(checkResult.error || '无法创建子分组')
     return
   }
-  
+
   // 打开分组表单，设置父分组
   editingGroup.value = {
     id: '',
@@ -685,7 +792,7 @@ const handleEditGroup = () => {
 const handleDeleteGroup = async () => {
   if (selectedGroup.value) {
     const sessionCount = getGroupSessionCount(selectedGroup.value.id)
-    
+
     // 根据分组内是否有会话显示不同的确认对话框
     if (sessionCount > 0) {
       // 有会话时需要二次确认
@@ -694,7 +801,7 @@ const handleDeleteGroup = async () => {
         `该分组包含 ${sessionCount} 个会话，删除分组将会话移至未分组，确定继续？`,
         true // 显示警告样式
       )
-      
+
       if (!confirmed) {
         groupContextMenuVisible.value = false
         return
@@ -705,13 +812,13 @@ const handleDeleteGroup = async () => {
         '删除分组确认',
         `确定要删除分组 "${selectedGroup.value.name}" 吗？`
       )
-      
+
       if (!confirmed) {
         groupContextMenuVisible.value = false
         return
       }
     }
-    
+
     try {
       await window.api.sessionGroup.delete(selectedGroup.value.id)
       sessionStore.removeSessionGroup(selectedGroup.value.id)
@@ -766,19 +873,19 @@ const handleMoveToGroup = () => {
  */
 const handleMoveToSpecificGroup = async (groupId: string) => {
   if (!selectedSessionForMove.value) return
-  
+
   try {
     // 更新会话的分组
-    await window.api.session.update(selectedSessionForMove.value.id, { 
-      groupId: groupId || undefined 
+    await window.api.session.update(selectedSessionForMove.value.id, {
+      groupId: groupId || undefined
     })
-    
+
     // 更新本地状态
     const session = sessionStore.sessions.find(s => s.id === selectedSessionForMove.value!.id)
     if (session) {
       session.groupId = groupId || undefined
     }
-    
+
     // 关闭菜单
     closeAllContextMenus()
   } catch (error) {
@@ -803,24 +910,24 @@ const handleConnect = async (session: Session) => {
   try {
     // 创建标签页（初始状态为disconnected）
     const tab = terminalStore.createTab(session.name, session.id)
-    
+
     // 更新标签页状态为连接中
     terminalStore.updateTabStatus(tab.id, 'connecting')
-    
+
     // 连接会话（使用tabId作为连接标识）
     await window.api.session.connect(tab.id, session.id)
-    
+
     // 更新标签页状态为已连接
     terminalStore.updateTabStatus(tab.id, 'connected')
   } catch (error: unknown) {
     console.error('Failed to connect:', error)
-    
+
     // 连接失败，更新标签页状态为错误
     const tab = terminalStore.tabs.find(t => t.sessionId === session.id)
     if (tab) {
       terminalStore.updateTabStatus(tab.id, 'error')
     }
-    
+
     // 显示错误对话框
     const errorMessage = error instanceof Error ? error.message : String(error)
     showErrorDialog('连接失败', errorMessage, session.id)
@@ -855,7 +962,7 @@ const handleDuplicate = async (session: Session) => {
       id: undefined,
       name: `${session.name} (副本)`
     }
-    
+
     // 保存新会话
     const createdSession = await window.api.session.create(newSession)
     sessionStore.addSession(createdSession)
@@ -925,7 +1032,7 @@ onMounted(async () => {
     // 加载会话分组
     const groups = await window.api.sessionGroup.getAll()
     sessionStore.sessionGroups = groups
-    
+
     // 加载展开状态
     loadExpandedGroups()
   } catch (error) {
@@ -960,6 +1067,8 @@ onUnmounted(() => {
 }
 
 .session-list {
+  display: flex;
+  flex-direction: column;
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
@@ -972,6 +1081,8 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  height: 100%;
+  width: 100%;
   padding: 24px;
   color: var(--text-secondary, #808080);
   font-size: 13px;
@@ -984,6 +1095,9 @@ onUnmounted(() => {
 }
 
 .session-groups {
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 4px 0;
   flex: 1;
   min-height: 0;
@@ -1006,7 +1120,7 @@ onUnmounted(() => {
   align-items: center;
   padding: 6px 12px;
   cursor: pointer;
-  color: var(--text-secondary, #808080);
+  color: var(--text-color, #cccccc);
   font-size: 12px;
   transition: background-color 0.15s;
   position: relative;
@@ -1016,9 +1130,9 @@ onUnmounted(() => {
   background-color: var(--hover-bg, #2a2a2a);
 }
 
-/* 层级限制达到时的样式 */
+/* 层级限制达到时的样式 - 显式设置 opacity 为 1，使文字显示效果与其他层一致 */
 .group-header.depth-limit-reached {
-  opacity: 0.6;
+  opacity: 1; /* 保持与其他分组相同的显示效果 */
   cursor: not-allowed;
 }
 
@@ -1089,12 +1203,7 @@ onUnmounted(() => {
 
 /* 会话项容器，确保嵌套时会话项宽度正确 */
 .group-sessions {
-  padding-left: 12px;
-}
-
-/* 子分组缩进 */
-.sub-groups {
-  /* 移除 padding-left 和 margin-left，仅使用动态 paddingLeft 控制缩进 */
+  padding-left: 24px;
 }
 
 /* 右键菜单样式 */
@@ -1115,6 +1224,7 @@ onUnmounted(() => {
     opacity: 0;
     transform: scale(0.95);
   }
+
   to {
     opacity: 1;
     transform: scale(1);
@@ -1188,6 +1298,7 @@ onUnmounted(() => {
     opacity: 0;
     transform: translateX(-8px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -1243,5 +1354,4 @@ onUnmounted(() => {
   background: var(--primary-color, #0e639c);
   color: white;
 }
-
 </style>

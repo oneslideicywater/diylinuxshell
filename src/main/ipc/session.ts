@@ -19,14 +19,35 @@ export function registerSessionHandlers(): void {
    * 获取所有会话
    */
   ipcMain.handle(IPC_CHANNELS.SESSION.GET_ALL, () => {
-    return StoreService.getSessions()
+    const sessions = StoreService.getSessions()
+    // 解密所有会话的密码
+    return sessions.map(session => {
+      const decryptedSession = { ...session }
+      if (decryptedSession.password) {
+        decryptedSession.password = CryptoService.decrypt(decryptedSession.password)
+      }
+      if (decryptedSession.keyPassphrase) {
+        decryptedSession.keyPassphrase = CryptoService.decrypt(decryptedSession.keyPassphrase)
+      }
+      return decryptedSession
+    })
   })
 
   /**
    * 根据ID获取会话
    */
   ipcMain.handle(IPC_CHANNELS.SESSION.GET_BY_ID, (_event, id: string) => {
-    return StoreService.getSessionById(id)
+    const session = StoreService.getSessionById(id)
+    if (!session) return undefined
+    // 解密密码
+    const decryptedSession = { ...session }
+    if (decryptedSession.password) {
+      decryptedSession.password = CryptoService.decrypt(decryptedSession.password)
+    }
+    if (decryptedSession.keyPassphrase) {
+      decryptedSession.keyPassphrase = CryptoService.decrypt(decryptedSession.keyPassphrase)
+    }
+    return decryptedSession
   })
 
   /**
@@ -49,7 +70,16 @@ export function registerSessionHandlers(): void {
     }
 
     StoreService.addSession(session)
-    return session
+    
+    // 返回解密后的会话
+    const decryptedSession = { ...session }
+    if (decryptedSession.password) {
+      decryptedSession.password = CryptoService.decrypt(decryptedSession.password)
+    }
+    if (decryptedSession.keyPassphrase) {
+      decryptedSession.keyPassphrase = CryptoService.decrypt(decryptedSession.keyPassphrase)
+    }
+    return decryptedSession
   })
 
   /**
@@ -65,7 +95,19 @@ export function registerSessionHandlers(): void {
     }
 
     StoreService.updateSession(id, updates)
-    return StoreService.getSessionById(id)
+    
+    // 返回解密后的会话
+    const session = StoreService.getSessionById(id)
+    if (!session) return undefined
+    
+    const decryptedSession = { ...session }
+    if (decryptedSession.password) {
+      decryptedSession.password = CryptoService.decrypt(decryptedSession.password)
+    }
+    if (decryptedSession.keyPassphrase) {
+      decryptedSession.keyPassphrase = CryptoService.decrypt(decryptedSession.keyPassphrase)
+    }
+    return decryptedSession
   })
 
   /**

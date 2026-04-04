@@ -5,6 +5,9 @@ description: "Electron 应用测试最佳实践。当测试 Electron 应用、�
 
 # Electron 应用测试最佳实践
 
+- 获取控制台日志用于调试
+- 不要使用浏览器模式编写测试用例
+
 ## 核心概念
 
 ### Electron 应用的两种访问方式
@@ -14,12 +17,14 @@ description: "Electron 应用测试最佳实践。当测试 Electron 应用、�
    - preload 脚本正常加载
    - `window.api` 可用
    - contextBridge 正常工作
+   - 使用这个模式进行测试时，需要确保 `window.api` 是可用的
 
 2. **浏览器模式** (直接访问 `http://localhost:5173/`)
    - 仅加载渲染进程的 Web 页面
    - **没有** preload 脚本
    - `window.api` 是 `undefined`
    - 无法调用 IPC 通信
+   - 不要使用这个模式进行测试
 
 ## 常见错误
 
@@ -283,63 +288,6 @@ test.describe('测试', () => {
 })
 ```
 
-### 3. 浏览器模式 - 捕获 Vue 运行时警告
-
-```typescript
-import { test, expect, Page } from '@playwright/test'
-
-const consoleMessages: any[] = []
-
-test.describe('浏览器模式测试', () => {
-  let page: Page
-
-  test.beforeAll(async ({ browser }) => {
-    page = await browser.newPage()
-    consoleMessages.length = 0
-    
-    page.on('console', (msg) => {
-      consoleMessages.push({
-        type: msg.type(),
-        text: msg.text(),
-        location: msg.location()
-      })
-      if (msg.type() === 'warning' || msg.type() === 'error') {
-        console.error(`[${msg.type()}] ${msg.text}`)
-      }
-    })
-  })
-
-  test.afterAll(async () => {
-    await page.close()
-  })
-
-  test('访问开发服务器并捕获错误', async () => {
-    // 先运行：npm run dev
-    await page.goto('http://localhost:5173/', { 
-      waitUntil: 'networkidle',
-      timeout: 30000
-    })
-    
-    await page.waitForTimeout(3000)
-    
-    // 触发操作
-    await page.locator('.trigger-button').click()
-    await page.waitForTimeout(1000)
-    
-    // 查找 Vue 警告
-    const vueWarnings = consoleMessages.filter(msg =>
-      msg.text.includes('[Vue warn]')
-    )
-    
-    vueWarnings.forEach(msg => {
-      console.log(`[Vue warn] ${msg.text}`)
-      if (msg.location) {
-        console.log(`  位置：${JSON.stringify(msg.location)}`)
-      }
-    })
-  })
-})
-```
 
 ### 4. 运行测试
 

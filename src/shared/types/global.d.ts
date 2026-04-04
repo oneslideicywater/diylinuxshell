@@ -10,6 +10,7 @@ export interface CustomAPI {
   windowMaximize: () => void
   windowClose: () => void
   windowIsMaximized: () => Promise<boolean>
+  openDevTools: (data?: { x: number; y: number }) => void
 
   // 窗口事件监听
   onWindowMaximize: (callback: () => void) => () => void

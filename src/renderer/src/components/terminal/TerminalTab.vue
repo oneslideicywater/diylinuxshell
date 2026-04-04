@@ -105,6 +105,12 @@ const contextMenu = ref<HTMLDivElement | null>(null)
 const contextMenuVisible = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
 
+// 错误对话框相关计算属性
+const errorDialogVisible = computed(() => errorDialogStore.visible)
+const errorDialogTitle = computed(() => errorDialogStore.title)
+const errorDialogMessage = computed(() => errorDialogStore.message)
+const errorDialogSessionId = computed(() => errorDialogStore.sessionId)
+
 // 计算属性：是否可以断开会话
 const canDisconnect = computed(() => {
   return props.tab.status === 'connected' || props.tab.status === 'connecting'

@@ -12,7 +12,7 @@
       class="session-group sub-group"
       :data-group-id="subGroup.id"
       :data-group-depth="subGroup.depth"
-      :style="{ paddingLeft: `${(subGroup.depth - 1) * 8}px` }"
+      :style="{ paddingLeft: '12px' }"
       @contextmenu.prevent="handleGroupContextMenu($event, subGroup)"
     >
       <!-- 子分组头部 -->
@@ -265,23 +265,10 @@ const handleCreateSubGroup = (group: SessionGroup) => {
 .sub-groups {
   display: flex;
   flex-direction: column;
-  /* 移除 padding-left 和 margin-left，仅使用动态 paddingLeft 控制缩进 */
 }
 
 .session-group.sub-group {
-  /* 移除 margin-left，使用 paddingLeft 控制缩进 */
   position: relative;
-}
-
-/* 子分组连接线 */
-.session-group.sub-group::before {
-  content: '';
-  position: absolute;
-  left: -4px;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background-color: var(--el-border-color-light);
 }
 
 .group-header {
@@ -292,10 +279,12 @@ const handleCreateSubGroup = (group: SessionGroup) => {
   border-radius: 4px;
   transition: background-color 0.2s;
   user-select: none;
+  color: var(--text-color, #cccccc);
+  font-size: 13px;
 }
 
 .group-header:hover {
-  background-color: var(--el-fill-color-light);
+  background-color: var(--el-color-primary-light-9);
 }
 
 .expand-icon {
@@ -313,7 +302,7 @@ const handleCreateSubGroup = (group: SessionGroup) => {
 .group-name {
   flex: 1;
   font-size: 13px;
-  color: var(--el-text-color-regular);
+  color: var(--text-color, #cccccc);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -330,9 +319,9 @@ const handleCreateSubGroup = (group: SessionGroup) => {
   text-align: center;
 }
 
-/* 层级限制达到时的样式 */
+/* 层级限制达到时的样式 - 显式设置 opacity 为 1，使文字显示效果与其他层一致 */
 .group-header.depth-limit-reached {
-  opacity: 0.7;
+  opacity: 1; /* 保持与其他分组相同的显示效果 */
 }
 
 .group-header.depth-limit-reached:hover {
@@ -374,5 +363,6 @@ const handleCreateSubGroup = (group: SessionGroup) => {
 .group-sessions {
   display: flex;
   flex-direction: column;
+  padding-left: 24px;
 }
 </style>

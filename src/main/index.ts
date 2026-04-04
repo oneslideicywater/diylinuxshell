@@ -192,17 +192,23 @@ ipcMain.handle('window-is-maximized', event => {
  * @param data - 可选的坐标数据 { x: number, y: number }
  */
 ipcMain.on('open-devtools', (event, data?: { x: number; y: number }) => {
+  console.log('[Main] open-devtools called with data:', data)
   const win = BrowserWindow.fromWebContents(event.sender)
   if (win) {
+    console.log('[Main] Opening devtools...')
     // 打开开发者工具
     win.webContents.openDevTools()
     
     // 如果提供了坐标，则检查指定位置的元素
     if (data && typeof data.x === 'number' && typeof data.y === 'number') {
+      console.log('[Main] Will inspect element at:', data.x, data.y)
       // 延迟一点时间，等待开发者工具打开
       setTimeout(() => {
+        console.log('[Main] Calling inspectElement...')
         win.webContents.inspectElement(data.x, data.y)
       }, 100)
     }
+  } else {
+    console.error('[Main] Failed to get BrowserWindow')
   }
 })

@@ -8,7 +8,7 @@
   <div class="app-layout">
     <!-- 顶部标题栏 -->
     <header class="app-header">
-      <div class="header-left">
+      <div class="header-left" :style="{ width: `${sidebarWidth}px` }">
         <span class="app-title">DIY Linux Shell</span>
       </div>
       <div class="header-center">
@@ -280,7 +280,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   padding: 0 12px;
-  width: 240px;
+  flex-shrink: 0; /* 防止被压缩 */
 }
 
 .app-title {
