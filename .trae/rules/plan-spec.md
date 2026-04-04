@@ -45,6 +45,8 @@ npm run test:e2e设置自动关闭，不要卡死
 
 #### bug修复流程
 
+提及: ’bug‘关键词进入此流程。
+
 1. 查看phase对应prd和plan，更新两个文档。
 2. 编写代码修复bug；
 3. 根据electron-testing SKILL编写测试用例，验证修复是否正常；
