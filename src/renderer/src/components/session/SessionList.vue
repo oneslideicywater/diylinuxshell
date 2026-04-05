@@ -45,9 +45,9 @@
               <GroupIcon :icon-type="group.icon" :size="16" />
               <span class="group-name">{{ group.name }}</span>
               <span class="group-count">{{ getGroupSessionCount(group.id) }}</span>
-              <!-- 新建子分组按钮（仅在未达到层级限制时显示） -->
-              <button v-if="canCreateSubGroupIn(group.id)" class="add-subgroup-btn"
-                @click.stop="handleCreateSubGroup(group)" title="新建子分组">
+              <!-- 添加会话按钮 -->
+              <button class="add-session-btn"
+                @click.stop="handleAddSessionToGroup(group)" title="添加会话到分组">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                   <path d="M6 1V11M1 6H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
                 </svg>
@@ -62,7 +62,8 @@
                 @toggle-group="toggleGroup" @select-session="handleSelect" @connect-session="handleConnect"
                 @edit-session="handleEdit" @delete-session="handleDelete" @duplicate-session="handleDuplicate"
                 @properties-session="handleProperties" @group-contextmenu="handleGroupContextMenu"
-                @session-contextmenu="handleSessionContextMenu" @create-subgroup="handleCreateSubGroup" />
+                @session-contextmenu="handleSessionContextMenu" @create-subgroup="handleCreateSubGroup"
+                @add-session-to-group="handleAddSessionToGroup" />
 
               <!-- 当前分组的会话 -->
               <div class="group-sessions">
@@ -230,6 +231,10 @@
     <SessionGroupForm :visible="groupFormVisible" :group="editingGroup" @close="handleCloseGroupForm"
       @submit="handleSubmitGroupForm" />
 
+    <!-- 会话表单对话框 -->
+    <SessionForm :visible="sessionFormVisible" :session="editingSession" @close="handleCloseSessionForm"
+      @submit="handleSubmitSessionForm" />
+
     <!-- 确认对话框 -->
     <ConfirmDialog :visible="confirmDialogVisible" :title="confirmDialogTitle" :message="confirmDialogMessage"
       :is-warning="confirmDialogIsWarning" @close="handleConfirmDialogClose" @confirm="handleConfirmDialogConfirm"
@@ -249,6 +254,7 @@ import { useTerminalStore } from '@/stores/terminal'
 import { useErrorDialogStore } from '@/stores/errorDialog'
 import SessionItem from './SessionItem.vue'
 import SessionGroupForm from './SessionGroupForm.vue'
+import SessionForm from './SessionForm.vue'
 import ErrorDialog from '@/components/common/ErrorDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import SessionGroupTree from './SessionGroupTree.vue'
@@ -310,6 +316,10 @@ const selectedGroup = ref<SessionGroup | null>(null)
 const contextMenuPosition = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const groupFormVisible = ref(false)
 const editingGroup = ref<SessionGroup | null>(null)
+
+// 会话表单相关状态
+const sessionFormVisible = ref(false)
+const editingSession = ref<Session | null>(null)
 
 // 列表右键菜单状态
 const listContextMenuVisible = ref(false)
@@ -526,6 +536,28 @@ const handleCreateSubGroup = async (parentGroup: SessionGroup) => {
   }
   groupFormVisible.value = true
   groupContextMenuVisible.value = false
+}
+
+/**
+ * 添加会话到分组
+ */
+const handleAddSessionToGroup = async (group: SessionGroup) => {
+  // 关闭分组菜单
+  closeAllContextMenus()
+  
+  // 打开会话表单，设置分组 ID
+  editingSession.value = {
+    id: '',
+    name: '',
+    host: '',
+    port: 22,
+    username: 'root',
+    authType: 'password',
+    groupId: group.id,
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  }
+  sessionFormVisible.value = true
 }
 
 /**
@@ -792,16 +824,6 @@ const showLevelLimitAlert = (message: string) => {
 }
 
 /**
- * 添加会话到分组
- */
-const handleAddSessionToGroup = () => {
-  // TODO: 打开会话选择对话框
-  // 暂时先打开会话表单
-  alert('请通过编辑会话来将其添加到此分组')
-  groupContextMenuVisible.value = false
-}
-
-/**
  * 编辑分组
  */
 const handleEditGroup = () => {
@@ -865,6 +887,14 @@ const handleCloseGroupForm = () => {
 }
 
 /**
+ * 关闭会话表单
+ */
+const handleCloseSessionForm = () => {
+  sessionFormVisible.value = false
+  editingSession.value = null
+}
+
+/**
  * 提交分组表单
  */
 const handleSubmitGroupForm = async (data: { name: string; icon?: string }) => {
@@ -883,6 +913,28 @@ const handleSubmitGroupForm = async (data: { name: string; icon?: string }) => {
   } catch (error) {
     console.error('Failed to save group:', error)
     const errorMessage = error instanceof Error ? error.message : '保存分组失败'
+    alert(errorMessage)
+  }
+}
+
+/**
+ * 提交会话表单
+ */
+const handleSubmitSessionForm = async (data: Session) => {
+  try {
+    if (data.id) {
+      // 更新会话
+      await window.api.session.update(data.id, data)
+      sessionStore.updateSession(data.id, data)
+    } else {
+      // 创建会话
+      const session = await window.api.session.create(data)
+      sessionStore.addSession(session)
+    }
+    handleCloseSessionForm()
+  } catch (error) {
+    console.error('Failed to save session:', error)
+    const errorMessage = error instanceof Error ? error.message : '保存会话失败'
     alert(errorMessage)
   }
 }
@@ -1194,8 +1246,8 @@ onUnmounted(() => {
   text-align: center;
 }
 
-/* 新建子分组按钮 */
-.add-subgroup-btn {
+/* 添加会话按钮 */
+.add-session-btn {
   width: 20px;
   height: 20px;
   display: flex;
@@ -1212,11 +1264,11 @@ onUnmounted(() => {
   margin-left: 4px;
 }
 
-.group-header:hover .add-subgroup-btn {
+.group-header:hover .add-session-btn {
   opacity: 1;
 }
 
-.add-subgroup-btn:hover {
+.add-session-btn:hover {
   background-color: var(--color-primary-light-9, rgba(64, 158, 255, 0.1));
   color: var(--color-primary, #409eff);
 }

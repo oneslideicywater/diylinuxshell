@@ -36,12 +36,11 @@
         <GroupIcon :icon-type="subGroup.icon" :size="16" />
         <span class="group-name">{{ subGroup.name }}</span>
         <span class="group-count">{{ getGroupSessionCount(subGroup.id) }}</span>
-        <!-- 新建子分组按钮（仅在未达到层级限制时显示） -->
+        <!-- 添加会话按钮 -->
         <button
-          v-if="canCreateSubGroupIn(subGroup.id)"
-          class="add-subgroup-btn"
-          @click.stop="handleCreateSubGroup(subGroup)"
-          title="新建子分组"
+          class="add-session-btn"
+          @click.stop="handleAddSessionToGroup(subGroup)"
+          title="添加会话到分组"
         >
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path d="M6 1V11M1 6H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -129,6 +128,7 @@ const emit = defineEmits<{
   groupContextmenu: [event: MouseEvent, group: SessionGroup]
   sessionContextmenu: [event: MouseEvent, session: Session]
   createSubgroup: [group: SessionGroup]
+  addSessionToGroup: [group: SessionGroup]
 }>()
 
 /**
@@ -262,6 +262,13 @@ const handlePropertiesSession = (session: Session) => {
 const handleCreateSubGroup = (group: SessionGroup) => {
   emit('createSubgroup', group)
 }
+
+/**
+ * 添加会话到分组
+ */
+const handleAddSessionToGroup = (group: SessionGroup) => {
+  emit('addSessionToGroup', group)
+}
 </script>
 
 <style scoped>
@@ -331,8 +338,8 @@ const handleCreateSubGroup = (group: SessionGroup) => {
   background-color: var(--el-fill-color);
 }
 
-/* 新建子分组按钮 */
-.add-subgroup-btn {
+/* 添加会话按钮 */
+.add-session-btn {
   width: 20px;
   height: 20px;
   display: flex;
@@ -349,11 +356,11 @@ const handleCreateSubGroup = (group: SessionGroup) => {
   margin-left: 4px;
 }
 
-.group-header:hover .add-subgroup-btn {
+.group-header:hover .add-session-btn {
   opacity: 1;
 }
 
-.add-subgroup-btn:hover {
+.add-session-btn:hover {
   background-color: var(--el-color-primary-light-9);
   color: var(--el-color-primary);
 }

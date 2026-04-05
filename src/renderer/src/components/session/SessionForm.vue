@@ -5,7 +5,7 @@
  */
 
 <template>
-  <div class="session-form-overlay" @click="handleOverlayClick">
+  <div v-if="visible" class="session-form-overlay" @click="handleOverlayClick">
     <div ref="formRef" class="session-form" :class="{ shaking: isShaking }" @click.stop>
       <!-- 装饰性背景 -->
       <div class="form-decoration">
@@ -343,11 +343,16 @@ import GroupTreeSelect from './GroupTreeSelect.vue'
  * Props 定义
  */
 interface Props {
+  /** 是否显示表单 */
+  visible?: boolean
+  /** 会话数据，用于编辑模式 */
   session?: Session | null
+  /** 默认分组 ID */
   defaultGroupId?: string | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  visible: false,
   session: null,
   defaultGroupId: null
 })
