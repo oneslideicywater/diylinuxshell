@@ -49,12 +49,23 @@
               <input
                 id="groupName"
                 v-model="formData.name"
+                @input="validateGroupName"
                 type="text"
                 placeholder="例如：生产环境"
                 required
                 autocomplete="off"
                 ref="nameInputRef"
+                :class="{ 'input-error': validationError }"
               />
+            </div>
+            <!-- 实时校验错误提示 -->
+            <div v-if="validationError" class="input-error-message">
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M7 4V7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <circle cx="7" cy="9.5" r="0.5" fill="currentColor"/>
+              </svg>
+              <span>{{ validationError }}</span>
             </div>
           </div>
 
@@ -237,6 +248,62 @@ const formRef = ref<HTMLElement | null>(null)
 const nameInputRef = ref<HTMLInputElement | null>(null)
 
 /**
+ * 校验错误信息
+ */
+const validationError = ref<string>('')
+
+/**
+ * 防抖定时器
+ */
+let validationTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * 实时校验分组名称
+ */
+async function validateGroupName(): Promise<void> {
+  // 清除之前的定时器
+  if (validationTimer) {
+    clearTimeout(validationTimer)
+  }
+
+  // 如果名称为空，清除错误
+  if (!formData.name.trim()) {
+    validationError.value = ''
+    return
+  }
+
+  // 防抖：500ms 后校验
+  validationTimer = setTimeout(async () => {
+    try {
+      // 获取所有分组
+      const allGroups = await window.api.sessionGroup.getAll()
+      
+      // 查找同级分组
+      const siblingGroups = allGroups.filter(g => {
+        // 如果是编辑模式，排除自己
+        if (isEdit.value && props.group && g.id === props.group.id) {
+          return false
+        }
+        // 比较 parentId（使用 == 处理 null 和 undefined）
+        return g.parentId == (props.group?.parentId ?? null)
+      })
+
+      // 检查是否有重名
+      const hasDuplicate = siblingGroups.some(g => g.name === formData.name.trim())
+      
+      if (hasDuplicate) {
+        validationError.value = `同级分组中已存在名为"${formData.name.trim()}"的分组，请使用不同的名称`
+      } else {
+        validationError.value = ''
+      }
+    } catch (error) {
+      console.error('校验分组名称失败:', error)
+      validationError.value = ''
+    }
+  }, 500)
+}
+
+/**
  * 抖动状态
  */
 const isShaking = ref(false)
@@ -258,6 +325,9 @@ watch(
         formData.name = ''
         formData.icon = 'folder'
       }
+
+      // 清除校验错误
+      validationError.value = ''
 
       // 聚焦输入框
       await nextTick()
@@ -294,6 +364,13 @@ function handleClose(): void {
  * 处理提交
  */
 function handleSubmit(): void {
+  // 检查是否有校验错误
+  if (validationError.value) {
+    triggerShake()
+    nameInputRef.value?.focus()
+    return
+  }
+
   if (!formData.name.trim()) {
     triggerShake()
     nameInputRef.value?.focus()
@@ -522,6 +599,46 @@ function handleSubmit(): void {
 
 .input-wrapper input::placeholder {
   color: var(--text-placeholder);
+}
+
+/* 输入框错误状态 */
+.input-wrapper input.input-error {
+  border-color: #ff4444;
+}
+
+.input-wrapper input.input-error:focus {
+  box-shadow: 0 0 0 3px rgba(255, 68, 68, 0.1);
+}
+
+/* 输入错误提示信息 */
+.input-error-message {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: rgba(255, 68, 68, 0.1);
+  border-radius: 6px;
+  color: #ff4444;
+  font-size: 12px;
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.input-error-message svg {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
 }
 
 /* 图标选择器 */
