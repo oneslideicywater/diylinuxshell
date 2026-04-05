@@ -41,6 +41,8 @@
                 viewBox="0 0 12 12">
                 <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" />
               </svg>
+              <!-- 分组图标 -->
+              <GroupIcon :icon-type="group.icon" :size="16" />
               <span class="group-name">{{ group.name }}</span>
               <span class="group-count">{{ getGroupSessionCount(group.id) }}</span>
               <!-- 新建子分组按钮（仅在未达到层级限制时显示） -->
@@ -250,6 +252,7 @@ import SessionGroupForm from './SessionGroupForm.vue'
 import ErrorDialog from '@/components/common/ErrorDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import SessionGroupTree from './SessionGroupTree.vue'
+import GroupIcon from './GroupIcon.vue'
 import type { Session, SessionGroup } from '@shared/types'
 import { MAX_GROUP_DEPTH } from '@shared/types'
 

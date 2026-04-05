@@ -32,6 +32,8 @@
         >
           <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" />
         </svg>
+        <!-- 分组图标 -->
+        <GroupIcon :icon-type="subGroup.icon" :size="16" />
         <span class="group-name">{{ subGroup.name }}</span>
         <span class="group-count">{{ getGroupSessionCount(subGroup.id) }}</span>
         <!-- 新建子分组按钮（仅在未达到层级限制时显示） -->
@@ -95,6 +97,7 @@
 import { computed } from 'vue'
 import type { Session, SessionGroup } from '@shared/types'
 import SessionItem from './SessionItem.vue'
+import GroupIcon from './GroupIcon.vue'
 import { MAX_GROUP_DEPTH } from '@shared/types'
 
 /**
