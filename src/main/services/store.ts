@@ -1,10 +1,14 @@
 /**
  * 数据存储服务
  * 使用 electron-store 实现持久化数据存储
+ * 所有数据存储在 data 目录下
  * @module services/store
  */
 
 import Store from 'electron-store'
+import { app } from 'electron'
+import { join } from 'path'
+import { mkdirSync, existsSync } from 'fs'
 import type { Session, SessionGroup, CommandSnippet, CommandSnippetGroup, AppConfig } from '@shared/types'
 import { MAX_GROUP_DEPTH } from '@shared/types'
 import {
@@ -52,9 +56,25 @@ const defaultConfig: AppConfig = {
 }
 
 /**
- * 创建存储实例
+ * 获取 data 目录路径
+ * 数据存储在 project_root/data 目录下
+ */
+const getDataDir = (): string => {
+  // 获取应用根目录（即项目根目录）
+  const appPath = app.getAppPath()
+  const dataDir = join(appPath, 'data')
+  // 确保 data 目录存在
+  if (!existsSync(dataDir)) {
+    mkdirSync(dataDir, { recursive: true })
+  }
+  return dataDir
+}
+
+/**
+ * 创建存储实例，数据存储在 data 目录下
  */
 const store = new Store<StoreSchema>({
+  cwd: getDataDir(),
   defaults: {
     sessions: [],
     sessionGroups: [],
@@ -165,6 +185,17 @@ export class StoreService {
       }
     }
     
+    // 检查同级分组名字是否重复
+    // 使用 == 而不是 === 来比较 parentId，这样可以同时处理 null 和 undefined
+    const siblingGroups = groups.filter(g => g.parentId == group.parentId)
+    const hasDuplicateName = siblingGroups.some(g => g.name === group.name)
+    if (hasDuplicateName) {
+      return {
+        success: false,
+        error: `同级分组中已存在名为"${group.name}"的分组，请使用不同的名称。`
+      }
+    }
+    
     // 计算新分组的深度
     if (group.parentId) {
       const parentDepth = calculateGroupDepth(group.parentId, groups)
@@ -196,6 +227,22 @@ export class StoreService {
             error: updates.parentId 
               ? '目标位置嵌套层级超限，无法移入该子分组下。'
               : '无法将分组移动到根级别'
+          }
+        }
+      }
+      
+      // 如果更新名字或 parentId，需要检查同级名字是否重复
+      if (updates.name !== undefined || updates.parentId !== undefined) {
+        const targetParentId = updates.parentId !== undefined ? updates.parentId : groups[index].parentId
+        const currentName = updates.name !== undefined ? updates.name : groups[index].name
+        const siblingGroups = groups.filter((g, i) => 
+          g.parentId === targetParentId && i !== index // 排除自己
+        )
+        const hasDuplicateName = siblingGroups.some(g => g.name === currentName)
+        if (hasDuplicateName) {
+          return {
+            success: false,
+            error: `同级分组中已存在名为"${currentName}"的分组，请使用不同的名称。`
           }
         }
       }

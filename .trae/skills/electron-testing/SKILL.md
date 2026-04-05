@@ -39,61 +39,10 @@ npm run dev  // 启动 Electron 应用
 
 **原因**：浏览器直接访问的是渲染进程的 Web 页面，没有 Electron 的 preload 脚本注入 `window.api`。
 
-### 正确做法：使用 Playwright 测试 Electron
-
-```typescript
-// ✅ 正确做法：使用 Playwright 的 _electron.launch()
-import { _electron as electron } from '@playwright/test'
-
-const app = await electron.launch({
-  args: [path.join(__dirname, '../out/main/index.js')],
-  stdio: 'pipe'
-})
-
-const page = await app.firstWindow()
-```
-
 ## Playwright Electron 测试配置
 
-### 1. 启动配置
 
-```typescript
-// e2e/helpers/electron-app.ts
-export async function startApp(): Promise<{ app: ElectronApplication; page: Page }> {
-  const electronApp = await electron.launch({
-    args: [path.join(__dirname, '../../out/main/index.js')],
-    env: {
-      ...process.env,
-      NODE_ENV: 'test'
-    },
-    stdio: 'pipe'  // 捕获主进程日志
-  })
-
-  // 监听主进程日志
-  electronApp.process().stdout?.on('data', (data) => {
-    console.log('[Main stdout]', data.toString())
-  })
-  electronApp.process().stderr?.on('data', (data) => {
-    console.error('[Main stderr]', data.toString())
-  })
-
-  const page = await electronApp.firstWindow()
-
-  // 监听渲染进程日志
-  page.on('console', (msg) => {
-    console.log(`[Renderer ${msg.type()}]`, msg.text())
-  })
-  page.on('pageerror', (error) => {
-    console.error('[Renderer error]', error.message)
-  })
-
-  await page.waitForLoadState('domcontentloaded')
-
-  return { app: electronApp, page }
-}
-```
-
-### 2. 测试示例
+### 1. 测试示例
 
 ```typescript
 // e2e/connection.e2e.spec.ts
@@ -121,8 +70,8 @@ test.describe('SSH 连接测试', () => {
   })
 })
 ```
-
-### 3. Playwright 配置
+完整参考: [e2e/session-form/debug-group-depth.e2e.spec.ts](./e2e/session-form/debug-group-depth.e2e.spec.ts)
+### 2. Playwright 配置
 
 ```typescript
 // playwright.config.ts
@@ -294,14 +243,4 @@ test.describe('测试', () => {
 ```bash
 # Electron 模式
 npx playwright test --project=electron
-
-# 浏览器模式（需先运行 npm run dev）
-npx playwright test --project=chromium
 ```
-
-### 5. 关键要点
-
-- **清空消息**：测试前清空数组 `consoleMessages.length = 0`
-- **等待时间**：给足时间让错误出现 `await page.waitForTimeout(1000)`
-- **过滤错误**：按类型或关键词过滤
-- **详细输出**：输出类型、内容、位置
