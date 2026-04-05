@@ -315,7 +315,7 @@ function handleSubmit(): void {
   left: 0;
   right: 0;
   bottom: 0;
-  background: transparent;
+  background: transparent; /* 透明遮罩 */
   display: flex;
   align-items: center;
   justify-content: center;
@@ -336,9 +336,10 @@ function handleSubmit(): void {
 .group-form {
   position: relative;
   width: 420px;
-  background: var(--bg-secondary);
+  background: #2d2d30; /* 使用明确的不透明背景色，避免 CSS 变量计算为透明 */
   border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  opacity: 1; /* 弹出框不透明 */
   overflow: hidden;
   animation: slideUp 0.3s ease-out;
 }
@@ -385,7 +386,7 @@ function handleSubmit(): void {
 .decoration-circle {
   position: absolute;
   border-radius: 50%;
-  opacity: 0.05;
+  opacity: 1; /* 装饰性背景圆圈透明度设置为 1 */
 }
 
 .decoration-circle:first-child {
@@ -467,11 +468,13 @@ function handleSubmit(): void {
 .form-body {
   position: relative;
   padding: 24px 28px;
+  opacity: 1; /* 表单主体不透明 */
 }
 
 /* 表单组 */
 .form-group {
   margin-bottom: 20px;
+  opacity: 1; /* 表单组不透明 */
 }
 
 .form-group:last-child {
@@ -496,6 +499,7 @@ function handleSubmit(): void {
 /* 输入框包装器 */
 .input-wrapper {
   position: relative;
+  opacity: 1; /* 输入框包装器不透明 */
 }
 
 .input-wrapper input {
@@ -506,6 +510,7 @@ function handleSubmit(): void {
   border-radius: 8px;
   font-size: 14px;
   color: var(--text-primary);
+  opacity: 1; /* 输入框不透明 */
   transition: all 0.2s;
 }
 
@@ -536,6 +541,7 @@ function handleSubmit(): void {
   border: 2px solid var(--border-color);
   border-radius: 8px;
   color: var(--text-secondary);
+  opacity: 1; /* 图标选项不透明 */
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -560,6 +566,7 @@ function handleSubmit(): void {
   padding: 16px 24px;
   border-top: 1px solid var(--border-color);
   background: var(--bg-primary);
+  opacity: 1; /* 表单底部不透明 */
 }
 
 /* 按钮样式 */

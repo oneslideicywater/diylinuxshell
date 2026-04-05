@@ -12,8 +12,8 @@
         <span>加载中...</span>
       </div>
 
-      <!-- 空状态 -->
-      <div v-else-if="sessions.length === 0" class="empty-state" @contextmenu.prevent="handleListContextMenu">
+      <!-- 空状态：既没有会话也没有分组时显示 -->
+      <div v-else-if="sessions.length === 0 && sessionGroups.length === 0" class="empty-state" @contextmenu.prevent="handleListContextMenu">
         <p>暂无会话</p>
         <p class="hint">点击上方 + 按钮创建新会话</p>
       </div>
@@ -334,7 +334,21 @@ const activeSessionId = computed(() => sessionStore.activeSessionId)
 
 // 会话分组列表
 const sessionGroups = computed(() => {
-  return sessionStore.sessionGroups
+  const groups = sessionStore.sessionGroups
+  
+  // 找到默认分组
+  const defaultGroup = groups.find(g => g.name === '默认分组')
+  
+  if (!defaultGroup) {
+    // 没有默认分组，直接返回所有分组（按 order 排序）
+    return [...groups].sort((a, b) => a.order - b.order)
+  }
+  
+  // 过滤出非默认分组
+  const otherGroups = groups.filter(g => g.name !== '默认分组')
+  
+  // 默认分组排在最前面，其他分组按 order 排序
+  return [defaultGroup, ...otherGroups.sort((a, b) => a.order - b.order)]
 })
 
 // 未分组的会话

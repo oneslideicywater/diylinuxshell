@@ -136,6 +136,7 @@ app.whenReady().then(() => {
 function createDefaultGroup(): void {
   try {
     const groups = StoreService.getSessionGroups()
+    
     // 检查是否已存在默认分组
     const hasDefaultGroup = groups.some(g => g.name === '默认分组')
     

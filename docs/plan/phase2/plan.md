@@ -591,3 +591,113 @@ const handleDrop = async (event: DragEvent) => {
 }
 </script>
 ```
+
+### 分组表单样式实现
+
+**背景不透明处理**
+
+问题：CSS 变量 `var(--bg-secondary)` 在某些情况下计算为 `rgba(0, 0, 0, 0)`（完全透明），导致弹出框透出底层内容。
+
+解决方案：
+```css
+/* SessionGroupForm.vue */
+.group-form {
+  position: relative;
+  width: 420px;
+  background: #2d2d30; /* 使用明确的不透明背景色 */
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  opacity: 1; /* 弹出框不透明 */
+  overflow: hidden;
+  animation: slideUp 0.3s ease-out;
+}
+
+.group-form-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: transparent; /* 透明遮罩 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+}
+```
+
+### 默认分组显示顺序实现
+
+**需求**：默认分组始终显示在分组列表最上方（无论创建时间）
+
+**问题**：分组按 `order` 字段（创建时间）排序，导致默认分组可能不在最上方
+
+**解决方案**：在 `SessionList.vue` 的 `sessionGroups` computed 属性中特殊处理默认分组
+
+```typescript
+// SessionList.vue
+const sessionGroups = computed(() => {
+  const groups = sessionStore.sessionGroups
+  
+  // 找到默认分组
+  const defaultGroup = groups.find(g => g.name === '默认分组')
+  
+  if (!defaultGroup) {
+    // 没有默认分组，直接返回所有分组（按 order 排序）
+    return [...groups].sort((a, b) => a.order - b.order)
+  }
+  
+  // 过滤出非默认分组
+  const otherGroups = groups.filter(g => g.name !== '默认分组')
+  
+  // 默认分组排在最前面，其他分组按 order 排序
+  return [defaultGroup, ...otherGroups.sort((a, b) => a.order - b.order)]
+})
+```
+
+**效果**：
+- 默认分组始终显示在分组列表顶部
+- 其他分组按创建时间排序
+- 即使创建了新分组，默认分组仍然在最上方
+
+**空状态显示修复**
+
+问题：当没有会话但有分组时，页面显示"暂无会话"的空状态，导致分组列表不渲染。
+
+原因：空状态条件为 `v-else-if="sessions.length === 0"`，当会话列表为空时，即使有分组也会显示空状态。
+
+解决方案：修改空状态条件为 `v-else-if="sessions.length === 0 && sessionGroups.length === 0"`，确保只有在既没有会话也没有分组时才显示空状态。
+
+```vue
+<!-- 修复前 -->
+<div v-else-if="sessions.length === 0" class="empty-state">
+  <p>暂无会话</p>
+</div>
+
+<!-- 修复后 -->
+<div v-else-if="sessions.length === 0 && sessionGroups.length === 0" class="empty-state">
+  <p>暂无会话</p>
+</div>
+```
+
+效果：
+- 即使没有会话，分组列表也会正常显示
+- 默认分组和其他分组在没有会话时仍然可见
+- 用户可以在空会话状态下创建和查看分组
+
+**子元素不透明处理**
+
+确保所有子元素都不透明：
+```css
+.form-body { opacity: 1; }
+.form-group { opacity: 1; }
+.input-wrapper { opacity: 1; }
+.input-wrapper input { opacity: 1; }
+.icon-option { opacity: 1; }
+.form-footer { opacity: 1; }
+```
+  }
+}
+</script>
+```
