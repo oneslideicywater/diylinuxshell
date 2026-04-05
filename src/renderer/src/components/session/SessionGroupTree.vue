@@ -33,7 +33,7 @@
           <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" />
         </svg>
         <!-- 分组图标 -->
-        <GroupIcon :icon-type="subGroup.icon" :size="16" />
+          <GroupIcon :size="16" />
         <span class="group-name">{{ subGroup.name }}</span>
         <span class="group-count">{{ getGroupSessionCount(subGroup.id) }}</span>
         <!-- 添加会话按钮 -->

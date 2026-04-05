@@ -68,29 +68,6 @@
               <span>{{ validationError }}</span>
             </div>
           </div>
-
-          <!-- 分组图标 -->
-          <div class="form-group">
-            <label>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M7 4V7L9 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              <span>分组图标（可选）</span>
-            </label>
-            <div class="icon-selector">
-              <div
-                v-for="icon in availableIcons"
-                :key="icon.value"
-                class="icon-option"
-                :class="{ active: formData.icon === icon.value }"
-                @click="formData.icon = icon.value"
-                :title="icon.label"
-              >
-                <component :is="icon.component" />
-              </div>
-            </div>
-          </div>
         </div>
 
         <!-- 表单底部 -->
@@ -108,7 +85,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, nextTick, defineComponent, h } from 'vue'
+import { ref, reactive, watch, nextTick } from 'vue'
 import type { SessionGroup } from '@shared/types'
 
 /**
@@ -129,111 +106,14 @@ const props = withDefaults(defineProps<Props>(), {
  */
 const emit = defineEmits<{
   close: []
-  submit: [data: { name: string; icon?: string }]
+  submit: [data: { name: string }]
 }>()
-
-/**
- * 可用图标列表
- */
-const availableIcons = [
-  {
-    value: 'folder',
-    label: '文件夹',
-    component: defineComponent({
-      render() {
-        return h('svg', { width: 20, height: 20, viewBox: '0 0 20 20', fill: 'none' }, [
-          h('path', {
-            d: 'M18 16C18 17.1046 17.1046 18 16 18H4C2.89543 18 2 17.1046 2 16V4C2 2.89543 2.89543 2 4 2H8L10 5H16C17.1046 5 18 5.89543 18 7V16Z',
-            stroke: 'currentColor',
-            'stroke-width': '1.5',
-            'stroke-linecap': 'round',
-            'stroke-linejoin': 'round'
-          })
-        ])
-      }
-    })
-  },
-  {
-    value: 'server',
-    label: '服务器',
-    component: defineComponent({
-      render() {
-        return h('svg', { width: 20, height: 20, viewBox: '0 0 20 20', fill: 'none' }, [
-          h('rect', { x: 2, y: 3, width: 16, height: 5, rx: 1, stroke: 'currentColor', 'stroke-width': '1.5' }),
-          h('rect', { x: 2, y: 12, width: 16, height: 5, rx: 1, stroke: 'currentColor', 'stroke-width': '1.5' }),
-          h('circle', { cx: 5.5, cy: 5.5, r: 0.75, fill: 'currentColor' }),
-          h('circle', { cx: 5.5, cy: 14.5, r: 0.75, fill: 'currentColor' })
-        ])
-      }
-    })
-  },
-  {
-    value: 'cloud',
-    label: '云',
-    component: defineComponent({
-      render() {
-        return h('svg', { width: 20, height: 20, viewBox: '0 0 20 20', fill: 'none' }, [
-          h('path', {
-            d: 'M16 14H5C3.34315 14 2 12.6569 2 11C2 9.34315 3.34315 8 5 8C5.07862 8 5.15647 8.003 5.23347 8.00888C5.73184 6.25282 7.35189 5 9.25 5C11.5972 5 13.5 6.90279 13.5 9.25C13.5 9.33434 13.4984 9.41828 13.4952 9.50179C14.9582 9.78204 16 11.0823 16 12.625V14Z',
-            stroke: 'currentColor',
-            'stroke-width': '1.5',
-            'stroke-linecap': 'round',
-            'stroke-linejoin': 'round'
-          })
-        ])
-      }
-    })
-  },
-  {
-    value: 'database',
-    label: '数据库',
-    component: defineComponent({
-      render() {
-        return h('svg', { width: 20, height: 20, viewBox: '0 0 20 20', fill: 'none' }, [
-          h('ellipse', { cx: 10, cy: 5, rx: 7, ry: 3, stroke: 'currentColor', 'stroke-width': '1.5' }),
-          h('path', { d: 'M3 5V15C3 16.6569 6.13401 18 10 18C13.866 18 17 16.6569 17 15V5', stroke: 'currentColor', 'stroke-width': '1.5' }),
-          h('path', { d: 'M3 10C3 11.6569 6.13401 13 10 13C13.866 13 17 11.6569 17 10', stroke: 'currentColor', 'stroke-width': '1.5' })
-        ])
-      }
-    })
-  },
-  {
-    value: 'code',
-    label: '代码',
-    component: defineComponent({
-      render() {
-        return h('svg', { width: 20, height: 20, viewBox: '0 0 20 20', fill: 'none' }, [
-          h('path', { d: 'M7 14L3 10L7 6', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
-          h('path', { d: 'M13 6L17 10L13 14', stroke: 'currentColor', 'stroke-width': '1.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })
-        ])
-      }
-    })
-  },
-  {
-    value: 'star',
-    label: '星标',
-    component: defineComponent({
-      render() {
-        return h('svg', { width: 20, height: 20, viewBox: '0 0 20 20', fill: 'none' }, [
-          h('path', {
-            d: 'M10 2L12.39 6.88L17.78 7.54L13.89 11.28L14.78 16.64L10 14.1L5.22 16.64L6.11 11.28L2.22 7.54L7.61 6.88L10 2Z',
-            stroke: 'currentColor',
-            'stroke-width': '1.5',
-            'stroke-linecap': 'round',
-            'stroke-linejoin': 'round'
-          })
-        ])
-      }
-    })
-  }
-]
 
 /**
  * 表单数据
  */
 const formData = reactive({
-  name: '',
-  icon: 'folder'
+  name: ''
 })
 
 /**
@@ -319,11 +199,9 @@ watch(
       if (props.group) {
         isEdit.value = true
         formData.name = props.group.name
-        formData.icon = props.group.icon || 'folder'
       } else {
         isEdit.value = false
         formData.name = ''
-        formData.icon = 'folder'
       }
 
       // 清除校验错误
@@ -378,8 +256,7 @@ function handleSubmit(): void {
   }
 
   emit('submit', {
-    name: formData.name.trim(),
-    icon: formData.icon
+    name: formData.name.trim()
   })
 }
 </script>
@@ -639,40 +516,6 @@ function handleSubmit(): void {
   flex-shrink: 0;
   width: 14px;
   height: 14px;
-}
-
-/* 图标选择器 */
-.icon-selector {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 8px;
-}
-
-.icon-option {
-  width: 44px;
-  height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-primary);
-  border: 2px solid var(--border-color);
-  border-radius: 8px;
-  color: var(--text-secondary);
-  opacity: 1; /* 图标选项不透明 */
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.icon-option:hover {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-  transform: translateY(-2px);
-}
-
-.icon-option.active {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: white;
 }
 
 /* 表单底部 */
