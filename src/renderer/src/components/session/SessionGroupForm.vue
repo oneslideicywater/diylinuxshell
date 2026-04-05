@@ -413,7 +413,7 @@ function handleSubmit(): void {
 .group-form {
   position: relative;
   width: 420px;
-  background: #2d2d30; /* 使用明确的不透明背景色，避免 CSS 变量计算为透明 */
+  background: var(--bg-primary, #2d2d30); /* 使用 CSS 变量支持主题切换 */
   border-radius: 16px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   opacity: 1; /* 弹出框不透明 */
@@ -720,11 +720,13 @@ function handleSubmit(): void {
 
 /* 深色主题 */
 [data-theme='dark'] .group-form {
+  background: var(--bg-primary, #2d2d30);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
 /* 浅色主题 */
 [data-theme='light'] .group-form {
+  background: var(--bg-primary, #ffffff);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
 }
 
