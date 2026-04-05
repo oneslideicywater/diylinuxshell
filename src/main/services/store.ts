@@ -235,8 +235,9 @@ export class StoreService {
       if (updates.name !== undefined || updates.parentId !== undefined) {
         const targetParentId = updates.parentId !== undefined ? updates.parentId : groups[index].parentId
         const currentName = updates.name !== undefined ? updates.name : groups[index].name
+        // 使用 == 而不是 === 来比较 parentId，这样可以同时处理 null 和 undefined
         const siblingGroups = groups.filter((g, i) => 
-          g.parentId === targetParentId && i !== index // 排除自己
+          g.parentId == targetParentId && i !== index // 排除自己
         )
         const hasDuplicateName = siblingGroups.some(g => g.name === currentName)
         if (hasDuplicateName) {
