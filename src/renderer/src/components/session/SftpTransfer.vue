@@ -21,7 +21,7 @@
           </svg>
           <div class="header-title">
             <h3>SFTP 文件传输</h3>
-            <p class="header-subtitle">{{ session.name }} - {{ session.host }}:{{ session.port }}</p>
+            <p class="header-subtitle">{{ session?.name }} - {{ session?.host }}:{{ session?.port }}</p>
           </div>
         </div>
         <div class="header-actions">
