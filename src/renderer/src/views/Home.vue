@@ -116,7 +116,7 @@ const handleCloseErrorDialog = (): void => {
 /**
  * 从错误对话框中重试连接
  */
-const handleRetryFromError = async (sessionId: string): void => {
+const handleRetryFromError = async (sessionId: string): Promise<void> => {
   // 重新从后端获取会话，确保密码是解密后的
   const freshSession = await window.api.session.getById(sessionId)
   if (freshSession) {
@@ -127,7 +127,7 @@ const handleRetryFromError = async (sessionId: string): void => {
 /**
  * 从错误对话框中编辑会话
  */
-const handleEditFromError = async (sessionId: string): void => {
+const handleEditFromError = async (sessionId: string): Promise<void> => {
   // 重新从后端获取会话，确保密码是解密后的
   const freshSession = await window.api.session.getById(sessionId)
   if (freshSession) {

@@ -185,7 +185,13 @@ const handleBack = (): void => {
 /**
  * 主题切换处理
  */
-const handleThemeChange = (theme: 'dark' | 'light'): void => {
+const handleThemeChange = (val: string | number | boolean | undefined): void => {
+  // 类型检查，确保值是 'dark' 或 'light'
+  if (val !== 'dark' && val !== 'light') {
+    console.error('Invalid theme value:', val)
+    return
+  }
+  const theme = val as 'dark' | 'light'
   settingsStore.setTheme(theme)
   ElMessage.success(`已切换到${theme === 'dark' ? '深色' : '浅色'}主题`)
 }
@@ -193,76 +199,121 @@ const handleThemeChange = (theme: 'dark' | 'light'): void => {
 /**
  * 字体大小变化处理
  */
-const handleFontSizeChange = (size: number): void => {
-  settingsStore.setFontSize(size)
-  ElMessage.success(`字体大小已设置为 ${size}px`)
+const handleFontSizeChange = (val: string | number | boolean): void => {
+  // 类型检查，确保值是 number
+  if (typeof val !== 'number') {
+    console.error('Invalid font size value:', val)
+    return
+  }
+  settingsStore.setFontSize(val)
+  ElMessage.success(`字体大小已设置为 ${val}px`)
 }
 
 /**
  * 字体类型变化处理
  */
-const handleFontFamilyChange = (font: string): void => {
-  settingsStore.setFontFamily(font)
-  ElMessage.success(`字体已设置为 ${font}`)
+const handleFontFamilyChange = (val: string | number | boolean): void => {
+  // 类型检查，确保值是 string
+  if (typeof val !== 'string') {
+    console.error('Invalid font family value:', val)
+    return
+  }
+  settingsStore.setFontFamily(val)
+  ElMessage.success(`字体已设置为 ${val}`)
 }
 
 /**
  * 终端类型变化处理
  */
-const handleTerminalTypeChange = (type: string): void => {
-  settingsStore.setTerminalType(type)
-  ElMessage.success(`终端类型已设置为 ${type}`)
+const handleTerminalTypeChange = (val: string | number | boolean): void => {
+  // 类型检查，确保值是 string
+  if (typeof val !== 'string') {
+    console.error('Invalid terminal type value:', val)
+    return
+  }
+  settingsStore.setTerminalType(val)
+  ElMessage.success(`终端类型已设置为 ${val}`)
 }
 
 /**
  * 光标样式变化处理
  */
-const handleCursorStyleChange = (style: string): void => {
-  settingsStore.setCursorStyle(style as 'block' | 'underline' | 'bar')
+const handleCursorStyleChange = (val: string | number | boolean): void => {
+  // 类型检查，确保值是 string
+  if (typeof val !== 'string') {
+    console.error('Invalid cursor style value:', val)
+    return
+  }
+  settingsStore.setCursorStyle(val as 'block' | 'underline' | 'bar')
   ElMessage.success(`光标样式已设置`)
 }
 
 /**
  * 光标闪烁变化处理
  */
-const handleCursorBlinkChange = (blink: boolean): void => {
-  settingsStore.setCursorBlink(blink)
+const handleCursorBlinkChange = (val: string | number | boolean): void => {
+  // 类型检查，确保值是 boolean
+  if (typeof val !== 'boolean') {
+    console.error('Invalid cursor blink value:', val)
+    return
+  }
+  settingsStore.setCursorBlink(val)
 }
 
 /**
  * 滚动缓冲区变化处理
  */
-const handleScrollbackChange = (size: number): void => {
-  settingsStore.setScrollback(size)
-  ElMessage.success(`滚动缓冲区已设置为 ${size}`)
+const handleScrollbackChange = (cur: number | undefined, _prev?: number | undefined): void => {
+  // 类型检查，确保值是 number
+  if (cur === undefined) {
+    console.error('Invalid scrollback size value:', cur)
+    return
+  }
+  settingsStore.setScrollback(cur)
+  ElMessage.success(`滚动缓冲区已设置为 ${cur}`)
 }
 
 /**
  * 连接超时变化处理
  */
-const handleConnectionTimeoutChange = (timeout: number): void => {
-  settingsStore.setConnectionTimeout(timeout)
+const handleConnectionTimeoutChange = (cur: number | undefined, _prev?: number | undefined): void => {
+  // 类型检查，确保值是 number
+  if (cur === undefined) {
+    console.error('Invalid connection timeout value:', cur)
+    return
+  }
+  settingsStore.setConnectionTimeout(cur)
 }
 
 /**
  * 心跳间隔变化处理
  */
-const handleKeepaliveIntervalChange = (interval: number): void => {
-  settingsStore.setKeepaliveInterval(interval)
+const handleKeepaliveIntervalChange = (cur: number | undefined, _prev?: number | undefined): void => {
+  // 类型检查，确保值是 number
+  if (cur === undefined) {
+    console.error('Invalid keepalive interval value:', cur)
+    return
+  }
+  settingsStore.setKeepaliveInterval(cur)
 }
 
 /**
  * 自动重连变化处理
  */
-const handleAutoReconnectChange = (enabled: boolean): void => {
-  settingsStore.setAutoReconnect(enabled)
+const handleAutoReconnectChange = (val: boolean): void => {
+  settingsStore.setAutoReconnect(val)
 }
 
 /**
  * 重连次数变化处理
  */
-const handleReconnectAttemptsChange = (attempts: number): void => {
-  settingsStore.setReconnectAttempts(attempts)
+const handleReconnectAttemptsChange = (cur: number | undefined, _prev?: number | undefined): void => {
+  // 类型检查，确保值是 number
+  if (cur === undefined) {
+    console.error('Invalid reconnect attempts value:', cur)
+    return
+  }
+  settingsStore.setReconnectAttempts(cur)
 }
 
 /**

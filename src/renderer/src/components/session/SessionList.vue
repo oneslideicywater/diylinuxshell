@@ -461,13 +461,6 @@ const getDirectGroupSessions = (groupId: string): Session[] => {
  * 获取分组会话数量（包括子分组）
  */
 const getGroupSessionCount = (groupId: string): number => {
-  // 递归获取所有子分组 ID
-  const getAllSubGroupIds = (gid: string): string[] => {
-    const children = sessionStore.sessionGroups.filter(g => g.parentId === gid)
-    const ids = children.map(c => c.id)
-    return [...ids, ...children.flatMap(c => getAllSubGroupIds(c.id))]
-  }
-
   const subGroupIds = getAllSubGroupIds(groupId)
   return sessions.value.filter(s => s.groupId && [groupId, ...subGroupIds].includes(s.groupId)).length
 }
@@ -476,15 +469,19 @@ const getGroupSessionCount = (groupId: string): number => {
  * 获取分组会话列表（包括子分组）
  */
 const getGroupSessions = (groupId: string): Session[] => {
-  // 递归获取所有子分组 ID
-  const getAllSubGroupIds = (gid: string): string[] => {
-    const children = sessionStore.sessionGroups.filter(g => g.parentId === gid)
-    const ids = children.map(c => c.id)
-    return [...ids, ...children.flatMap(c => getAllSubGroupIds(c.id))]
-  }
-
   const subGroupIds = getAllSubGroupIds(groupId)
   return sessions.value.filter(s => s.groupId && [groupId, ...subGroupIds].includes(s.groupId))
+}
+
+/**
+ * 递归获取所有子分组 ID
+ * @param gid - 分组 ID
+ * @returns 所有子分组 ID 数组
+ */
+const getAllSubGroupIds = (gid: string): string[] => {
+  const children = sessionStore.sessionGroups.filter(g => g.parentId === gid)
+  const ids = children.map(c => c.id)
+  return [...ids, ...children.flatMap(c => getAllSubGroupIds(c.id))]
 }
 
 /**
@@ -933,8 +930,11 @@ const handleSubmitGroupForm = async (data: { name: string; icon?: string }) => {
       sessionStore.updateSessionGroup(editingGroup.value.id, data)
     } else {
       // 创建分组（支持子分组）
-      const parentId = editingGroup.value?.parentId
-      const group = await window.api.sessionGroup.create(data, parentId)
+      const createData = {
+        ...data,
+        parentId: editingGroup.value?.parentId
+      }
+      const group = await window.api.sessionGroup.create(createData)
       sessionStore.addSessionGroup(group)
     }
     handleCloseGroupForm()
@@ -1044,7 +1044,7 @@ const handleConnect = async (session: Session) => {
  * 编辑会话
  */
 const handleEdit = (session: Session) => {
-  emit('edit', session)
+  emit('edit-session', session)
 }
 
 /**
@@ -1081,8 +1081,8 @@ const handleDuplicate = async (session: Session) => {
  * 显示会话属性
  */
 const handleProperties = (session: Session) => {
-  // TODO: 实现属性对话框
-  emit('edit', session)
+  // 打开编辑表单
+  emit('edit-session', session)
 }
 
 /**
@@ -1111,7 +1111,7 @@ const handleRetryConnect = (sessionId: string): void => {
   const session = sessions.value.find(s => s.id === sessionId)
   if (session) {
     // 打开编辑表单，让用户重新输入密码
-    emit('edit', session)
+    emit('edit-session', session)
   }
 }
 
@@ -1123,7 +1123,7 @@ const handleEditFromError = (sessionId: string): void => {
   const session = sessions.value.find(s => s.id === sessionId)
   if (session) {
     // 打开编辑表单
-    emit('edit', session)
+    emit('edit-session', session)
   }
 }
 

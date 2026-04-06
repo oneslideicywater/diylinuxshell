@@ -32,7 +32,7 @@ export interface CustomAPI {
   // 会话分组管理
   sessionGroup: {
     getAll: () => Promise<SessionGroup[]>
-    create: (data: { name: string; icon?: string }) => Promise<SessionGroup>
+    create: (data: { name: string; icon?: string; parentId?: string }) => Promise<SessionGroup>
     update: (id: string, updates: Partial<SessionGroup>) => Promise<SessionGroup | undefined>
     delete: (id: string) => Promise<boolean>
     checkCanCreateSubGroup: (targetGroupId: string | undefined) => Promise<{ canCreate: boolean; error?: string }>

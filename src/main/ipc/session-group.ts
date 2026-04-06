@@ -27,6 +27,11 @@ export function registerSessionGroupHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.SESSION_GROUP.CREATE,
     (_event, groupData: Omit<SessionGroup, 'id' | 'createdAt' | 'updatedAt' | 'depth'>) => {
+      // 验证分组名称
+      if (!groupData.name || groupData.name.trim() === '') {
+        throw new Error('分组名称不能为空')
+      }
+
       const group: SessionGroup = {
         ...groupData,
         id: CryptoService.generateGroupId(),
