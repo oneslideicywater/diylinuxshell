@@ -44,40 +44,7 @@
         </div>
       </div>
 
-      <!-- 工具栏 -->
-      <div class="sftp-toolbar">
-        <button class="toolbar-btn" @click="uploadFile" @contextmenu.prevent="showContextMenu($event, 'upload')" title="上传文件">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M8 11V3M8 3L5 6M8 3l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M3 11v2h10v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <span>上传</span>
-        </button>
-        <button class="toolbar-btn" @click="downloadFile" @contextmenu.prevent="showContextMenu($event, 'download')" title="下载文件">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M8 3v8M8 11l-3-3M8 11l3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M3 11v2h10v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <span>下载</span>
-        </button>
-        <div class="toolbar-separator"></div>
-        <button class="toolbar-btn" @click="createRemoteFolder" @contextmenu.prevent="showContextMenu($event, 'newFolder')" title="新建文件夹">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M14 12a2 2 0 002-2V6a2 2 0 00-2-2h-4l-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h10z" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M8 6v6M5 9h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <span>新建文件夹</span>
-        </button>
-        <div class="toolbar-separator"></div>
-        <button class="toolbar-btn" @click="deleteFile" @contextmenu.prevent="showContextMenu($event, 'delete')" title="删除">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M3 4h10M5 4v9a1 1 0 001 1h4a1 1 0 001-1V4M6 4V2h4v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-          <span>删除</span>
-        </button>
-      </div>
-
-      <!-- 右键菜单（移到工具栏外部） -->
+      <!-- 右键菜单 -->
       <div v-if="contextMenuVisible" class="context-menu" :style="contextMenuStyle">
         <div class="context-menu-item" @click="handleContextMenuAction">
           <span class="menu-item-title">{{ currentContextMenuAction?.title }}</span>
@@ -1129,43 +1096,6 @@ watch(() => props.visible, async (newVal) => {
 .header-btn.close:hover {
   background: #e81123;
   color: white;
-}
-
-/* 工具栏 */
-.sftp-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--bg-color-secondary, #2d2d2d);
-  border-bottom: 1px solid var(--border-color, #e0e0e0);
-}
-
-.toolbar-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  color: var(--text-color-secondary, #888);
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.toolbar-btn:hover {
-  background: var(--bg-color-tertiary, #333);
-  color: var(--text-color, #fff);
-  border-color: var(--border-color, #444);
-}
-
-.toolbar-separator {
-  width: 1px;
-  height: 20px;
-  background: var(--border-color, #333);
-  margin: 0 4px;
 }
 
 /* 主内容区 */
