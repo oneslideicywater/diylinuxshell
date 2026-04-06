@@ -172,6 +172,55 @@ const api: CustomAPI = {
     // 重置配置
     reset: (): Promise<AppConfig> => 
       ipcRenderer.invoke(IPC_CHANNELS.CONFIG.RESET)
+  },
+
+  /**
+   * SFTP 文件传输相关方法
+   */
+  sftp: {
+    // 连接 SFTP 服务器
+    connect: (sessionId: string, config: { host: string; port: number; username: string; password?: string }): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:connect', sessionId, config),
+    
+    // 列出远程目录内容
+    listDir: (sessionId: string, remotePath: string): Promise<{ success: boolean; data?: any[]; error?: string }> => 
+      ipcRenderer.invoke('sftp:listDir', sessionId, remotePath),
+    
+    // 下载文件
+    download: (sessionId: string, remotePath: string, localPath: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:download', sessionId, remotePath, localPath),
+    
+    // 下载文件夹（递归）
+    downloadFolder: (sessionId: string, remotePath: string, localPath: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:downloadFolder', sessionId, remotePath, localPath),
+    
+    // 上传文件
+    upload: (sessionId: string, localPath: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:upload', sessionId, localPath, remotePath),
+    
+    // 创建远程目录
+    mkdir: (sessionId: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:mkdir', sessionId, remotePath),
+    
+    // 删除远程文件
+    delete: (sessionId: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:delete', sessionId, remotePath),
+    
+    // 断开连接
+    disconnect: (sessionId: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:disconnect', sessionId),
+    
+    // 选择本地文件
+    selectLocalFile: (options: { selectFolder?: boolean }): Promise<{ success: boolean; path?: string; error?: string }> => 
+      ipcRenderer.invoke('sftp:selectLocalFile', options),
+    
+    // 获取本地文件列表
+    getLocalFiles: (localPath: string): Promise<{ success: boolean; data?: any[]; error?: string }> => 
+      ipcRenderer.invoke('sftp:getLocalFiles', localPath),
+    
+    // 获取用户主目录
+    getHomeDir: (): Promise<{ success: boolean; data?: string; error?: string }> => 
+      ipcRenderer.invoke('sftp:getHomeDir')
   }
 }
 

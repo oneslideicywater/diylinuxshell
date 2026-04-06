@@ -28,6 +28,19 @@
 
     <!-- 操作按钮 -->
     <div class="session-actions" @click.stop>
+      <!-- SFTP 传输按钮 -->
+      <button class="action-btn sftp" title="SFTP 传输" @click="$emit('sftp')">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path
+            d="M14 12a2 2 0 002-2V6a2 2 0 00-2-2h-4l-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h10z"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+
       <!-- 连接按钮 -->
       <button class="action-btn connect" title="连接" @click="$emit('connect')">
         <svg width="14" height="14" viewBox="0 0 14 14">
@@ -82,6 +95,7 @@ const emit = defineEmits<{
   (e: 'delete'): void
   (e: 'duplicate'): void
   (e: 'properties'): void
+  (e: 'sftp'): void
 }>()
 </script>
 
@@ -163,8 +177,28 @@ const emit = defineEmits<{
 }
 
 .action-btn:hover {
-  background-color: var(--hover-bg, #3c3c3c);
+  background-color: var(--hover-bg, #2a2a2a);
   color: var(--text-color, #cccccc);
+}
+
+.action-btn.sftp:hover {
+  background-color: var(--primary-color-light, rgba(64, 158, 255, 0.15));
+  color: var(--primary-color, #409eff);
+}
+
+.action-btn.connect:hover {
+  background-color: rgba(103, 194, 58, 0.15);
+  color: #67c23a;
+}
+
+.action-btn.edit:hover {
+  background-color: rgba(230, 162, 60, 0.15);
+  color: #e6a23c;
+}
+
+.action-btn.delete:hover {
+  background-color: rgba(245, 108, 108, 0.15);
+  color: #f56c6c;
 }
 
 .action-btn.connect:hover {

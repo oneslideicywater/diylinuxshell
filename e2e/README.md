@@ -35,6 +35,8 @@ e2e/
 │   ├── app-sidebar-resize.e2e.spec.ts
 │   ├── tab-persistence.e2e.spec.ts
 │   └── tabs.e2e.spec.ts
+├── sftp/                           # SFTP 文件传输测试
+│   └── sftp-transfer.e2e.spec.ts   # SFTP 窗口功能测试
 ├── session/                        # 会话管理测试
 │   ├── debug-session-group-contextmenu.e2e.spec.ts
 │   ├── five-level-nested-groups.e2e.spec.ts

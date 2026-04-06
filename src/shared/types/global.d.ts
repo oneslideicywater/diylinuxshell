@@ -50,6 +50,19 @@ export interface CustomAPI {
     get: () => Promise<AppConfig>
     set: (config: Partial<AppConfig>) => Promise<AppConfig>
     reset: () => Promise<AppConfig>
+  },
+
+  // SFTP 文件传输
+  sftp: {
+    connect: (sessionId: string, config: { host: string; port: number; username: string; password?: string }) => Promise<{ success: boolean; error?: string }>
+    listDir: (sessionId: string, remotePath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+    download: (sessionId: string, remotePath: string, localPath: string) => Promise<{ success: boolean; error?: string }>
+    upload: (sessionId: string, localPath: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
+    mkdir: (sessionId: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
+    delete: (sessionId: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
+    disconnect: (sessionId: string) => Promise<{ success: boolean; error?: string }>
+    selectLocalFile: (options: { selectFolder?: boolean }) => Promise<{ success: boolean; path?: string; error?: string }>
+    getLocalFiles: (localPath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
   }
 }
 

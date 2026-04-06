@@ -25,7 +25,7 @@
           <SessionItem v-for="session in ungroupedSessions" :key="session.id" :session="session"
             :active="session.id === activeSessionId" @click="handleSelect(session)" @dblclick="handleConnect(session)"
             @connect="handleConnect(session)" @edit="handleEdit(session)" @delete="handleDelete(session)"
-            @duplicate="handleDuplicate(session)" @properties="handleProperties(session)"
+            @duplicate="handleDuplicate(session)" @properties="handleProperties(session)" @sftp="handleSftp(session)"
             @contextmenu.prevent="handleSessionContextMenu($event, session)" />
         </div>
 
@@ -71,7 +71,7 @@
                   :active="session.id === activeSessionId" @click="handleSelect(session)"
                   @dblclick="handleConnect(session)" @connect="handleConnect(session)" @edit="handleEdit(session)"
                   @delete="handleDelete(session)" @duplicate="handleDuplicate(session)"
-                  @properties="handleProperties(session)"
+                  @properties="handleProperties(session)" @sftp="handleSftp(session)"
                   @contextmenu.prevent="handleSessionContextMenu($event, session)" />
               </div>
             </div>
@@ -235,6 +235,9 @@
     <SessionForm :visible="sessionFormVisible" :session="editingSession" @close="handleCloseSessionForm"
       @submit="handleSubmitSessionForm" />
 
+    <!-- SFTP 传输窗口 -->
+    <SftpTransfer :visible="sftpVisible" :session="sftpSession" @close="handleCloseSftp" />
+
     <!-- 确认对话框 -->
     <ConfirmDialog :visible="confirmDialogVisible" :title="confirmDialogTitle" :message="confirmDialogMessage"
       :is-warning="confirmDialogIsWarning" @close="handleConfirmDialogClose" @confirm="handleConfirmDialogConfirm"
@@ -255,6 +258,7 @@ import { useErrorDialogStore } from '@/stores/errorDialog'
 import SessionItem from './SessionItem.vue'
 import SessionGroupForm from './SessionGroupForm.vue'
 import SessionForm from './SessionForm.vue'
+import SftpTransfer from './SftpTransfer.vue'
 import ErrorDialog from '@/components/common/ErrorDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import SessionGroupTree from './SessionGroupTree.vue'
@@ -320,6 +324,10 @@ const editingGroup = ref<SessionGroup | null>(null)
 // 会话表单相关状态
 const sessionFormVisible = ref(false)
 const editingSession = ref<Session | null>(null)
+
+// SFTP 传输相关状态
+const sftpVisible = ref(false)
+const sftpSession = ref<Session | null>(null)
 
 // 列表右键菜单状态
 const listContextMenuVisible = ref(false)
@@ -892,6 +900,26 @@ const handleCloseGroupForm = () => {
 const handleCloseSessionForm = () => {
   sessionFormVisible.value = false
   editingSession.value = null
+}
+
+/**
+ * 关闭 SFTP 窗口
+ */
+const handleCloseSftp = () => {
+  sftpVisible.value = false
+  sftpSession.value = null
+}
+
+/**
+ * 打开 SFTP 传输
+ */
+const handleSftp = (session: Session) => {
+  if (!session) {
+    console.error('Session is null')
+    return
+  }
+  sftpSession.value = session
+  sftpVisible.value = true
 }
 
 /**

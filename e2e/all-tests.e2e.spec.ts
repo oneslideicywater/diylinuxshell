@@ -11,6 +11,7 @@
  * - debug: 调试和测试工具
  * - empty-state: 空状态测试
  * - layout: 应用布局测试
+ * - sftp: SFTP 文件传输测试
  * - session: 会话管理测试
  * - session-form: 会话表单测试
  * - settings: 设置功能测试
@@ -114,6 +115,27 @@ test.describe('Layout - 应用布局', () => {
 
   test('多标签页功能', async () => {
     // 测试在 layout/tabs.e2e.spec.ts 中定义
+  })
+})
+
+/**
+ * SFTP 文件传输测试
+ */
+test.describe('SFTP - SFTP 文件传输', () => {
+  test('SFTP 窗口应该能正常打开', async () => {
+    // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
+  })
+
+  test('SFTP 窗口应该能响应主题切换', async () => {
+    // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
+  })
+
+  test('SFTP 窗口应该能最大化/还原', async () => {
+    // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
+  })
+
+  test('SFTP 窗口应该能刷新文件列表', async () => {
+    // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
   })
 })
 

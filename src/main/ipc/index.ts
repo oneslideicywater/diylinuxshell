@@ -8,9 +8,10 @@ import { registerSessionHandlers } from './session'
 import { registerSessionGroupHandlers } from './session-group'
 import { registerTerminalHandlers } from './terminal'
 import { registerConfigHandlers } from './config'
+import { registerSFTPIpcHandlers } from './sftp'
 
 /**
- * 注册所有IPC处理器
+ * 注册所有 IPC 处理器
  */
 export function registerAllHandlers(): void {
   // 注册会话相关处理器
@@ -23,6 +24,9 @@ export function registerAllHandlers(): void {
   // 注册配置相关处理器
   registerConfigHandlers()
 
+  // 注册 SFTP 相关处理器
+  registerSFTPIpcHandlers()
+
   console.log('All IPC handlers registered')
 }
 
@@ -31,3 +35,4 @@ export { registerSessionHandlers } from './session'
 export { registerSessionGroupHandlers } from './session-group'
 export { registerTerminalHandlers } from './terminal'
 export { registerConfigHandlers } from './config'
+export { registerSFTPIpcHandlers } from './sftp'
