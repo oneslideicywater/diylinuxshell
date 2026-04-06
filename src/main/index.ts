@@ -11,6 +11,7 @@ import { registerAllHandlers } from './ipc'
 import { SSHManager } from './services/ssh-manager'
 import { StoreService } from './services/store'
 import { CryptoService } from './services/crypto'
+import type { SessionGroup } from '../shared/types'
 
 /**
  * 创建主窗口
@@ -130,25 +131,23 @@ app.whenReady().then(() => {
 })
 
 /**
- * 创建默认分组
  * 如果不存在"默认分组"，则创建它
  */
 function createDefaultGroup(): void {
   try {
-    const groups = StoreService.getSessionGroups()
-    
     // 检查是否已存在默认分组
+    const groups = StoreService.getSessionGroups()
     const hasDefaultGroup = groups.some(g => g.name === '默认分组')
     
     if (!hasDefaultGroup) {
       // 创建默认分组
-      const defaultGroup = {
-        id: CryptoService.generateId(),
+      const defaultGroup: SessionGroup = {
+        id: CryptoService.generateGroupId(),
         name: '默认分组',
         icon: 'folder',
         order: 0,
         depth: 1,
-        parentId: null,
+        parentId: undefined,
         createdAt: Date.now(),
         updatedAt: Date.now()
       }

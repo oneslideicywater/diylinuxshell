@@ -7,7 +7,6 @@
 import { Client } from 'ssh2'
 import * as fs from 'fs'
 import * as path from 'path'
-import type { Readable } from 'stream'
 
 /**
  * SFTP 连接配置
@@ -74,21 +73,6 @@ export class SFTPService {
           password: config.password,
           privateKey: config.privateKey
         })
-    })
-  }
-
-  /**
-   * 获取 SFTP 句柄
-   */
-  private getSFTP(): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.client.sftp((err, sftp) => {
-        if (err) {
-          reject(err)
-        } else {
-          resolve(sftp)
-        }
-      })
     })
   }
 
@@ -297,7 +281,7 @@ export class SFTPService {
           const readStream = fs.createReadStream(localPath)
           let position = 0
 
-          readStream.on('data', (chunk: Buffer) => {
+          readStream.on('data', (chunk) => {
             this.sftpHandle.write(handle, chunk, 0, chunk.length, position, (err: Error) => {
               if (err) {
                 this.sftpHandle.close(handle)
@@ -414,7 +398,7 @@ class SFTPConnectionPool {
   /**
    * 获取或创建 SFTP 连接
    */
-  getConnection(sessionId: string, config: SFTPConfig): SFTPService {
+  getConnection(sessionId: string): SFTPService {
     if (!this.connections.has(sessionId)) {
       const service = new SFTPService()
       this.connections.set(sessionId, service)

@@ -1,11 +1,11 @@
-/**
+﻿/**
  * SFTP IPC 处理器
- * 处理渲染进程与 SFTP 相关的 IPC 通信
+ * 处理渲染进程的 SFTP 相关 IPC 通信
  * @module ipc/sftp
  */
 
 import { ipcMain, dialog, BrowserWindow } from 'electron'
-import { sftpPool, SFTPService, type SFTPConfig, type FileInfo } from '../services/sftp'
+import { sftpPool, type SFTPConfig, type FileInfo } from '../services/sftp'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -16,10 +16,10 @@ export function registerSFTPIpcHandlers(): void {
   /**
    * 连接 SFTP 服务器
    */
-  ipcMain.handle('sftp:connect', async (event, sessionId: string, config: SFTPConfig) => {
+  ipcMain.handle('sftp:connect', async (_event, sessionId: string, config: SFTPConfig) => {
     try {
       console.log('Connecting to:', config.host, 'with session:', sessionId)
-      const service = sftpPool.getConnection(sessionId, config)
+      const service = sftpPool.getConnection(sessionId)
       await service.connect(config)
       console.log('Connected successfully to:', config.host, 'session:', sessionId)
       return { success: true }
@@ -32,9 +32,9 @@ export function registerSFTPIpcHandlers(): void {
   /**
    * 列出远程目录内容
    */
-  ipcMain.handle('sftp:listDir', async (event, sessionId: string, remotePath: string) => {
+  ipcMain.handle('sftp:listDir', async (_event, sessionId: string, remotePath: string) => {
     try {
-      const service = sftpPool.getConnection(sessionId, {} as SFTPConfig)
+      const service = sftpPool.getConnection(sessionId)
       // 检查服务是否已连接
       if (!(service as any).sftpHandle) {
         throw new Error('SFTP not connected. Please connect first.')
@@ -52,9 +52,9 @@ export function registerSFTPIpcHandlers(): void {
    */
   ipcMain.handle(
     'sftp:download',
-    async (event, sessionId: string, remotePath: string, localPath: string) => {
+    async (_event, sessionId: string, remotePath: string, localPath: string) => {
       try {
-        const service = sftpPool.getConnection(sessionId, {} as SFTPConfig)
+        const service = sftpPool.getConnection(sessionId)
         await service.downloadFile(remotePath, localPath)
         return { success: true }
       } catch (error: any) {
@@ -68,9 +68,9 @@ export function registerSFTPIpcHandlers(): void {
    */
   ipcMain.handle(
     'sftp:downloadFolder',
-    async (event, sessionId: string, remotePath: string, localPath: string) => {
+    async (_event, sessionId: string, remotePath: string, localPath: string) => {
       try {
-        const service = sftpPool.getConnection(sessionId, {} as SFTPConfig)
+        const service = sftpPool.getConnection(sessionId)
         await service.downloadFolder(remotePath, localPath)
         return { success: true }
       } catch (error: any) {
@@ -84,9 +84,9 @@ export function registerSFTPIpcHandlers(): void {
    */
   ipcMain.handle(
     'sftp:upload',
-    async (event, sessionId: string, localPath: string, remotePath: string) => {
+    async (_event, sessionId: string, localPath: string, remotePath: string) => {
       try {
-        const service = sftpPool.getConnection(sessionId, {} as SFTPConfig)
+        const service = sftpPool.getConnection(sessionId)
         await service.uploadFile(localPath, remotePath)
         return { success: true }
       } catch (error: any) {
@@ -98,9 +98,9 @@ export function registerSFTPIpcHandlers(): void {
   /**
    * 创建远程目录
    */
-  ipcMain.handle('sftp:mkdir', async (event, sessionId: string, remotePath: string) => {
+  ipcMain.handle('sftp:mkdir', async (_event, sessionId: string, remotePath: string) => {
     try {
-      const service = sftpPool.getConnection(sessionId, {} as SFTPConfig)
+      const service = sftpPool.getConnection(sessionId)
       await service.mkdir(remotePath)
       return { success: true }
     } catch (error: any) {
@@ -111,9 +111,9 @@ export function registerSFTPIpcHandlers(): void {
   /**
    * 删除远程文件
    */
-  ipcMain.handle('sftp:delete', async (event, sessionId: string, remotePath: string) => {
+  ipcMain.handle('sftp:delete', async (_event, sessionId: string, remotePath: string) => {
     try {
-      const service = sftpPool.getConnection(sessionId, {} as SFTPConfig)
+      const service = sftpPool.getConnection(sessionId)
       await service.deleteFile(remotePath)
       return { success: true }
     } catch (error: any) {
@@ -124,7 +124,7 @@ export function registerSFTPIpcHandlers(): void {
   /**
    * 断开 SFTP 连接
    */
-  ipcMain.handle('sftp:disconnect', async (event, sessionId: string) => {
+  ipcMain.handle('sftp:disconnect', async (_event, sessionId: string) => {
     try {
       sftpPool.removeConnection(sessionId)
       return { success: true }
@@ -136,9 +136,9 @@ export function registerSFTPIpcHandlers(): void {
   /**
    * 选择本地文件
    */
-  ipcMain.handle('sftp:selectLocalFile', async (event, options: { selectFolder?: boolean }) => {
+  ipcMain.handle('sftp:selectLocalFile', async (_event, options: { selectFolder?: boolean }) => {
     try {
-      const window = BrowserWindow.fromWebContents(event.sender)
+      const window = BrowserWindow.fromWebContents(_event.sender)
       const result = await dialog.showOpenDialog(window!, {
         properties: options.selectFolder ? ['openDirectory'] : ['openFile'],
         title: options.selectFolder ? '选择文件夹' : '选择文件'
@@ -157,7 +157,7 @@ export function registerSFTPIpcHandlers(): void {
   /**
    * 获取本地文件列表
    */
-  ipcMain.handle('sftp:getLocalFiles', async (event, localPath: string) => {
+  ipcMain.handle('sftp:getLocalFiles', async (_event, localPath: string) => {
     try {
       const files = await getLocalDirectoryContents(localPath)
       return { success: true, data: files }
@@ -211,27 +211,8 @@ async function getLocalDirectoryContents(dirPath: string): Promise<FileInfo[]> {
         }
       }
 
-      // 目录在前，文件在后
-      files.sort((a, b) => {
-        if (a.isDirectory && !b.isDirectory) return -1
-        if (!a.isDirectory && b.isDirectory) return 1
-        return a.name.localeCompare(b.name)
-      })
-
       resolve(files)
     })
   })
 }
 
-/**
- * 获取用户主目录
- */
-ipcMain.handle('sftp:getHomeDir', async () => {
-  try {
-    const os = await import('os')
-    const homeDir = os.homedir()
-    return { success: true, data: homeDir }
-  } catch (error: any) {
-    return { success: false, error: error.message }
-  }
-})

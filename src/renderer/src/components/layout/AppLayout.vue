@@ -97,7 +97,7 @@ const terminalStore = useTerminalStore()
 
 // 定义事件
 const emit = defineEmits<{
-  (e: 'add-session'): void
+  (e: 'add-session', groupId?: string): void
   (e: 'edit-session', session: Session): void
   (e: 'open-settings'): void
 }>()

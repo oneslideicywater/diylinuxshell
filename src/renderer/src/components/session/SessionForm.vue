@@ -496,8 +496,7 @@ const handleSubmit = async () => {
       keyPassphrase:
         formData.value.authType === 'key' && formData.value.keyPassphrase
           ? formData.value.keyPassphrase
-          : undefined,
-      status: 'disconnected'
+          : undefined
     })
   } finally {
     submitting.value = false

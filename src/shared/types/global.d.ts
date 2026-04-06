@@ -26,6 +26,7 @@ export interface CustomAPI {
     connect: (tabId: string, sessionId: string) => Promise<{ success: boolean; tabId: string }>
     disconnect: (tabId: string) => Promise<boolean>
     getStatus: (tabId: string) => Promise<string | null>
+    testConnection: (sessionData: Partial<Session>) => Promise<boolean>
   }
 
   // 会话分组管理
@@ -34,6 +35,8 @@ export interface CustomAPI {
     create: (data: { name: string; icon?: string }) => Promise<SessionGroup>
     update: (id: string, updates: Partial<SessionGroup>) => Promise<SessionGroup | undefined>
     delete: (id: string) => Promise<boolean>
+    checkCanCreateSubGroup: (targetGroupId: string | undefined) => Promise<{ canCreate: boolean; error?: string }>
+    checkCanMoveGroup: (sourceGroupId: string, targetGroupId: string | undefined) => Promise<{ canMove: boolean; error?: string }>
   }
 
   // 终端操作

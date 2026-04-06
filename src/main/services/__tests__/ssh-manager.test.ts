@@ -1,7 +1,6 @@
-/**
- * SSHManager 单元测试
- * 测试 SSH 连接管理器的核心功能
- */
+﻿/**
+ * SSHManager 閸楁洖鍘撳ù瀣槸
+ * 濞村鐦?SSH 鏉╃偞甯寸粻锛勬倞閸ｃ劎娈戦弽绋跨妇閸旂喕鍏? */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { Session } from '@shared/types'
@@ -52,7 +51,6 @@ describe('SSHManager', () => {
     username: 'testuser',
     authType: 'password',
     password: 'test-password',
-    status: 'disconnected',
     createdAt: Date.now(),
     updatedAt: Date.now(),
     ...overrides
@@ -70,7 +68,7 @@ describe('SSHManager', () => {
     mockStream.end.mockClear()
     mockStream.setWindow.mockClear()
     
-    // 清空所有连接
+    // 断开所有连接
     SSHManager.disconnectAll()
   })
 
@@ -82,7 +80,7 @@ describe('SSHManager', () => {
     it('should create SSH connection with password auth', async () => {
       const session = createMockSession()
       
-      // 模拟成功连接
+      // 模拟 SSH 连接成功
       mockClient.on.mockImplementation((event: string, callback: () => void) => {
         if (event === 'ready') {
           setTimeout(callback, 0)
@@ -92,7 +90,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      const result = await SSHManager.connect(session)
+      const result = await SSHManager.connect("session-1", session)
       
       expect(result).toBe('session-1')
       expect(mockClient.connect).toHaveBeenCalled()
@@ -111,21 +109,21 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       expect(SSHManager.getConnectionCount()).toBe(1)
 
       // 第二次连接同一个会话
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       expect(SSHManager.getConnectionCount()).toBe(1)
     })
 
     it('should handle connection timeout', async () => {
       const session = createMockSession()
       
-      // 模拟超时（不触发 ready 事件）
+      // 模拟 SSH 连接超时（不触发 ready 事件）
       mockClient.on.mockImplementation(() => {})
 
-      await expect(SSHManager.connect(session)).rejects.toThrow('Connection timeout')
+      await expect(SSHManager.connect("session-1", session)).rejects.toThrow('Connection timeout')
     })
 
     it('should handle connection error', async () => {
@@ -137,7 +135,7 @@ describe('SSHManager', () => {
         }
       })
 
-      await expect(SSHManager.connect(session)).rejects.toThrow('Connection refused')
+      await expect(SSHManager.connect("session-1", session)).rejects.toThrow('Connection refused')
     })
   })
 
@@ -154,7 +152,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       expect(SSHManager.hasConnection('session-1')).toBe(true)
 
       await SSHManager.disconnect('session-1')
@@ -181,8 +179,8 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session1)
-      await SSHManager.connect(session2)
+      await SSHManager.connect("session-1", session1)
+      await SSHManager.connect("session-2", session2)
       expect(SSHManager.getConnectionCount()).toBe(2)
 
       await SSHManager.disconnectAll()
@@ -203,7 +201,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       const status = SSHManager.getStatus('session-1')
       
       expect(status).toBe('connected')
@@ -228,7 +226,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       expect(SSHManager.hasConnection('session-1')).toBe(true)
     })
 
@@ -252,7 +250,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       expect(SSHManager.getConnectionCount()).toBe(1)
     })
   })
@@ -270,7 +268,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       SSHManager.write('session-1', 'ls -la\n')
       
       expect(mockStream.write).toHaveBeenCalledWith('ls -la\n')
@@ -294,7 +292,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       SSHManager.resize('session-1', 24, 80)
       
       expect(mockStream.setWindow).toHaveBeenCalledWith(24, 80, 480, 640)
@@ -318,7 +316,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       const callback = vi.fn()
       const unsubscribe = SSHManager.onData('session-1', callback)
       
@@ -345,7 +343,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       const callback = vi.fn()
       const unsubscribe = SSHManager.onClose('session-1', callback)
       
@@ -367,7 +365,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       const callback = vi.fn()
       const unsubscribe = SSHManager.onError('session-1', callback)
       
@@ -389,7 +387,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       const connections = SSHManager.getAllConnections()
       
       expect(connections).toHaveLength(1)
@@ -410,7 +408,7 @@ describe('SSHManager', () => {
         callback(null, mockStream)
       })
 
-      await SSHManager.connect(session)
+      await SSHManager.connect("session-1", session)
       const connection = SSHManager.getConnection('session-1')
       
       expect(connection).toBeDefined()

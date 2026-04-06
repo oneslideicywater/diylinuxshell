@@ -10,7 +10,7 @@
     <div class="sidebar-section">
       <div class="section-header">
         <span class="section-title">会话列表</span>
-        <button class="add-btn" @click="handleAddSession" title="新建会话">
+        <button class="add-btn" @click.stop="handleAddSession()" title="新建会话">
           <!-- + 图标 -->
           <svg width="14" height="14" viewBox="0 0 14 14">
             <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" />

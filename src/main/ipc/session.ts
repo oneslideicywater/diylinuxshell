@@ -9,7 +9,7 @@ import { StoreService } from '../services/store'
 import { CryptoService } from '../services/crypto'
 import { SSHManager } from '../services/ssh-manager'
 import { IPC_CHANNELS } from '@shared/constants/ipc-channels'
-import type { Session } from '@shared/types'
+import type { Session, SessionGroup } from '@shared/types'
 
 /**
  * 注册会话相关IPC处理器
@@ -240,11 +240,13 @@ export function registerSessionGroupHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.SESSION_GROUP.CREATE,
     (_event, groupData: { name: string; icon?: string }) => {
-      const group = {
+      const group: SessionGroup = {
         id: CryptoService.generateGroupId(),
         name: groupData.name,
         icon: groupData.icon,
         order: StoreService.getSessionGroups().length,
+        depth: 1,
+        parentId: undefined,
         createdAt: Date.now(),
         updatedAt: Date.now()
       }

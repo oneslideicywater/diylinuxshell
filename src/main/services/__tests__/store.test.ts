@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { Session, SessionGroup, AppConfig } from '@shared/types'
+import type { Session, SessionGroup } from '@shared/types'
 
 // Mock electron-store
 const mockStore: Record<string, unknown> = {}
@@ -23,7 +23,7 @@ vi.mock('electron-store', () => {
   }
 })
 
-// 重新导入以应用 mock
+// 重新导入以应�?mock
 const { StoreService } = await import('../store')
 
 describe('StoreService', () => {
@@ -51,7 +51,6 @@ describe('StoreService', () => {
           port: 22,
           username: 'test',
           authType: 'password',
-          status: 'disconnected',
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -72,7 +71,6 @@ describe('StoreService', () => {
           port: 22,
           username: 'admin',
           authType: 'password',
-          status: 'disconnected',
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -92,7 +90,6 @@ describe('StoreService', () => {
           port: 22,
           username: 'user1',
           authType: 'password',
-          status: 'disconnected',
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -103,7 +100,6 @@ describe('StoreService', () => {
           port: 22,
           username: 'user2',
           authType: 'password',
-          status: 'disconnected',
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -125,7 +121,6 @@ describe('StoreService', () => {
           port: 22,
           username: 'test',
           authType: 'password',
-          status: 'disconnected',
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -145,7 +140,6 @@ describe('StoreService', () => {
           port: 22,
           username: 'user1',
           authType: 'password',
-          status: 'disconnected',
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -156,7 +150,6 @@ describe('StoreService', () => {
           port: 22,
           username: 'user2',
           authType: 'password',
-          status: 'disconnected',
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -180,7 +173,6 @@ describe('StoreService', () => {
           port: 22,
           username: 'test',
           authType: 'password',
-          status: 'disconnected',
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -200,7 +192,6 @@ describe('StoreService', () => {
           port: 22,
           username: 'user1',
           authType: 'password',
-          status: 'disconnected',
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -211,7 +202,6 @@ describe('StoreService', () => {
           port: 22,
           username: 'user2',
           authType: 'password',
-          status: 'disconnected',
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -235,7 +225,6 @@ describe('StoreService', () => {
           port: 22,
           username: 'test',
           authType: 'password',
-          status: 'disconnected',
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -267,6 +256,8 @@ describe('StoreService', () => {
           id: 'group-1',
           name: 'Production',
           order: 0,
+          depth: 1,
+          parentId: undefined,
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -285,6 +276,8 @@ describe('StoreService', () => {
           id: 'group-1',
           name: 'Original',
           order: 0,
+          depth: 1,
+          parentId: undefined,
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -303,6 +296,8 @@ describe('StoreService', () => {
           id: 'group-1',
           name: 'Test Group',
           order: 0,
+          depth: 1,
+          parentId: undefined,
           createdAt: Date.now(),
           updatedAt: Date.now()
         }
@@ -363,7 +358,6 @@ describe('StoreService', () => {
         port: 22,
         username: 'test',
         authType: 'password',
-        status: 'disconnected',
         createdAt: Date.now(),
         updatedAt: Date.now()
       }
@@ -383,16 +377,15 @@ describe('StoreService', () => {
           port: 22,
           username: 'admin',
           authType: 'password' as const,
-          status: 'disconnected' as const,
           createdAt: Date.now(),
           updatedAt: Date.now()
         }],
-        sessionGroups: [],
-        commandSnippets: [],
-        commandSnippetGroups: [],
+        sessionGroups: [] as any[],
+        commandSnippets: [] as any[],
+        commandSnippetGroups: [] as any[],
         config: {
-          theme: 'dark',
-          language: 'zh-CN',
+          theme: 'dark' as const,
+          language: 'zh-CN' as const,
           terminal: {
             fontSize: 14,
             fontFamily: 'Consolas',
@@ -401,8 +394,10 @@ describe('StoreService', () => {
             scrollback: 10000,
             terminalType: 'xterm-256color'
           },
-          connectionTimeout: 30000,
-          keepaliveInterval: 30000,
+          connectionTimeout: 30,
+          keepaliveInterval: 60,
+          keepaliveMaxMissed: 3,
+          enableKeepalive: true,
           autoReconnect: true,
           reconnectAttempts: 3
         }
@@ -425,7 +420,6 @@ describe('StoreService', () => {
         port: 22,
         username: 'test',
         authType: 'password',
-        status: 'disconnected',
         createdAt: Date.now(),
         updatedAt: Date.now()
       }
@@ -437,3 +431,4 @@ describe('StoreService', () => {
     })
   })
 })
+
