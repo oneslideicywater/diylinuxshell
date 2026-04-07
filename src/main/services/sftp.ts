@@ -404,7 +404,7 @@ export class SFTPService {
   }
 
   /**
-   * 删除文件
+   * 删除远程文件或目录（递归）
    */
   async deleteFile(remotePath: string): Promise<void> {
     if (!this.sftpHandle) {
@@ -414,21 +414,52 @@ export class SFTPService {
     return new Promise((resolve, reject) => {
       this.sftpHandle.stat(remotePath, (err: Error, stats: any) => {
         if (err) {
+          console.error('SFTPService.deleteFile stat 失败:', { remotePath, error: err.message })
           reject(err)
           return
         }
 
         if (stats.isDirectory()) {
-          this.sftpHandle.rmdir(remotePath, (err: Error) => {
+          console.log('SFTPService.deleteFile 开始删除目录:', { remotePath })
+          // 递归删除目录内容
+          this.sftpHandle.readdir(remotePath, async (err: Error, entries: any[]) => {
             if (err) {
+              console.error('SFTPService.deleteFile readdir 失败:', { remotePath, error: err.message })
               reject(err)
-            } else {
-              resolve()
+              return
             }
+
+            // 删除所有子文件和子目录
+            for (const entry of entries) {
+              if (entry.filename === '.' || entry.filename === '..') {
+                continue
+              }
+              const childPath = `${remotePath}/${entry.filename}`
+              try {
+                await this.deleteFile(childPath)
+              } catch (error: any) {
+                console.error('SFTPService.deleteFile 删除子项失败:', { childPath, error: error.message })
+                reject(error)
+                return
+              }
+            }
+
+            // 删除空目录
+            this.sftpHandle.rmdir(remotePath, (err: Error) => {
+              if (err) {
+                console.error('SFTPService.deleteFile rmdir 失败:', { remotePath, error: err.message })
+                reject(err)
+              } else {
+                console.log('SFTPService.deleteFile 删除成功:', { remotePath })
+                resolve()
+              }
+            })
           })
         } else {
+          // 删除文件
           this.sftpHandle.unlink(remotePath, (err: Error) => {
             if (err) {
+              console.error('SFTPService.deleteFile unlink 失败:', { remotePath, error: err.message })
               reject(err)
             } else {
               resolve()
