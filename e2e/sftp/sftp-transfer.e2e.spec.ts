@@ -609,6 +609,227 @@ test.describe('SFTP 文件传输功能', () => {
     }
   })
 
+  /**
+   * 测试用例：上传文件夹（递归上传）
+   */
+  test('SFTP 窗口应该能上传文件夹', async () => {
+    // 打开 SFTP 窗口
+    await openSFTPWindow(page)
+    
+    // 等待 SFTP 窗口完全加载
+    await page.waitForTimeout(2000)
+
+    // 创建测试文件夹和文件
+    const testFolderName = `test_upload_folder_${Date.now()}`
+    const tempDir = require('os').tmpdir()
+    const testFolderPath = require('path').join(tempDir, testFolderName)
+    const fs = require('fs')
+    
+    // 创建测试文件夹
+    if (!fs.existsSync(testFolderPath)) {
+      fs.mkdirSync(testFolderPath, { recursive: true })
+    }
+    
+    // 创建测试文件
+    const testFile1 = require('path').join(testFolderPath, 'test1.txt')
+    const testFile2 = require('path').join(testFolderPath, 'test2.txt')
+    fs.writeFileSync(testFile1, '测试文件 1 内容')
+    fs.writeFileSync(testFile2, '测试文件 2 内容')
+    
+    // 创建子文件夹
+    const subFolder = require('path').join(testFolderPath, 'subfolder')
+    fs.mkdirSync(subFolder, { recursive: true })
+    const testFile3 = require('path').join(subFolder, 'test3.txt')
+    fs.writeFileSync(testFile3, '测试文件 3 内容（子文件夹）')
+
+    console.log('创建测试文件夹:', testFolderPath)
+
+    // 验证文件夹存在
+    if (!fs.existsSync(testFolderPath)) {
+      throw new Error('测试文件夹创建失败：' + testFolderPath)
+    }
+    console.log('测试文件夹已创建:', testFolderPath)
+
+    // 导航到临时文件夹
+    const localPathInput = await page.locator('.file-panel.local .path-input').first()
+    await localPathInput.fill(tempDir)
+    await localPathInput.press('Enter')
+    await page.waitForTimeout(2000)
+
+    // 选择测试文件夹
+    const testFolderItem = await page.locator('.file-panel.local .file-item', {
+      hasText: testFolderName
+    }).first()
+    await testFolderItem.scrollIntoViewIfNeeded()
+    
+    // 使用 JavaScript 触发 contextmenu 事件
+    await testFolderItem.evaluate((element) => {
+      const event = new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        view: window
+      })
+      element.dispatchEvent(event)
+    })
+    await page.waitForTimeout(2000)
+
+    // 验证右键菜单显示
+    const contextMenu = await page.locator('.context-menu.file-context-menu').first()
+    await expect(contextMenu).toBeVisible({ timeout: 3000 })
+    console.log('右键菜单已显示')
+
+    // 点击上传文件夹菜单项
+    const uploadFolderMenuItem = await page.locator('.context-menu-item').filter({
+      hasText: '上传文件夹到服务器'
+    }).first()
+    await uploadFolderMenuItem.click({ force: true })
+    console.log('已点击上传文件夹菜单项')
+    
+    console.log('已点击上传文件夹菜单项，等待上传完成...')
+
+    // 等待上传完成（文件夹上传可能需要更长时间）
+    await page.waitForTimeout(15000)
+
+    // 验证上传成功（远程文件列表中出现新文件夹）
+    const remoteFileItems = page.locator('.file-panel.remote .file-item')
+    let found = false
+    let attempts = 0
+    const maxAttempts = 15
+    
+    while (!found && attempts < maxAttempts) {
+      const files = await remoteFileItems.allTextContents()
+      console.log('远程文件列表:', files.filter(f => f.includes('test_upload_folder')))
+      found = files.some(file => file.includes(testFolderName))
+      if (!found) {
+        await page.waitForTimeout(1000)
+        attempts++
+      }
+    }
+
+    console.log('是否找到上传的文件夹:', found, '文件夹名称:', testFolderName)
+    expect(found).toBe(true)
+
+    // 清理远程测试文件夹
+    await page.evaluate(async (folderName) => {
+      try {
+        const sessions = await (window as any).api.session.getAll()
+        const session = sessions.find((s: any) => s.name === 'SFTP Test Server')
+        if (session) {
+          const sessionId = session.id || session.host
+          await (window as any).api.sftp.delete(sessionId, '/' + folderName)
+        }
+      } catch (e) {
+        console.log('清理远程文件夹失败:', e)
+      }
+    }, testFolderName)
+
+    // 清理本地测试文件夹
+    try {
+      if (fs.existsSync(testFolderPath)) {
+        fs.rmSync(testFolderPath, { recursive: true, force: true })
+      }
+    } catch (e) {
+      console.log('清理本地文件夹失败:', e)
+    }
+  })
+
+  /**
+   * 测试用例：进度状态栏显示
+   */
+  test('SFTP 窗口应该显示传输进度状态栏', async () => {
+    // 打开 SFTP 窗口
+    await openSFTPWindow(page)
+    
+    // 等待 SFTP 窗口完全加载
+    await page.waitForTimeout(2000)
+
+    // 创建测试文件
+    const testFileName = `test_progress_${Date.now()}.txt`
+    const tempDir = require('os').tmpdir()
+    const testFilePath = require('path').join(tempDir, testFileName)
+    const fs = require('fs')
+    
+    // 创建较大的测试文件（用于观察进度）
+    const largeContent = '测试内容\n'.repeat(10000)
+    fs.writeFileSync(testFilePath, largeContent)
+
+    console.log('创建测试文件:', testFilePath, '大小:', largeContent.length)
+
+    // 导航到临时文件夹
+    const localPathInput = await page.locator('.file-panel.local .path-input').first()
+    await localPathInput.fill(tempDir)
+    await localPathInput.press('Enter')
+    await page.waitForTimeout(2000)
+
+    // 选择测试文件
+    const testFileItem = await page.locator('.file-panel.local .file-item', {
+      hasText: testFileName
+    }).first()
+    await testFileItem.click({ force: true })
+
+    // 点击上传按钮
+    const uploadButton = await page.locator('.toolbar-btn', { hasText: '上传' }).first()
+    await uploadButton.click({ force: true })
+
+    // 等待进度状态栏出现（增加等待时间）
+    await page.waitForTimeout(500)
+
+    // 验证进度状态栏显示
+    const progressElement = await page.locator('.transfer-progress').first()
+    await expect(progressElement).toBeVisible({ timeout: 5000 })
+
+    // 验证进度条存在
+    const progressBar = await page.locator('.progress-bar').first()
+    await expect(progressBar).toBeVisible()
+
+    // 验证进度信息存在
+    const progressInfo = await page.locator('.progress-info').first()
+    await expect(progressInfo).toBeVisible()
+
+    // 等待上传完成
+    await page.waitForTimeout(5000)
+
+    // 验证上传完成后进度栏关闭或显示完成状态
+    const remoteFileItems = page.locator('.file-panel.remote .file-item')
+    let found = false
+    let attempts = 0
+    const maxAttempts = 5
+    
+    while (!found && attempts < maxAttempts) {
+      const files = await remoteFileItems.allTextContents()
+      found = files.some(file => file.includes(testFileName))
+      if (!found) {
+        await page.waitForTimeout(1000)
+        attempts++
+      }
+    }
+
+    expect(found).toBe(true)
+
+    // 清理远程测试文件
+    await page.evaluate(async (fileName) => {
+      try {
+        const sessions = await (window as any).api.session.getAll()
+        const session = sessions.find((s: any) => s.name === 'SFTP Test Server')
+        if (session) {
+          const sessionId = session.id || session.host
+          await (window as any).api.sftp.delete(sessionId, '/' + fileName)
+        }
+      } catch (e) {
+        console.log('清理远程文件失败:', e)
+      }
+    }, testFileName)
+
+    // 清理本地测试文件
+    try {
+      if (fs.existsSync(testFilePath)) {
+        fs.unlinkSync(testFilePath)
+      }
+    } catch (e) {
+      console.log('清理本地文件失败:', e)
+    }
+  })
+
   test.afterAll('清理测试数据', async () => {
     // 清理测试会话
     try {

@@ -137,6 +137,34 @@ test.describe('SFTP - SFTP 文件传输', () => {
   test('SFTP 窗口应该能刷新文件列表', async () => {
     // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
   })
+
+  test('SFTP 窗口应该能上传文件', async () => {
+    // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
+  })
+
+  test('SFTP 窗口应该支持右键菜单操作', async () => {
+    // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
+  })
+
+  test('SFTP 窗口应该能新建文件夹', async () => {
+    // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
+  })
+
+  test('SFTP 窗口应该能下载文件', async () => {
+    // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
+  })
+
+  test('SFTP 窗口应该能删除文件', async () => {
+    // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
+  })
+
+  test('SFTP 窗口应该能上传文件夹', async () => {
+    // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
+  })
+
+  test('SFTP 窗口应该显示传输进度状态栏', async () => {
+    // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
+  })
 })
 
 /**

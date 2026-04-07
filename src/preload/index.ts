@@ -198,6 +198,10 @@ const api: CustomAPI = {
     upload: (sessionId: string, localPath: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('sftp:upload', sessionId, localPath, remotePath),
     
+    // 上传文件夹（递归）
+    uploadFolder: (sessionId: string, localPath: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:uploadFolder', sessionId, localPath, remotePath),
+    
     // 创建远程目录
     mkdir: (sessionId: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('sftp:mkdir', sessionId, remotePath),

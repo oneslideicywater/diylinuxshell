@@ -96,6 +96,29 @@ export function registerSFTPIpcHandlers(): void {
   )
 
   /**
+   * 上传文件夹（递归）
+   */
+  ipcMain.handle(
+    'sftp:uploadFolder',
+    async (_event, sessionId: string, localPath: string, remotePath: string) => {
+      try {
+        console.log('uploadFolder 被调用:', { sessionId, localPath, remotePath })
+        // 检查本地路径是否存在
+        if (!fs.existsSync(localPath)) {
+          console.error('本地路径不存在:', localPath)
+          return { success: false, error: `本地路径不存在：${localPath}` }
+        }
+        const service = sftpPool.getConnection(sessionId)
+        await service.uploadFolder(localPath, remotePath)
+        return { success: true }
+      } catch (error: any) {
+        console.error('uploadFolder error:', error.message)
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
+  /**
    * 创建远程目录
    */
   ipcMain.handle('sftp:mkdir', async (_event, sessionId: string, remotePath: string) => {

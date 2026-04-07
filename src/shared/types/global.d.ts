@@ -62,6 +62,7 @@ export interface CustomAPI {
     download: (sessionId: string, remotePath: string, localPath: string) => Promise<{ success: boolean; error?: string }>
     downloadFolder: (sessionId: string, remotePath: string, localPath: string) => Promise<{ success: boolean; error?: string }>
     upload: (sessionId: string, localPath: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
+    uploadFolder: (sessionId: string, localPath: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
     mkdir: (sessionId: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
     delete: (sessionId: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
     disconnect: (sessionId: string) => Promise<{ success: boolean; error?: string }>

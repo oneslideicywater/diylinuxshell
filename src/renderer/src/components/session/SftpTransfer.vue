@@ -59,6 +59,10 @@
           <span class="menu-item-title">上传到服务器</span>
           <span class="menu-item-description">将选中的本地文件上传到远程目录</span>
         </div>
+        <div class="context-menu-item" @click="handleFileContextMenuAction('uploadFolder')" v-if="fileContextMenuType === 'local' && selectedLocalFile?.isDirectory === true">
+          <span class="menu-item-title">上传文件夹到服务器</span>
+          <span class="menu-item-description">将选中的本地文件夹上传到远程目录（递归上传）</span>
+        </div>
         <div class="context-menu-item" @click="handleFileContextMenuAction('deleteLocal')" v-if="fileContextMenuType === 'local'">
           <span class="menu-item-title">删除</span>
           <span class="menu-item-description">删除选中的本地文件或文件夹</span>
@@ -197,8 +201,11 @@
           <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
         </div>
         <div class="progress-info">
+          <span class="progress-current-file">{{ progressCurrentFile }}</span>
           <span>{{ progressCurrent }} / {{ progressTotal }}</span>
           <span>{{ progressSpeed }}</span>
+          <span v-if="progressRemaining">• {{ progressRemaining }}</span>
+          <span>{{ progressTransferredSize }} / {{ progressTotalSize }}</span>
         </div>
       </div>
 
@@ -281,6 +288,23 @@ const progressPercent = ref(0)
 const progressCurrent = ref('')
 const progressTotal = ref('')
 const progressSpeed = ref('')
+const progressRemaining = ref('')
+const progressCurrentFile = ref('')
+const progressTransferredSize = ref('')
+const progressTotalSize = ref('')
+
+/**
+ * 传输统计信息
+ */
+const transferStats = ref({
+  transferredFiles: 0,
+  totalFiles: 0,
+  transferredBytes: 0,
+  totalBytes: 0,
+  startTime: 0,
+  lastUpdateTime: 0,
+  speedHistory: [] as number[]
+})
 
 /**
  * 文件浏览状态
@@ -339,6 +363,10 @@ const contextMenuActions: Record<string, { title: string; description: string }>
   upload: {
     title: '上传文件',
     description: '选择本地文件上传到当前远程目录'
+  },
+  uploadFolder: {
+    title: '上传文件夹',
+    description: '选择本地文件夹上传到当前远程目录（递归上传）'
   },
   download: {
     title: '下载文件',
@@ -568,6 +596,56 @@ async function downloadFile(): Promise<void> {
 }
 
 /**
+ * 上传文件夹（递归）
+ * @param folderPath 可选的文件夹路径，如果提供则直接上传该文件夹，否则弹出选择对话框
+ */
+async function uploadFolder(folderPath?: string): Promise<void> {
+  try {
+    if (!props.session) return
+    const sessionId = props.session.id || props.session.host
+    
+    let localFolderPath: string
+    
+    if (folderPath) {
+      // 使用提供的文件夹路径
+      localFolderPath = folderPath
+    } else {
+      // 弹出文件夹选择对话框
+      const result = await window.api.sftp.selectLocalFile({ selectFolder: true })
+      
+      if (!result.success || !result.path) {
+        return // 用户取消选择
+      }
+      
+      localFolderPath = result.path
+    }
+    
+    const folderName = localFolderPath.split(/[\\/]/).pop() || ''
+    const remoteFolderPath = remotePath.value === '/' ? `/${folderName}` : `${remotePath.value}/${folderName}`
+    
+    transferring.value = true
+    progressTitle.value = '上传文件夹中...'
+    progressPercent.value = 0
+    
+    const uploadResult = await window.api.sftp.uploadFolder(sessionId, localFolderPath, remoteFolderPath)
+    
+    if (uploadResult.success) {
+      progressPercent.value = 100
+      setTimeout(() => {
+        transferring.value = false
+        loadRemoteFiles()
+      }, 500)
+    } else {
+      alert(`上传失败：${uploadResult.error}`)
+      transferring.value = false
+    }
+  } catch (error: any) {
+    alert(`上传失败：${error.message}`)
+    transferring.value = false
+  }
+}
+
+/**
  * 创建远程文件夹
  */
 async function createRemoteFolder(): Promise<void> {
@@ -652,6 +730,9 @@ function handleContextMenuAction(): void {
     case 'upload':
       uploadFile()
       break
+    case 'uploadFolder':
+      uploadFolder()
+      break
     case 'download':
       downloadFile()
       break
@@ -672,6 +753,7 @@ function handleContextMenuAction(): void {
  * 处理本地文件列表右键菜单
  */
 function handleLocalContextMenu(event: MouseEvent): void {
+  console.log('handleLocalContextMenu 被调用')
   const target = event.target as HTMLElement
   const fileItem = target.closest('.file-item') as HTMLElement
   
@@ -679,6 +761,8 @@ function handleLocalContextMenu(event: MouseEvent): void {
   
   const path = fileItem.dataset.path
   const file = localFiles.value.find(f => f.path === path)
+  
+  console.log('右键点击的文件:', file, '路径:', path)
   
   if (!file) return
   
@@ -696,6 +780,8 @@ function handleLocalContextMenu(event: MouseEvent): void {
   fileContextMenuPath.value = localPath.value
   fileContextMenuType.value = 'local'
   fileContextMenuVisible.value = true
+  
+  console.log('右键菜单已显示，类型:', fileContextMenuType.value, '选中的文件:', selectedLocal.value)
 }
 
 /**
@@ -732,10 +818,18 @@ function handleRemoteContextMenu(event: MouseEvent): void {
  * 处理文件列表右键菜单点击
  */
 function handleFileContextMenuAction(action: string): void {
-  // 根据类型获取选中的文件
+  console.log('右键菜单动作:', action, '类型:', fileContextMenuType.value, '选中的本地文件:', selectedLocal.value)
+  
+  // 根据类型获取右键选中的文件（从右键菜单位置获取，而不是从 selectedLocal/selectedRemote 获取）
+  const contextMenuPath = fileContextMenuType.value === 'local'
+    ? fileContextMenuPath.value
+    : remotePath.value
+  
   const selectedFile = fileContextMenuType.value === 'local'
     ? localFiles.value.find(f => f.path === selectedLocal.value)
     : remoteFiles.value.find(f => f.path === selectedRemote.value)
+  
+  console.log('选中的文件:', selectedFile)
   
   if (!selectedFile) return
   
@@ -744,6 +838,13 @@ function handleFileContextMenuAction(action: string): void {
       // 上传选中的本地文件到远程
       if (fileContextMenuType.value === 'local') {
         uploadFile()
+      }
+      break
+    case 'uploadFolder':
+      // 上传选中的本地文件夹到远程
+      if (fileContextMenuType.value === 'local' && selectedFile.isDirectory) {
+        console.log('上传文件夹:', selectedFile.path)
+        uploadFolder(selectedFile.path)
       }
       break
     case 'download':

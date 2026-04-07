@@ -313,6 +313,65 @@ export class SFTPService {
   }
 
   /**
+   * 上传文件夹（递归）
+   */
+  async uploadFolder(localPath: string, remotePath: string, onProgress?: (progress: number, currentFile: string) => void): Promise<void> {
+    if (!this.sftpHandle) {
+      throw new Error('SFTP not connected')
+    }
+
+    // 首先创建远程目录
+    try {
+      await this.mkdir(remotePath)
+    } catch (error: any) {
+      throw error
+    }
+
+    // 递归上传所有文件和子目录
+    await this.uploadDirectoryRecursive(localPath, remotePath, onProgress)
+  }
+
+  /**
+   * 递归上传目录
+   */
+  private async uploadDirectoryRecursive(
+    localDir: string,
+    remoteDir: string,
+    onProgress?: (progress: number, currentFile: string) => void
+  ): Promise<void> {
+    // 首先创建远程目录
+    try {
+      await this.mkdir(remoteDir)
+    } catch (error: any) {
+      throw error
+    }
+    
+    const entries = fs.readdirSync(localDir)
+
+    for (const entry of entries) {
+      const localPath = path.join(localDir, entry)
+      const remotePath = `${remoteDir}/${entry}`
+      const stats = fs.statSync(localPath)
+
+      if (stats.isDirectory()) {
+        // 递归上传子目录
+        await this.uploadDirectoryRecursive(localPath, remotePath, onProgress)
+      } else {
+        // 上传文件
+        try {
+          await this.uploadFile(localPath, remotePath, (progress) => {
+            if (onProgress) {
+              onProgress(progress, localPath)
+            }
+          })
+        } catch (error: any) {
+          throw error
+        }
+      }
+    }
+  }
+
+  /**
    * 创建目录
    */
   async mkdir(remotePath: string): Promise<void> {
@@ -321,9 +380,22 @@ export class SFTPService {
     }
 
     return new Promise((resolve, reject) => {
-      this.sftpHandle.mkdir(remotePath, (err: Error) => {
+      // 尝试创建目录，如果已存在则忽略错误
+      this.sftpHandle.mkdir(remotePath, { mode: 0o755 }, (err: Error) => {
         if (err) {
-          reject(err)
+          // 如果错误是因为目录已存在，则忽略
+          if (err.message.includes('Failure') || err.message.includes('already exists')) {
+            // 检查目录是否存在
+            this.sftpHandle.stat(remotePath, (statErr: Error) => {
+              if (statErr) {
+                reject(err)
+              } else {
+                resolve()
+              }
+            })
+          } else {
+            reject(err)
+          }
         } else {
           resolve()
         }
