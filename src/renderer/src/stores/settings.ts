@@ -90,9 +90,11 @@ const loadSettings = (): AppConfig => {
     if (stored) {
       const parsed = JSON.parse(stored) as Partial<AppConfig>
       // 合并默认配置，确保所有字段都有值
+      // 注意：主题始终使用默认值（深色），除非用户主动切换
       return {
         ...defaultConfig,
         ...parsed,
+        theme: defaultConfig.theme, // 强制使用默认主题（深色）
         terminal: {
           ...defaultConfig.terminal,
           ...parsed.terminal
@@ -216,7 +218,10 @@ export const useSettingsStore = defineStore('settings', () => {
    */
   const setTheme = (newTheme: 'dark' | 'light'): void => {
     theme.value = newTheme
+    config.value.theme = newTheme
     applyTheme(newTheme)
+    // 保存到本地存储
+    saveSettings(config.value)
   }
 
   /**
@@ -303,9 +308,9 @@ export const useSettingsStore = defineStore('settings', () => {
     applyTheme(defaultConfig.theme)
   }
 
-  // 监听设置变化，自动保存
+  // 监听设置变化，自动保存（主题除外，主题由 setTheme 手动保存）
   watch(
-    [theme, language, terminal, connectionTimeout, keepaliveInterval, autoReconnect, reconnectAttempts],
+    [language, terminal, connectionTimeout, keepaliveInterval, autoReconnect, reconnectAttempts],
     () => {
       config.value = {
         theme: theme.value,

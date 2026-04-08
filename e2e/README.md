@@ -36,6 +36,11 @@ e2e/
 │   ├── tab-persistence.e2e.spec.ts
 │   └── tabs.e2e.spec.ts
 ├── sftp/                           # SFTP 文件传输测试
+│   ├── cancel-upload-simple.e2e.spec.ts
+│   ├── cancel-upload.e2e.spec.ts
+│   ├── sftp-tree-expand-collapse.e2e.spec.ts  # SFTP 传输树展开/折叠功能测试
+│   ├── sftp-tree-status.e2e.spec.ts           # SFTP 树形状态测试
+│   ├── sftp-tree-upload.e2e.spec.ts
 │   └── sftp-transfer.e2e.spec.ts   # SFTP 窗口功能测试
 ├── session/                        # 会话管理测试
 │   ├── debug-session-group-contextmenu.e2e.spec.ts

@@ -28,39 +28,30 @@
 
 ### 2.2 技术架构图
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           用户界面层 (Renderer Process)                  │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │  会话管理   │  │  终端组件   │  │  设置面板   │  │  命令片段   │    │
-│  │  Vue组件    │  │  xterm.js   │  │  Vue组件    │  │  Vue组件    │    │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
-│                              │                                          │
-│                              ▼                                          │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                    状态管理层 (Pinia Store)                       │   │
-│  │  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐    │   │
-│  │  │SessionStore│ │TerminalStore│ │ConfigStore │ │CommandStore│    │   │
-│  │  └───────────┘  └───────────┘  └───────────┘  └───────────┘    │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-│                              │                                          │
-│                              ▼ IPC通信                                  │
-├─────────────────────────────────────────────────────────────────────────┤
-│                           主进程层 (Main Process)                        │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │  IPC处理    │  │  SSH管理器  │  │  数据存储   │  │  窗口管理   │    │
-│  │  Handler    │  │  SSHManager │  │  Database   │  │  WindowMgr  │    │
-│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
-│                              │                                          │
-│                              ▼                                          │
-│  ┌─────────────────────────────────────────────────────────────────┐   │
-│  │                      底层服务层                                   │   │
-│  │  ┌───────────┐  ┌───────────┐  ┌───────────┐  ┌───────────┐    │   │
-│  │  │   ssh2    │  │  SQLite   │  │  加密服务  │  │  文件系统  │    │   │
-│  │  │  (SSH库)  │  │ (数据库)  │  │ (crypto)  │  │   (fs)    │    │   │
-│  │  └───────────┘  └───────────┘  └───────────┘  └───────────┘    │   │
-│  └─────────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Renderer["渲染进程"]
+        UI[Vue 组件 + Element Plus]
+        Terminal[xterm.js 终端]
+        Store[Pinia 状态管理]
+        
+        UI --> Store
+        Terminal --> Store
+    end
+    
+    subgraph Main["主进程"]
+        IPC[IPC 通信]
+        SSH[SSHManager<br/>ssh2]
+        Storage[electron-store]
+        
+        IPC --> SSH
+        IPC --> Storage
+    end
+    
+    Store --> IPC
+    
+    style Renderer fill:#e1f5ff,stroke:#0066cc
+    style Main fill:#fff4e1,stroke:#cc6600
 ```
 
 ---
@@ -77,47 +68,89 @@
 
 ### 3.2 进程架构图
 
+#### 3.2.1 整体架构概览
+
+```mermaid
+graph TB
+    subgraph Main["主进程"]
+        MainServices["主进程服务<br/>窗口管理 | SSH 管理 | 数据存储"]
+        IPCHandler[IPC Handler]
+    end
+    
+    subgraph Renderer["渲染进程"]
+        RendererServices["渲染进程服务<br/>Vue 应用 | Pinia | xterm.js"]
+        IPCBridge[IPC Bridge]
+    end
+    
+    IPCHandler <--> IPCBridge
+    MainServices --> IPCHandler
+    RendererServices --> IPCBridge
+    
+    style Main fill:#fff4e1,stroke:#cc6600
+    style Renderer fill:#e1f5ff,stroke:#0066cc
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Electron 应用                             │
-│                                                                  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                    主进程 (Main Process)                   │  │
-│  │                                                            │  │
-│  │   ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │  │
-│  │   │  窗口管理   │    │  SSH管理器  │    │  数据库服务  │  │  │
-│  │   │             │    │             │    │             │  │  │
-│  │   │ • 创建窗口  │    │ • 连接管理  │    │ • 会话存储  │  │  │
-│  │   │ • 窗口状态  │    │ • 连接池    │    │ • 配置存储  │  │  │
-│  │   │ • 托盘图标  │    │ • 数据转发  │    │ • 日志存储  │  │  │
-│  │   └─────────────┘    └─────────────┘    └─────────────┘  │  │
-│  │          │                  │                  │         │  │
-│  │          └──────────────────┼──────────────────┘         │  │
-│  │                             │                            │  │
-│  │                    ┌────────┴────────┐                   │  │
-│  │                    │   IPC Handler   │                   │  │
-│  │                    │   (消息路由)    │                   │  │
-│  │                    └────────┬────────┘                   │  │
-│  └─────────────────────────────┼─────────────────────────────┘  │
-│                                │                                │
-│                   ┌────────────┴────────────┐                   │
-│                   │       IPC Bridge        │                   │
-│                   │   (进程间通信桥梁)      │                   │
-│                   └────────────┬────────────┘                   │
-│                                │                                │
-│  ┌─────────────────────────────┼─────────────────────────────┐  │
-│  │                    渲染进程 (Renderer)                     │  │
-│  │                             │                             │  │
-│  │   ┌─────────────┐    ┌──────┴──────┐    ┌─────────────┐  │  │
-│  │   │  Vue应用    │    │  Pinia Store │    │  xterm.js   │  │  │
-│  │   │             │    │             │    │             │  │  │
-│  │   │ • 组件渲染  │◄───┤ • 状态管理  │◄───┤ • 终端模拟  │  │  │
-│  │   │ • 用户交互  │    │ • 数据缓存  │    │ • 输入输出  │  │  │
-│  │   └─────────────┘    └─────────────┘    └─────────────┘  │  │
-│  │                                                            │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+
+#### 3.2.2 主进程架构
+
+```mermaid
+graph TB
+    IPCHandler["IPC Handler
+    消息路由"]
+    
+    WindowMgr["窗口管理
+    • 创建窗口
+    • 窗口状态
+    • 托盘图标"]
+    SSHMgr["SSH 管理器
+    • 连接管理
+    • 连接池
+    • 数据转发"]
+    StoreSvc["存储服务
+    • 会话存储
+    • 配置存储
+    • 日志存储"]
+    
+    IPCHandler --> WindowMgr
+    IPCHandler --> SSHMgr
+    IPCHandler --> StoreSvc
+    
+    SSHMgr --> ssh2((ssh2))
+    StoreSvc --> electronStore((electron-store))
+    
+    style IPCHandler fill:#ffcc80,stroke:#cc6600
+```
+
+#### 3.2.3 渲染进程架构
+
+```mermaid
+graph TB
+    IPCBridge["IPC Bridge
+    进程间通信"]
+    
+    subgraph Vue["Vue 应用"]
+        Components[组件渲染]
+        Interaction[用户交互]
+    end
+    
+    subgraph Pinia["Pinia Store"]
+        State[状态管理]
+        Cache[数据缓存]
+    end
+    
+    subgraph XTerm["xterm.js"]
+        Terminal[终端模拟]
+        IO[输入输出]
+    end
+    
+    IPCBridge --> Vue
+    IPCBridge --> Pinia
+    IPCBridge --> XTerm
+    
+    Pinia --> Vue
+    XTerm --> Pinia
+    
+    style IPCBridge fill:#90caf9,stroke:#0066cc
+    style Pinia fill:#e3f2fd,stroke:#0066cc
 ```
 
 ---
@@ -126,86 +159,52 @@
 
 ### 4.1 目录结构
 
-```
+```bash
 diy-linux-shell/
 ├── package.json                    # 项目配置文件
-├── electron.vite.config.ts         # Electron构建配置
-├── tsconfig.json                   # TypeScript配置
+├── electron.vite.config.ts         # Electron 构建配置
+├── tsconfig.json                   # TypeScript 配置
+├── playwright.config.ts            # Playwright E2E 测试配置
+├── vitest.config.ts                # Vitest 单元测试配置
 │
-├── src/
+├── src/                            # 源代码目录
 │   ├── main/                       # 主进程代码
-│   │   ├── index.ts               # 主进程入口
-│   │   ├── ipc/                   # IPC通信处理
-│   │   │   ├── index.ts           # IPC注册入口
-│   │   │   ├── session.ts         # 会话相关IPC
-│   │   │   ├── terminal.ts        # 终端相关IPC
-│   │   │   └── config.ts          # 配置相关IPC
-│   │   ├── services/              # 核心服务
-│   │   │   ├── ssh-manager.ts     # SSH连接管理器
-│   │   │   ├── database.ts        # 数据库服务
-│   │   │   ├── crypto.ts          # 加密服务
-│   │   │   └── logger.ts          # 日志服务
-│   │   └── utils/                 # 工具函数
-│   │       └── helpers.ts
-│   │
 │   ├── renderer/                   # 渲染进程代码
-│   │   ├── index.html             # HTML入口
-│   │   ├── src/
-│   │   │   ├── main.ts            # Vue应用入口
-│   │   │   ├── App.vue            # 根组件
-│   │   │   ├── components/        # UI组件
-│   │   │   │   ├── layout/        # 布局组件
-│   │   │   │   │   ├── AppLayout.vue
-│   │   │   │   │   ├── Sidebar.vue
-│   │   │   │   │   └── Header.vue
-│   │   │   │   ├── session/       # 会话管理组件
-│   │   │   │   │   ├── SessionList.vue
-│   │   │   │   │   ├── SessionForm.vue
-│   │   │   │   │   └── SessionGroup.vue
-│   │   │   │   ├── terminal/      # 终端组件
-│   │   │   │   │   ├── TerminalTab.vue
-│   │   │   │   │   ├── TerminalTabs.vue
-│   │   │   │   │   └── XTerminal.vue
-│   │   │   │   └── common/        # 通用组件
-│   │   │   │       ├── Dialog.vue
-│   │   │   │       └── Button.vue
-│   │   │   ├── views/             # 页面视图
-│   │   │   │   ├── Home.vue
-│   │   │   │   └── Settings.vue
-│   │   │   ├── stores/            # Pinia状态管理
-│   │   │   │   ├── index.ts
-│   │   │   │   ├── session.ts     # 会话状态
-│   │   │   │   ├── terminal.ts    # 终端状态
-│   │   │   │   └── config.ts      # 配置状态
-│   │   │   ├── api/               # IPC API封装
-│   │   │   │   ├── index.ts
-│   │   │   │   ├── session.ts
-│   │   │   │   ├── terminal.ts
-│   │   │   │   └── config.ts
-│   │   │   ├── styles/            # 样式文件
-│   │   │   │   ├── variables.css  # CSS变量
-│   │   │   │   ├── themes/        # 主题样式
-│   │   │   │   │   ├── dark.css
-│   │   │   │   │   └── light.css
-│   │   │   │   └── global.css     # 全局样式
-│   │   │   └── utils/             # 工具函数
-│   │   │       ├── helpers.ts
-│   │   │       └── constants.ts
-│   │   └── assets/                # 静态资源
-│   │       └── icons/
-│   │
+│   ├── preload/                    # 预加载脚本
 │   └── shared/                     # 共享代码
-│       ├── types/                 # TypeScript类型定义
-│       │   ├── session.ts
-│       │   ├── terminal.ts
-│       │   └── config.ts
-│       └── constants/             # 共享常量
-│           └── ipc-channels.ts
+│
+├── e2e/                            # E2E 测试 (Playwright)
+│   ├── config/                     # 测试配置
+│   ├── helpers/                    # 测试辅助工具
+│   ├── app/                        # 应用测试
+│   ├── connection/                 # 连接测试
+│   ├── context-menu/               # 右键菜单测试
+│   ├── debug/                      # 调试测试
+│   ├── empty-state/                # 空状态测试
+│   ├── layout/                     # 布局测试
+│   ├── session/                    # 会话测试
+│   ├── session-form/               # 会话表单测试
+│   ├── session-group/              # 会话组测试
+│   ├── session-list/               # 会话列表测试
+│   ├── settings/                   # 设置测试
+│   ├── sftp/                       # SFTP 测试
+│   └── terminal/                   # 终端测试
+│
+├── tests/                          # 单元测试和集成测试 (Vitest)
+│   └── integration/                # 集成测试
+│
+├── docs/                           # 文档
+│   ├── bugs/                       # Bug 记录
+│   ├── plan/                       # 各阶段计划
+│   └── wiki/                       # 技术维基
 │
 ├── resources/                      # 应用资源
-│   └── icons/                     # 应用图标
+├── .github/                        # GitHub 配置
+│   └── workflows/                  # GitHub Actions 工作流
 │
-└── out/                           # 构建输出目录
+└── .trae/                          # Trae IDE 配置
+    ├── rules/                      # 项目规则
+    └── skills/                     # 技能配置
 ```
 
 ### 4.2 核心模块设计
@@ -361,44 +360,25 @@ export const IPC_CHANNELS = {
 } as const;
 ```
 
-#### 4.3.2 IPC通信流程
+#### 4.3.2 IPC 通信流程
 
-```
-┌──────────────────┐                              ┌──────────────────┐
-│   渲染进程        │                              │    主进程        │
-│  (Renderer)      │                              │    (Main)        │
-├──────────────────┤                              ├──────────────────┤
-│                  │                              │                  │
-│  用户点击连接    │                              │                  │
-│       │          │                              │                  │
-│       ▼          │                              │                  │
-│  调用API方法     │                              │                  │
-│       │          │                              │                  │
-│       │          │  ipcRenderer.invoke()       │                  │
-│       │─────────────────────────────────────────►                  │
-│                  │                              │                  │
-│                  │                              │  处理请求        │
-│                  │                              │       │          │
-│                  │                              │       ▼          │
-│                  │                              │  SSH连接         │
-│                  │                              │       │          │
-│                  │                              │       ▼          │
-│                  │                              │  建立连接成功    │
-│                  │                              │       │          │
-│                  │  ipcMain.handle() 返回       │       │          │
-│       ◄─────────────────────────────────────────┤                  │
-│                  │                              │                  │
-│  更新UI状态      │                              │                  │
-│                  │                              │                  │
-│                  │                              │                  │
-│                  │     ════════ 数据流 ════════ │                  │
-│                  │                              │                  │
-│                  │  webContents.send()          │                  │
-│       ◄─────────────────────────────────────────┤  SSH数据到达    │
-│                  │                              │                  │
-│  更新终端显示    │                              │                  │
-│                  │                              │                  │
-└──────────────────┘                              └──────────────────┘
+```mermaid
+sequenceDiagram
+    participant Renderer as 渲染进程
+    participant Main as 主进程
+    
+    Renderer->>Main: 用户点击连接
+    Renderer->>Main: ipcRenderer.invoke()
+    Note over Main: 处理请求
+    Main->>Main: SSH 连接
+    Main->>Main: 建立连接成功
+    Main-->>Renderer: ipcMain.handle() 返回
+    Note over Renderer: 更新 UI 状态
+    
+    Note over Renderer,Main: 数据流
+    Main->>Renderer: webContents.send()
+    Note over Main: SSH 数据到达
+    Note over Renderer: 更新终端显示
 ```
 
 ---
@@ -407,48 +387,57 @@ export const IPC_CHANNELS = {
 
 ### 5.1 会话连接数据流
 
-```
-┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
-│ 用户操作 │───►│ Vue组件 │───►│  Store  │───►│ IPC API │───►│ 主进程  │
-└─────────┘    └─────────┘    └─────────┘    └─────────┘    └────┬────┘
-                                                                  │
-                                                                  ▼
-┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
-│ 终端显示 │◄───│ xterm.js│◄───│ 数据回调 │◄───│ SSH连接 │◄───│SSHManager│
-└─────────┘    └─────────┘    └─────────┘    └─────────┘    └─────────┘
+```mermaid
+graph LR
+    User[用户操作] --> Vue[Vue 组件]
+    Vue --> Store[Store]
+    Store --> IPC[IPC API]
+    IPC --> Main[主进程]
+    Main --> SSH[SSHManager]
+    SSH --> Conn[SSH 连接]
+    Conn --> Callback[数据回调]
+    Callback --> Xterm[xterm.js]
+    Xterm --> Display[终端显示]
 ```
 
 ### 5.2 状态管理数据流
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                          Pinia Store                                 │
-│                                                                      │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                      SessionStore                            │   │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │   │
-│  │  │   state     │  │  getters    │  │     actions         │  │   │
-│  │  │             │  │             │  │                     │  │   │
-│  │  │ sessions    │  │ getSession  │  │ fetchSessions()     │  │   │
-│  │  │ groups      │  │ getGroups   │  │ createSession()     │  │   │
-│  │  │ activeId    │  │ activeSession│  │ updateSession()    │  │   │
-│  │  │             │  │             │  │ deleteSession()     │  │   │
-│  │  └─────────────┘  └─────────────┘  └─────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                      │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                      TerminalStore                           │   │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │   │
-│  │  │   state     │  │  getters    │  │     actions         │  │   │
-│  │  │             │  │             │  │                     │  │   │
-│  │  │ tabs        │  │ activeTab   │  │ connect()           │  │   │
-│  │  │ activeTab   │  │ getTabById  │  │ disconnect()        │  │   │
-│  │  │             │  │             │  │ sendData()          │  │   │
-│  │  │             │  │             │  │ resize()            │  │   │
-│  │  └─────────────┘  └─────────────┘  └─────────────────────┘  │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    subgraph Pinia["Pinia Store"]
+        subgraph SessionStore["SessionStore"]
+            S_state["state
+            • sessions
+            • groups
+            • activeId"]
+            S_getters["getters
+            • getSession
+            • getGroups
+            • activeSession"]
+            S_actions["actions
+            • fetchSessions()
+            • createSession()
+            • updateSession()
+            • deleteSession()"]
+        end
+        
+        subgraph TerminalStore["TerminalStore"]
+            T_state["state
+            • tabs
+            • activeTab"]
+            T_getters["getters
+            • activeTab
+            • getTabById"]
+            T_actions["actions
+            • connect()
+            • disconnect()
+            • sendData()
+            • resize()"]
+        end
+    end
+    
+    S_state --- S_getters --- S_actions
+    T_state --- T_getters --- T_actions
 ```
 
 ---
@@ -457,36 +446,32 @@ export const IPC_CHANNELS = {
 
 ### 6.1 组件层次结构
 
-```
-App.vue
-├── AppLayout.vue                    # 应用布局容器
-│   ├── Sidebar.vue                  # 左侧边栏
-│   │   ├── SessionList.vue          # 会话列表
-│   │   │   └── SessionGroup.vue     # 会话分组
-│   │   │       └── SessionItem.vue  # 会话项
-│   │   └── QuickConnect.vue         # 快速连接
-│   │
-│   └── MainContent.vue              # 主内容区
-│       ├── Header.vue               # 顶部栏
-│       │   └── Toolbar.vue          # 工具栏
-│       │
-│       └── TerminalArea.vue         # 终端区域
-│           ├── TerminalTabs.vue     # 标签页栏
-│           │   └── TerminalTab.vue  # 单个标签
-│           │
-│           └── TerminalPane.vue     # 终端面板
-│               └── XTerminal.vue    # xterm.js封装
-│
-├── dialogs/                         # 对话框组件
-│   ├── SessionForm.vue              # 会话表单
-│   ├── SettingsDialog.vue           # 设置对话框
-│   └── CommandDialog.vue            # 命令片段对话框
-│
-└── common/                          # 通用组件
-    ├── Button.vue
-    ├── Input.vue
-    ├── Select.vue
-    └── Dialog.vue
+```mermaid
+mindmap
+  root((App.vue))
+    AppLayout[AppLayout.vue<br/>应用布局容器]
+      Sidebar[Sidebar.vue<br/>左侧边栏]
+        SessionList[SessionList.vue<br/>会话列表]
+          SessionGroup[SessionGroup.vue<br/>会话分组]
+            SessionItem[SessionItem.vue<br/>会话项]
+        QuickConnect[QuickConnect.vue<br/>快速连接]
+      MainContent[MainContent.vue<br/>主内容区]
+        Header[Header.vue<br/>顶部栏]
+          Toolbar[Toolbar.vue<br/>工具栏]
+        TerminalArea[TerminalArea.vue<br/>终端区域]
+          TerminalTabs[TerminalTabs.vue<br/>标签页栏]
+            TerminalTab[TerminalTab.vue<br/>单个标签]
+          TerminalPane[TerminalPane.vue<br/>终端面板]
+            XTerminal[XTerminal.vue<br/>xterm.js 封装]
+    Dialogs[对话框组件]
+      SessionForm[SessionForm.vue<br/>会话表单]
+      SettingsDialog[SettingsDialog.vue<br/>设置对话框]
+      CommandDialog[CommandDialog.vue<br/>命令片段对话框]
+    Common[通用组件]
+      Button[Button.vue]
+      Input[Input.vue]
+      Select[Select.vue]
+      Dialog[Dialog.vue]
 ```
 
 ### 6.2 核心组件接口设计
@@ -591,76 +576,50 @@ const handleDelete = (session: Session) => { /* ... */ }
 
 ### 7.1 密码存储安全
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                      密码存储流程                                │
-│                                                                  │
-│  用户输入密码                                                    │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────┐                                                │
-│  │ 获取系统密钥 │  ← 使用 Electron safeStorage API              │
-│  └─────────────┘                                                │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────┐                                                │
-│  │ AES加密     │  ← 使用系统密钥加密密码                        │
-│  └─────────────┘                                                │
-│       │                                                          │
-│       ▼                                                          │
-│  ┌─────────────┐                                                │
-│  │ 存储到数据库 │  ← 存储加密后的密文                           │
-│  └─────────────┘                                                │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    A[用户输入密码] --> B[获取系统密钥<br/>Electron safeStorage API]
+    B --> C[AES 加密<br/>使用系统密钥加密密码]
+    C --> D[存储到数据库<br/>存储加密后的密文]
+    
+    style A fill:#e3f2fd,stroke:#1976d2
+    style B fill:#fff3e0,stroke:#f57c00
+    style C fill:#fff3e0,stroke:#f57c00
+    style D fill:#e8f5e9,stroke:#388e3c
 ```
 
 ### 7.2 密钥文件安全
 
-```typescript
-/**
- * 密钥文件安全策略
- */
-const keyFileSecurity = {
-  // 1. 文件权限检查
-  checkPermissions: (filePath: string): boolean => {
-    // 确保私钥文件权限为 600 (仅所有者可读写)
-  },
-  
-  // 2. 密钥文件存储位置
-  // Windows: %APPDATA%/diy-linux-shell/keys/
-  // macOS: ~/Library/Application Support/diy-linux-shell/keys/
-  // Linux: ~/.config/diy-linux-shell/keys/
-  
-  // 3. 密钥文件加密（可选）
-  encryptKeyFile: (content: string, passphrase: string): string => {
-    // 使用 passphrase 加密私钥内容
-  }
-}
+```mermaid
+mindmap
+  root((密钥文件安全))
+    文件权限检查
+      权限 600<br/>仅所有者可读写
+    存储位置
+      Windows<br/>%APPDATA%/diy-linux-shell/keys/
+      macOS<br/>~/Library/Application Support/diy-linux-shell/keys/
+      Linux<br/>~/.config/diy-linux-shell/keys/
+    加密保护
+      使用 passphrase 加密<br/>私钥内容
 ```
 
-### 7.3 IPC通信安全
+### 7.3 IPC 通信安全
 
-```typescript
-/**
- * IPC通信安全策略
- */
-const ipcSecurity = {
-  // 1. 验证消息来源
-  validateSender: (event: IpcMainInvokeEvent): boolean => {
-    // 确保消息来自有效的渲染进程
-    return event.senderFrame.url.startsWith('app://')
-  },
-  
-  // 2. 敏感数据传输
-  // 使用 contextBridge 暴露安全的 API
-  // 不直接暴露 Node.js API 给渲染进程
-  
-  // 3. 输入验证
-  validateInput: (channel: string, data: unknown): boolean => {
-    // 验证所有输入数据的类型和格式
-  }
-}
+```mermaid
+flowchart LR
+    subgraph Security["IPC 通信安全策略"]
+        A[验证消息来源] --> B[contextBridge<br/>安全的 API 暴露]
+        B --> C[输入验证<br/>类型和格式检查]
+    end
+    
+    A -->|"event.senderFrame.url<br/>startsWith('app://')"| Validate[验证通过]
+    B --> NoNode[不直接暴露<br/>Node.js API]
+    C --> ValidData[有效数据]
+    
+    style Security fill:#e3f2fd,stroke:#1976d2
+    style Validate fill:#e8f5e9,stroke:#388e3c
+    style NoNode fill:#ffebee,stroke:#d32f2f
+    style ValidData fill:#e8f5e9,stroke:#388e3c
 ```
 
 ---
@@ -669,62 +628,74 @@ const ipcSecurity = {
 
 ### 8.1 终端渲染优化
 
-```typescript
-/**
- * 终端性能优化策略
- */
-const terminalOptimization = {
-  // 1. 使用 Canvas 渲染
-  // xterm.js 配置: rendererType: 'canvas'
-  
-  // 2. 启用 GPU 加速
-  // xterm.js 配置: gpuAcceleration: true
-  
-  // 3. 合理设置滚动缓冲区
-  // xterm.js 配置: scrollback: 10000
-  
-  // 4. 数据节流
-  throttleData: (data: string, delay: number = 16) => {
-    // 限制数据写入频率，避免大量数据导致卡顿
-  }
-}
+```mermaid
+mindmap
+  root((终端渲染优化))
+    xterm.js v5.3.0
+      渲染方式
+        默认：DOM 渲染
+        基于 div 元素
+    核心配置
+      字体优化
+        fontSize: 14
+        fontFamily: Consolas
+      滚动缓冲区
+        scrollback: 10000
+      光标设置
+        cursorStyle
+        cursorBlink
+    性能优化
+      FitAddon
+        自适应容器大小
+      WebLinksAddon
+        链接检测
+      SearchAddon
+        搜索功能
+      数据节流
+        避免频繁写入
+    主题适配
+      深色主题
+      浅色主题
+      动态切换
 ```
 
-### 8.2 数据库优化
+### 8.2 数据存储优化
 
-```sql
--- 会话表索引
-CREATE INDEX idx_sessions_group ON sessions(group_id);
-CREATE INDEX idx_sessions_name ON sessions(name);
-
--- 命令片段表索引
-CREATE INDEX idx_commands_group ON commands(group_id);
-
--- 使用事务批量操作
-BEGIN TRANSACTION;
--- 多条 INSERT/UPDATE 语句
-COMMIT;
+```mermaid
+mindmap
+  root((数据存储优化))
+    数据存储方案
+      electron-store
+      JSON 文件格式
+    优化策略
+      按需加载数据
+      增量更新
+      批量操作合并写入
+      避免频繁全量保存
+    数据组织
+      按类型分离存储
+      减少单次读取数据量
 ```
 
 ### 8.3 内存管理
 
-```typescript
-/**
- * 内存优化策略
- */
-const memoryOptimization = {
-  // 1. 连接池管理
-  // 限制最大连接数，及时释放不活跃连接
-  
-  // 2. 终端实例管理
-  // 关闭标签页时销毁 xterm.js 实例
-  
-  // 3. 事件监听器清理
-  // 组件销毁时移除所有事件监听器
-  
-  // 4. 缓存策略
-  // 使用 LRU 缓存常用数据
-}
+```mermaid
+mindmap
+  root((内存管理))
+    SSH 连接管理
+      连接池管理
+      disconnect 断开连接
+      destroy 销毁客户端
+      disconnectAll 关闭所有连接
+    终端实例管理
+      onUnmounted 清理
+      terminal.dispose 销毁实例
+      移除事件监听器
+    事件监听器清理
+      组件销毁时移除
+      cleanupDataListener
+      cleanupCloseListener
+      cleanupErrorListener
 ```
 
 ---

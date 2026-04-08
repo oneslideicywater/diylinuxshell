@@ -202,6 +202,26 @@ const api: CustomAPI = {
     uploadFolder: (sessionId: string, localPath: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('sftp:uploadFolder', sessionId, localPath, remotePath),
     
+    // 监听上传进度
+    onUploadProgress: (callback: (data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => void) => {
+      const channel = 'sftp:uploadProgress'
+      const listener = (_event: Electron.IpcRendererEvent, data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => {
+        callback(data)
+      }
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    },
+    
+    // 监听下载进度
+    onDownloadProgress: (callback: (data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => void) => {
+      const channel = 'sftp:downloadProgress'
+      const listener = (_event: Electron.IpcRendererEvent, data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => {
+        callback(data)
+      }
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    },
+    
     // 创建远程目录
     mkdir: (sessionId: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('sftp:mkdir', sessionId, remotePath),
@@ -209,6 +229,20 @@ const api: CustomAPI = {
     // 删除远程文件
     delete: (sessionId: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('sftp:delete', sessionId, remotePath),
+    
+    // 取消上传
+    cancelUpload: (sessionId: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:cancelUpload', sessionId),
+    
+    // 监听删除进度
+    onDeleteProgress: (callback: (data: { sessionId: string; currentPath: string }) => void) => {
+      const channel = 'sftp:deleteProgress'
+      const listener = (_event: Electron.IpcRendererEvent, data: { sessionId: string; currentPath: string }) => {
+        callback(data)
+      }
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    },
     
     // 断开连接
     disconnect: (sessionId: string): Promise<{ success: boolean; error?: string }> => 
@@ -224,7 +258,25 @@ const api: CustomAPI = {
     
     // 获取用户主目录
     getHomeDir: (): Promise<{ success: boolean; data?: string; error?: string }> => 
-      ipcRenderer.invoke('sftp:getHomeDir')
+      ipcRenderer.invoke('sftp:getHomeDir'),
+
+    // 删除本地文件
+    deleteLocalFile: (localPath: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:delete-local', localPath),
+
+    // 创建本地文件夹
+    createLocalFolder: (parentPath: string, folderName: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:create-local-folder', parentPath, folderName),
+
+    // 监听删除本地文件进度
+    onDeleteLocalProgress: (callback: (data: { currentPath: string }) => void) => {
+      const channel = 'sftp:delete-local-progress'
+      const listener = (_event: Electron.IpcRendererEvent, data: { currentPath: string }) => {
+        callback(data)
+      }
+      ipcRenderer.on(channel, listener)
+      return () => ipcRenderer.removeListener(channel, listener)
+    }
   }
 }
 

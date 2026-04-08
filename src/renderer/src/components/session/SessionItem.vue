@@ -9,7 +9,7 @@
   <div
     class="session-item"
     :class="{ active }"
-    @click="$emit('click')"
+    @click="handleClick"
     @dblclick="$emit('dblclick')"
   >
     <!-- 会话图标 -->
@@ -29,10 +29,10 @@
     <!-- 操作按钮 -->
     <div class="session-actions" @click.stop>
       <!-- SFTP 传输按钮 -->
-      <button class="action-btn sftp" title="SFTP 传输" @click="$emit('sftp')">
+      <button class="action-btn sftp" title="SFTP 传输" @click.stop="$emit('sftp')">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path
-            d="M14 12a2 2 0 002-2V6a2 2 0 00-2-2h-4l-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h10z"
+            d="M10 1H4a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V5l-2-2zM10 1v4h4"
             stroke="currentColor"
             stroke-width="1.5"
             stroke-linecap="round"
@@ -42,7 +42,7 @@
       </button>
 
       <!-- 连接按钮 -->
-      <button class="action-btn connect" title="连接" @click="$emit('connect')">
+      <button class="action-btn connect" title="连接" @click.stop="$emit('connect')">
         <svg width="14" height="14" viewBox="0 0 14 14">
           <path
             d="M12 2L7 7M12 2l-1 5-2-2M12 2l-5 1 2 2M5 9l-3 3M4 10l-1 1"
@@ -56,7 +56,7 @@
       </button>
 
       <!-- 编辑按钮 -->
-      <button class="action-btn edit" title="编辑" @click="$emit('edit')">
+      <button class="action-btn edit" title="编辑" @click.stop="$emit('edit')">
         <svg width="14" height="14" viewBox="0 0 14 14">
           <path
             d="M10.5 2l1.5 1.5-6 6H4V8l6-6zM3 12h8"
@@ -68,7 +68,7 @@
       </button>
 
       <!-- 删除按钮 -->
-      <button class="action-btn delete" title="删除" @click="$emit('delete')">
+      <button class="action-btn delete" title="删除" @click.stop="$emit('delete')">
         <svg width="14" height="14" viewBox="0 0 14 14">
           <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="2" />
         </svg>
@@ -97,6 +97,21 @@ const emit = defineEmits<{
   (e: 'properties'): void
   (e: 'sftp'): void
 }>()
+
+/**
+ * 处理点击事件
+ * 如果点击来自操作按钮区域，则不触发 click 事件
+ */
+const handleClick = (event: MouseEvent): void => {
+  // 检查点击目标是否在操作按钮区域内
+  const target = event.target as HTMLElement
+  if (target.closest('.session-actions')) {
+    // 点击的是操作按钮，不触发 click 事件
+    return
+  }
+  // 触发 click 事件
+  emit('click')
+}
 </script>
 
 <style scoped>
@@ -154,12 +169,6 @@ const emit = defineEmits<{
 .session-actions {
   display: flex;
   gap: 4px;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.session-item:hover .session-actions {
-  opacity: 1;
 }
 
 .action-btn {
@@ -177,35 +186,23 @@ const emit = defineEmits<{
 }
 
 .action-btn:hover {
-  background-color: var(--hover-bg, #2a2a2a);
+  background-color: transparent;
   color: var(--text-color, #cccccc);
 }
 
 .action-btn.sftp:hover {
-  background-color: var(--primary-color-light, rgba(64, 158, 255, 0.15));
   color: var(--primary-color, #409eff);
 }
 
 .action-btn.connect:hover {
-  background-color: rgba(103, 194, 58, 0.15);
   color: #67c23a;
 }
 
 .action-btn.edit:hover {
-  background-color: rgba(230, 162, 60, 0.15);
   color: #e6a23c;
 }
 
 .action-btn.delete:hover {
-  background-color: rgba(245, 108, 108, 0.15);
   color: #f56c6c;
-}
-
-.action-btn.connect:hover {
-  color: #0dbc79;
-}
-
-.action-btn.delete:hover {
-  color: #f14c4c;
 }
 </style>

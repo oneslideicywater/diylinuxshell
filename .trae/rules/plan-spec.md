@@ -41,19 +41,18 @@ npm run test:e2e设置自动关闭，不要卡死
 
 #### 新增、修改功能流程
 
-1. 查看phase对应prd和plan，更新两个文档。
+1. 查看phase对应prd和plan。
 2. 编写代码实现新增功能；
 3. 根据electron-testing SKILL编写测试用例，验证新增功能是否正常,应确保新增、更改编写的测试用例代码全部通过；
-4. 更新plan、prd文档。
+
 
 #### bug修复流程
 
 提及: ’bug‘关键词进入此流程。
 
-1. 查看phase对应prd和plan，更新两个文档。
+1. 查看phase对应prd和plan。
 2. 编写代码修复bug；
 3. 根据electron-testing SKILL编写测试用例，验证修复是否正常,应确保新增、更改编写的测试用例代码全部通过；
-4. 更新plan、prd文档; 更新bug记录至docs/bugs目录下，文件名格式为BUG-递增序号-描述.md
 
 
 

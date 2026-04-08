@@ -236,7 +236,7 @@
       @submit="handleSubmitSessionForm" />
 
     <!-- SFTP 传输窗口 -->
-    <SftpTransfer :visible="sftpVisible" :session="sftpSession" @close="handleCloseSftp" />
+    <SftpTransfer :sftp-window-visible="sftpVisible" :session="sftpSession" @close="handleCloseSftp" />
 
     <!-- 确认对话框 -->
     <ConfirmDialog :visible="confirmDialogVisible" :title="confirmDialogTitle" :message="confirmDialogMessage"
@@ -258,7 +258,7 @@ import { useErrorDialogStore } from '@/stores/errorDialog'
 import SessionItem from './SessionItem.vue'
 import SessionGroupForm from './SessionGroupForm.vue'
 import SessionForm from './SessionForm.vue'
-import SftpTransfer from './SftpTransfer.vue'
+import SftpTransfer from './sftp/SftpTransfer.vue'
 import ErrorDialog from '@/components/common/ErrorDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import SessionGroupTree from './SessionGroupTree.vue'

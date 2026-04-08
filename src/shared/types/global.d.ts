@@ -65,10 +65,17 @@ export interface CustomAPI {
     uploadFolder: (sessionId: string, localPath: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
     mkdir: (sessionId: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
     delete: (sessionId: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
+    cancelUpload: (sessionId: string) => Promise<{ success: boolean; error?: string }>
+    onDeleteProgress: (callback: (data: { sessionId: string; currentPath: string }) => void) => () => void
+    onUploadProgress: (callback: (data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => void) => () => void
+    onDownloadProgress: (callback: (data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => void) => () => void
     disconnect: (sessionId: string) => Promise<{ success: boolean; error?: string }>
     selectLocalFile: (options: { selectFolder?: boolean }) => Promise<{ success: boolean; path?: string; error?: string }>
     getLocalFiles: (localPath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
     getHomeDir: () => Promise<{ success: boolean; data?: string; error?: string }>
+    deleteLocalFile: (localPath: string) => Promise<{ success: boolean; error?: string }>
+    onDeleteLocalProgress: (callback: (data: { currentPath: string }) => void) => () => void
+    createLocalFolder: (parentPath: string, folderName: string) => Promise<{ success: boolean; error?: string }>
   }
 }
 

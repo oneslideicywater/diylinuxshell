@@ -165,6 +165,66 @@ test.describe('SFTP - SFTP 文件传输', () => {
   test('SFTP 窗口应该显示传输进度状态栏', async () => {
     // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
   })
+
+  test('SFTP 窗口应该能取消上传', async () => {
+    // 测试在 sftp/cancel-upload.e2e.spec.ts 中定义
+  })
+
+  test('取消按钮应该有正确的 UI 样式和交互', async () => {
+    // 测试在 sftp/cancel-upload.e2e.spec.ts 中定义
+  })
+
+  test('取消上传后节点状态应该显示为已取消', async () => {
+    // 测试在 sftp/cancel-upload.e2e.spec.ts 中定义
+  })
+
+  test('右键菜单应该能正常关闭', async () => {
+    // 测试在 sftp/cancel-upload.e2e.spec.ts 中定义
+  })
+
+  test('状态栏应该显示树形传输详情按钮', async () => {
+    // 测试在 sftp/sftp-tree-status.e2e.spec.ts 中定义
+  })
+
+  test('删除远程文件夹时应该显示树形进度', async () => {
+    // 测试在 sftp/sftp-tree-status.e2e.spec.ts 中定义
+  })
+
+  test('树形组件应该正确渲染节点层级', async () => {
+    // 测试在 sftp/sftp-tree-status.e2e.spec.ts 中定义
+  })
+
+  test('树形节点应该支持展开/折叠', async () => {
+    // 测试在 sftp/sftp-tree-status.e2e.spec.ts 中定义
+  })
+
+  test('不同状态应该使用不同颜色标识', async () => {
+    // 测试在 sftp/sftp-tree-status.e2e.spec.ts 中定义
+  })
+
+  test('树形详情面板应该显示完整的传输信息', async () => {
+    // 测试在 sftp/sftp-tree-status.e2e.spec.ts 中定义
+  })
+
+  test('传输树应该默认折叠', async () => {
+    // 测试在 sftp/sftp-tree-expand-collapse.e2e.spec.ts 中定义
+  })
+
+  test('点击展开图标应该只展开直接子节点', async () => {
+    // 测试在 sftp/sftp-tree-expand-collapse.e2e.spec.ts 中定义
+  })
+
+  test('全部展开按钮应该展开所有层级', async () => {
+    // 测试在 sftp/sftp-tree-expand-collapse.e2e.spec.ts 中定义
+  })
+
+  test('全部折叠按钮应该折叠所有节点', async () => {
+    // 测试在 sftp/sftp-tree-expand-collapse.e2e.spec.ts 中定义
+  })
+
+  test('点击折叠图标应该折叠节点', async () => {
+    // 测试在 sftp/sftp-tree-expand-collapse.e2e.spec.ts 中定义
+  })
 })
 
 /**

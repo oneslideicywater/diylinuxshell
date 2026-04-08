@@ -37,6 +37,7 @@ export class SFTPService {
   private client: Client
   private sftpHandle: any = null
   private connected: boolean = false
+  private uploadCancelled: boolean = false
 
   constructor() {
     this.client = new Client()
@@ -94,7 +95,7 @@ export class SFTPService {
         try {
           const files: FileInfo[] = []
           
-          // 添加父目录
+          // 添加父目录（用于 UI 导航）
           if (remotePath !== '/') {
             files.push({
               name: '..',
@@ -252,12 +253,34 @@ export class SFTPService {
   }
 
   /**
+   * 取消上传
+   */
+  cancelUpload(): void {
+    this.uploadCancelled = true
+    console.log('上传已取消')
+  }
+
+  /**
+   * 重置取消标志
+   */
+  resetUploadCancelled(): void {
+    this.uploadCancelled = false
+  }
+
+  /**
    * 上传文件
    */
-  async uploadFile(localPath: string, remotePath: string, onProgress?: (progress: number) => void): Promise<void> {
+  async uploadFile(
+    localPath: string,
+    remotePath: string,
+    onProgress?: (progress: number, size: number, transferredSize: number, speed: number) => void
+  ): Promise<void> {
     if (!this.sftpHandle) {
       throw new Error('SFTP not connected')
     }
+
+    // 重置取消标志
+    this.uploadCancelled = false
 
     return new Promise((resolve, reject) => {
       // 获取本地文件大小
@@ -269,6 +292,9 @@ export class SFTPService {
 
         const fileSize = stats.size
         let uploadedBytes = 0
+        const startTime = Date.now()
+        let lastUpdateTime = startTime
+        let lastUploadedBytes = 0
 
         // 打开远程文件
         this.sftpHandle.open(remotePath, 'w', (err: Error, handle: any) => {
@@ -282,9 +308,35 @@ export class SFTPService {
           let position = 0
 
           readStream.on('data', (chunk) => {
+            // 检查是否被取消
+            if (this.uploadCancelled) {
+              // 取消时尝试关闭 handle，但忽略错误
+              try {
+                this.sftpHandle.close(handle)
+              } catch (closeErr) {
+                // 忽略关闭错误
+              }
+              reject(new Error('Upload cancelled'))
+              return
+            }
+
             this.sftpHandle.write(handle, chunk, 0, chunk.length, position, (err: Error) => {
               if (err) {
-                this.sftpHandle.close(handle)
+                // 如果是取消导致的错误，忽略
+                if (this.uploadCancelled) {
+                  try {
+                    this.sftpHandle.close(handle)
+                  } catch (closeErr) {
+                    // 忽略关闭错误
+                  }
+                  reject(new Error('Upload cancelled'))
+                  return
+                }
+                try {
+                  this.sftpHandle.close(handle)
+                } catch (closeErr) {
+                  // 忽略关闭错误
+                }
                 reject(err)
                 return
               }
@@ -293,18 +345,47 @@ export class SFTPService {
               uploadedBytes += chunk.length
 
               if (onProgress && fileSize > 0) {
-                onProgress((uploadedBytes / fileSize) * 100)
+                const now = Date.now()
+                const timeDiff = (now - lastUpdateTime) / 1000 // 转换为秒
+                const bytesDiff = uploadedBytes - lastUploadedBytes
+                
+                // 计算速度（字节/秒）
+                const speed = timeDiff > 0 ? bytesDiff / timeDiff : 0
+                
+                // 更新时间和已传输字节
+                lastUpdateTime = now
+                lastUploadedBytes = uploadedBytes
+                
+                onProgress((uploadedBytes / fileSize) * 100, fileSize, uploadedBytes, speed)
               }
             })
           })
 
           readStream.on('end', () => {
-            this.sftpHandle.close(handle)
+            try {
+              this.sftpHandle.close(handle)
+            } catch (closeErr) {
+              // 忽略关闭错误
+            }
+            // Bug 修复：确保在文件上传完成时触发最后一次进度回调
+            // 对于空文件（0 字节），不会触发 data 事件，需要在 end 事件中触发进度回调
+            // 对于非空文件，如果最后一个 data 事件的回调执行滞后，也需要在 end 事件中确保触发最后的进度回调
+            if (onProgress) {
+              const now = Date.now()
+              const timeDiff = (now - lastUpdateTime) / 1000 // 转换为秒
+              const bytesDiff = uploadedBytes - lastUploadedBytes
+              const speed = timeDiff > 0 ? bytesDiff / timeDiff : 0
+              onProgress(100, fileSize, uploadedBytes, speed)
+            }
             resolve()
           })
 
           readStream.on('error', (err) => {
-            this.sftpHandle.close(handle)
+            try {
+              this.sftpHandle.close(handle)
+            } catch (closeErr) {
+              // 忽略关闭错误
+            }
             reject(err)
           })
         })
@@ -315,7 +396,11 @@ export class SFTPService {
   /**
    * 上传文件夹（递归）
    */
-  async uploadFolder(localPath: string, remotePath: string, onProgress?: (progress: number, currentFile: string) => void): Promise<void> {
+  async uploadFolder(
+    localPath: string, 
+    remotePath: string, 
+    onProgress?: (progress: number, currentFile: string, size: number, transferredSize: number, speed: number) => void
+  ): Promise<void> {
     if (!this.sftpHandle) {
       throw new Error('SFTP not connected')
     }
@@ -337,8 +422,13 @@ export class SFTPService {
   private async uploadDirectoryRecursive(
     localDir: string,
     remoteDir: string,
-    onProgress?: (progress: number, currentFile: string) => void
+    onProgress?: (progress: number, currentFile: string, size: number, transferredSize: number, speed: number) => void
   ): Promise<void> {
+    // 检查是否被取消
+    if (this.uploadCancelled) {
+      throw new Error('Upload cancelled')
+    }
+
     // 首先创建远程目录
     try {
       await this.mkdir(remoteDir)
@@ -349,6 +439,16 @@ export class SFTPService {
     const entries = fs.readdirSync(localDir)
 
     for (const entry of entries) {
+      // 检查是否被取消
+      if (this.uploadCancelled) {
+        throw new Error('Upload cancelled')
+      }
+
+      // 跳过 . 和 .. 目录
+      if (entry === '.' || entry === '..') {
+        continue
+      }
+      
       const localPath = path.join(localDir, entry)
       const remotePath = `${remoteDir}/${entry}`
       const stats = fs.statSync(localPath)
@@ -361,7 +461,7 @@ export class SFTPService {
         try {
           await this.uploadFile(localPath, remotePath, (progress) => {
             if (onProgress) {
-              onProgress(progress, localPath)
+              onProgress(progress, localPath, stats.size, (stats.size * progress) / 100, 0)
             }
           })
         } catch (error: any) {
@@ -406,7 +506,7 @@ export class SFTPService {
   /**
    * 删除远程文件或目录（递归）
    */
-  async deleteFile(remotePath: string): Promise<void> {
+  async deleteFile(remotePath: string, onProgress?: (currentPath: string) => void): Promise<void> {
     if (!this.sftpHandle) {
       throw new Error('SFTP not connected')
     }
@@ -436,7 +536,10 @@ export class SFTPService {
               }
               const childPath = `${remotePath}/${entry.filename}`
               try {
-                await this.deleteFile(childPath)
+                if (onProgress) {
+                  onProgress(childPath)
+                }
+                await this.deleteFile(childPath, onProgress)
               } catch (error: any) {
                 console.error('SFTPService.deleteFile 删除子项失败:', { childPath, error: error.message })
                 reject(error)
@@ -457,6 +560,7 @@ export class SFTPService {
           })
         } else {
           // 删除文件
+          console.log('SFTPService.deleteFile 删除文件:', { remotePath })
           this.sftpHandle.unlink(remotePath, (err: Error) => {
             if (err) {
               console.error('SFTPService.deleteFile unlink 失败:', { remotePath, error: err.message })

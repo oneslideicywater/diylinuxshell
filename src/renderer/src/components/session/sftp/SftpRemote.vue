@@ -1,0 +1,756 @@
+/**
+ * SFTP 远程文件浏览器组件
+ * 提供远程文件的浏览、导航、选择等功能
+ * @module components/session/SftpRemote
+ */
+
+<template>
+  <div class="file-panel remote">
+    <div class="panel-header">
+      <div class="panel-path">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <rect x="1" y="3" width="12" height="8" rx="1" stroke="currentColor" stroke-width="1.5"/>
+          <circle cx="7" cy="7" r="1.5" fill="currentColor"/>
+        </svg>
+        <input
+          v-model="remotePath"
+          type="text"
+          class="path-input"
+          @keyup.enter="handlePathEnter"
+        />
+      </div>
+      <button class="nav-btn" @click="handleUp" title="上级目录">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M11 7H3M3 7l4-4M3 7l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+    <div
+      class="file-list"
+      @dblclick="handleDblClick"
+      @contextmenu.prevent="handleContextMenu"
+      @dragover.prevent="handleDragOver"
+      @dragleave.prevent="handleDragLeave"
+      @drop.prevent="handleDrop"
+      :class="{ 'is-dragging': isDraggingOver }"
+    >
+      <div
+        v-for="item in remoteFiles"
+        :key="item.path"
+        :data-path="item.path"
+        class="file-item"
+        :class="{ selected: selectedRemote === item.path }"
+        @click="handleClick(item.path)"
+      >
+        <svg v-if="item.isDirectory" width="16" height="16" viewBox="0 0 16 16" fill="none" class="file-icon">
+          <path d="M14 12a2 2 0 002-2V6a2 2 0 00-2-2h-4l-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h10z" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+        <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none" class="file-icon">
+          <path d="M13 12a2 2 0 002-2V6l-4-4H5a2 2 0 00-2 2v12a2 2 0 002 2h8z" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+        <span class="file-name">{{ item.name }}</span>
+        <span class="file-size">{{ formatSize(item.size) }}</span>
+      </div>
+    </div>
+    
+    <!-- 远程文件右键菜单 -->
+    <div v-if="contextMenuVisible" class="context-menu file-context-menu" :style="contextMenuStyle">
+      <div class="context-menu-item" @click="handleMenuAction('download')">
+        <span class="menu-item-title">下载</span>
+        <span class="menu-item-description">将选中的远程文件/文件夹下载到本地目录</span>
+      </div>
+      <div class="context-menu-item" @click="handleMenuAction('createFolder')">
+        <span class="menu-item-title">新建文件夹</span>
+        <span class="menu-item-description">在当前远程目录下创建新文件夹</span>
+      </div>
+      <div class="context-menu-item" @click="handleMenuAction('deleteRemote')">
+        <span class="menu-item-title">删除</span>
+        <span class="menu-item-description">删除选中的远程文件或文件夹</span>
+      </div>
+    </div>
+    
+    <!-- 新建文件夹对话框 -->
+    <div v-if="createFolderDialogVisible" class="dialog-overlay" @click.self="closeCreateFolderDialog">
+      <div class="dialog">
+        <div class="dialog-header">
+          <h3 class="dialog-title">新建文件夹</h3>
+        </div>
+        <div class="dialog-body">
+          <div class="form-item">
+            <label class="form-label">文件夹名称</label>
+            <input
+              ref="folderNameInput"
+              v-model="folderName"
+              type="text"
+              class="form-input"
+              :class="{ 'is-invalid': folderNameError }"
+              placeholder="请输入文件夹名称"
+              @keyup.enter="confirmCreateFolder"
+              @keyup.esc="closeCreateFolderDialog"
+            />
+            <div v-if="folderNameError" class="form-error">{{ folderNameError }}</div>
+          </div>
+        </div>
+        <div class="dialog-footer">
+          <button class="btn btn-secondary" @click="closeCreateFolderDialog">取消</button>
+          <button class="btn btn-primary" @click="confirmCreateFolder" :disabled="!folderName || !!folderNameError">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import type { Session } from '@shared/types'
+import type { TransferTask } from '@shared/types/sftp'
+import { loadRemoteFiles, handleRemoteDblClick, getSelectedRemoteFile, remoteUp as remoteUpRemote, createRemoteFolder as createRemoteFolderUtil } from './script/remote'
+import { formatSize } from '@/utils/fs-utils'
+import { requestContextMenu, clearContextMenuOwner } from './script/globalState'
+
+/**
+ * Props 定义
+ */
+interface Props {
+  /** 当前远程路径 */
+  remotePath: string
+  /** 远程文件列表 */
+  remoteFiles: any[]
+  /** 选中的远程文件路径 */
+  selectedRemote: string
+  /** 当前会话 */
+  session: Session | null
+}
+
+const props = defineProps<Props>()
+
+/**
+ * Emits 定义
+ */
+const emit = defineEmits<{
+  /** 路径变化事件 */
+  'update:remotePath': [value: string]
+  /** 选中文件变化事件 */
+  'update:selectedRemote': [value: string]
+  /** 文件列表变化事件 */
+  'update:remoteFiles': [value: any[]]
+  /** 远程文件双击事件 */
+  'remote-dblclick': []
+  /** 下载文件事件 */
+  'download-local': [path: string]
+  /** 创建远程文件夹事件 */
+  'create-folder': []
+  /** 删除远程文件事件 */
+  'delete-remote': [path: string]
+  /** 下载任务更新事件 */
+  'download-tasks-update': [tasks: TransferTask[]]
+}>()
+
+/**
+ * 内部状态
+ */
+const remotePath = ref(props.remotePath)
+const remoteFiles = ref(props.remoteFiles)
+const selectedRemote = ref(props.selectedRemote)
+const session = computed(() => props.session)
+
+/**
+ * 下载任务数组
+ */
+const downloadTasks = ref<TransferTask[]>([])
+
+/**
+ * 拖拽状态
+ */
+const isDraggingOver = ref(false)
+
+/**
+ * 右键菜单状态
+ */
+const contextMenuVisible = ref(false)
+const contextMenuPosition = ref({ x: 0, y: 0 })
+const selectedFile = ref<any | null>(null)
+
+/**
+ * 创建文件夹对话框状态
+ */
+const createFolderDialogVisible = ref(false)
+const folderName = ref('')
+const folderNameError = ref('')
+const folderNameInput = ref<HTMLInputElement | null>(null)
+
+/**
+ * 右键菜单样式
+ */
+const contextMenuStyle = computed(() => ({
+  position: 'absolute' as const,
+  left: `${contextMenuPosition.value.x}px`,
+  top: `${contextMenuPosition.value.y}px`,
+  zIndex: 10000
+}))
+
+/**
+ * 监听 props 变化
+ */
+watch(() => props.remotePath, (newVal) => {
+  remotePath.value = newVal
+})
+
+watch(() => props.remoteFiles, (newVal) => {
+  remoteFiles.value = newVal
+})
+
+watch(() => props.selectedRemote, (newVal) => {
+  selectedRemote.value = newVal
+})
+
+/**
+ * 监听内部状态变化，同步到父组件
+ */
+watch(remotePath, (newVal) => {
+  emit('update:remotePath', newVal)
+})
+
+watch(remoteFiles, (newVal) => {
+  emit('update:remoteFiles', newVal)
+})
+
+watch(selectedRemote, (newVal) => {
+  emit('update:selectedRemote', newVal)
+})
+
+/**
+ * 加载远程文件列表
+ */
+async function loadFiles(): Promise<void> {
+  await loadRemoteFiles({
+    remotePath,
+    remoteFiles,
+    remoteFileCount: ref(0),
+    session
+  })
+}
+
+/**
+ * 处理路径输入回车
+ */
+function handlePathEnter(): void {
+  loadFiles()
+}
+
+/**
+ * 处理上级目录点击
+ */
+function handleUp(): void {
+  remoteUpRemote({ remotePath, remoteFiles, remoteFileCount: ref(0), session }, {
+    posix: {
+      dirname: (path: string) => {
+        const idx = path.lastIndexOf('/')
+        return idx > 0 ? path.substring(0, idx) : '/'
+      }
+    }
+  })
+}
+
+/**
+ * 处理文件点击
+ */
+function handleClick(path: string): void {
+  selectedRemote.value = path
+}
+
+/**
+ * 处理文件双击
+ */
+function handleDblClick(event: MouseEvent): void {
+  handleRemoteDblClick(event, { remotePath, remoteFiles, remoteFileCount: ref(0), session })
+  emit('remote-dblclick')
+}
+
+/**
+ * 处理右键菜单
+ */
+function handleContextMenu(event: MouseEvent): void {
+  const target = event.target as HTMLElement
+  const fileItem = target.closest('.file-item') as HTMLElement
+  
+  if (!fileItem) return
+  
+  const path = fileItem.dataset.path
+  const file = remoteFiles.value.find(f => f.path === path)
+  
+  if (!file) return
+  
+  // 选中该文件
+  selectedRemote.value = file.path
+  
+  // 请求显示右键菜单
+  const canShow = requestContextMenu('remote', closeContextMenu)
+  if (!canShow) return
+  
+  // 设置选中的文件
+  selectedFile.value = file
+  
+  // 设置菜单位置 - 使用相对于文件面板的位置
+  const rect = fileItem.getBoundingClientRect()
+  const panelRect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  contextMenuPosition.value = {
+    x: rect.left - panelRect.left + 10,
+    y: rect.bottom - panelRect.top + 4
+  }
+  
+  // 显示菜单
+  contextMenuVisible.value = true
+}
+
+/**
+ * 关闭右键菜单
+ */
+function closeContextMenu(): void {
+  contextMenuVisible.value = false
+  selectedFile.value = null
+  clearContextMenuOwner('remote')
+}
+
+/**
+ * 处理拖拽进入
+ */
+function handleDragOver(event: DragEvent): void {
+  isDraggingOver.value = true
+}
+
+/**
+ * 处理拖拽离开
+ */
+function handleDragLeave(): void {
+  isDraggingOver.value = false
+}
+
+/**
+ * 处理拖拽放置（上传文件）
+ */
+async function handleDrop(event: DragEvent): Promise<void> {
+  isDraggingOver.value = false
+  
+  const dataTransfer = event.dataTransfer
+  if (!dataTransfer || !dataTransfer.files || dataTransfer.files.length === 0) {
+    return
+  }
+  
+  // 获取拖拽的文件
+  const files = dataTransfer.files
+  const filePaths: string[] = []
+  
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    // 从 File 对象获取路径（需要 Electron API 支持）
+    const filePath = (file as any).path
+    if (filePath) {
+      filePaths.push(filePath)
+    }
+  }
+  
+  if (filePaths.length === 0) {
+    console.warn('[SftpRemote] 拖拽的文件无法获取路径')
+    alert('无法获取拖拽文件的路径')
+    return
+  }
+  
+
+}
+
+/**
+ * 处理右键菜单动作
+ */
+function handleMenuAction(action: string): void {
+  const file = selectedFile.value
+  if (!file) return
+  
+  switch (action) {
+    case 'download':
+      // 下载文件/文件夹 - 传递路径
+      emit('download-local', file.path)
+      break
+    case 'createFolder':
+      // 创建文件夹
+      console.log('[SftpRemote] Emitting create-folder event')
+      showCreateFolderDialog()
+      break
+    case 'deleteRemote':
+      // 删除文件
+      emit('delete-remote', file.path)
+      break
+  }
+  
+  // 关闭菜单
+  closeContextMenu()
+}
+
+/**
+ * 显示创建文件夹对话框
+ */
+function showCreateFolderDialog(): void {
+  folderName.value = '新建文件夹'
+  folderNameError.value = ''
+  createFolderDialogVisible.value = true
+  nextTick(() => {
+    if (folderNameInput.value) {
+      folderNameInput.value.focus()
+      folderNameInput.value.select()
+    }
+  })
+}
+
+/**
+ * 关闭创建文件夹对话框
+ */
+function closeCreateFolderDialog(): void {
+  createFolderDialogVisible.value = false
+  folderName.value = ''
+  folderNameError.value = ''
+}
+
+/**
+ * 验证文件夹名称
+ */
+function validateFolderName(name: string): string | null {
+  if (!name || name.trim() === '') {
+    return '文件夹名称不能为空'
+  }
+  
+  // 检查非法字符
+  const illegalChars = /[\\/:*?"<>|]/
+  if (illegalChars.test(name)) {
+    return '文件夹名称不能包含以下字符：\\ / : * ? " < > |'
+  }
+  
+  // 检查是否包含 ..
+  if (name.includes('..')) {
+    return '文件夹名称不能包含 ".."'
+  }
+  
+  // 检查重名
+  const exists = remoteFiles.value.some(f => f.name === name && f.isDirectory)
+  if (exists) {
+    return '该名称的文件夹已存在'
+  }
+  
+  return null
+}
+
+/**
+ * 确认创建文件夹
+ */
+async function confirmCreateFolder(): Promise<void> {
+  const error = validateFolderName(folderName.value)
+  if (error) {
+    folderNameError.value = error
+    return
+  }
+  
+  try {
+    await createRemoteFolderUtil({
+      remotePath,
+      remoteFiles,
+      remoteFileCount: ref(0),
+      session
+    }, ref(folderName.value.trim()), ref(false), ref(''))
+    closeCreateFolderDialog()
+  } catch (error: any) {
+    folderNameError.value = error.message || '创建文件夹失败'
+  }
+}
+
+// 监听全局点击事件以关闭菜单
+onMounted(() => {
+  document.addEventListener('click', closeContextMenu)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeContextMenu)
+  clearContextMenuOwner('remote')
+})
+
+// 导出函数供父组件调用
+defineExpose({
+  loadFiles,
+  getSelectedFile: () => getSelectedRemoteFile({ remotePath, remoteFiles, remoteFileCount: ref(0), session }, selectedRemote),
+  downloadTasks
+})
+
+// 注意：初始化加载由父组件调用 loadFiles 触发
+</script>
+
+<style scoped>
+.file-panel.remote {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-color, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: var(--sidebar-bg, var(--bg-color-secondary, #f3f3f3));
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.panel-path {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--input-bg, var(--bg-color, #ffffff));
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 3px;
+}
+
+.panel-path .path-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 13px;
+  background: transparent;
+  color: var(--text-color, #333333);
+}
+
+.nav-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-color, #ffffff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-color-secondary, #999999);
+}
+
+.nav-btn:hover {
+  background: var(--hover-bg, #f0f0f0);
+  border-color: var(--border-color, #d0d0d0);
+  color: var(--text-color, #333333);
+}
+
+.nav-btn:active {
+  background: var(--hover-bg, #e8e8e8);
+}
+
+.file-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+  transition: background 0.2s;
+}
+
+.file-list.is-dragging {
+  background: var(--drag-over-bg, rgba(64, 158, 255, 0.1));
+  border: 2px dashed var(--primary-color, #409eff);
+}
+
+.file-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.file-item:hover {
+  background: var(--hover-bg, rgba(255, 255, 255, 0.05));
+}
+
+.file-item.selected {
+  background: var(--active-bg, rgba(64, 158, 255, 0.15));
+}
+
+.file-icon {
+  flex-shrink: 0;
+  color: var(--warning-color, #e6a23c);
+}
+
+.file-icon:not([color]) {
+  color: var(--text-color-secondary, #999999);
+}
+
+.file-name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-color, #333333);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-size {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-color-secondary, #999999);
+  margin-left: 8px;
+}
+
+/* 右键菜单样式 */
+.context-menu {
+  position: absolute;
+  background: var(--card-bg, var(--bg-color, #ffffff));
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 4px 0;
+  min-width: 200px;
+  z-index: 10000;
+}
+
+.context-menu-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background-color 0.2s;
+}
+
+.context-menu-item:hover {
+  background: var(--hover-bg, #f0f0f0);
+}
+
+.menu-item-title {
+  font-size: 13px;
+  color: var(--text-color, #333333);
+  font-weight: 500;
+}
+
+.menu-item-description {
+  font-size: 11px;
+  color: var(--text-color-secondary, #999999);
+}
+
+/* 对话框样式 */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+}
+
+.dialog {
+  background: var(--bg-color, #ffffff);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  min-width: 400px;
+  max-width: 500px;
+  overflow: hidden;
+}
+
+.dialog-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #e0e0e0);
+}
+
+.dialog-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-color, #333333);
+}
+
+.dialog-body {
+  padding: 20px;
+}
+
+.form-item {
+  margin-bottom: 16px;
+}
+
+.form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-color, #333333);
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--text-color, #333333);
+  background: var(--bg-color, #ffffff);
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary-color, #409eff);
+}
+
+.form-input.is-invalid {
+  border-color: var(--error-color, #f56c6c);
+}
+
+.form-error {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--error-color, #f56c6c);
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color, #e0e0e0);
+}
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary {
+  background: var(--bg-color-secondary, #f5f5f5);
+  border: 1px solid var(--border-color, #e0e0e0);
+  color: var(--text-color, #333333);
+}
+
+.btn-secondary:hover {
+  background: var(--hover-bg, #e8e8e8);
+}
+
+.btn-primary {
+  background: var(--primary-color, #409eff);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: var(--primary-color-hover, #66b1ff);
+}
+
+.btn-primary:disabled {
+  background: var(--primary-color-disabled, #a0cfff);
+  cursor: not-allowed;
+}
+</style>

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * SFTP IPC 处理器
  * 处理渲染进程的 SFTP 相关 IPC 通信
  * @module ipc/sftp
@@ -52,10 +52,28 @@ export function registerSFTPIpcHandlers(): void {
    */
   ipcMain.handle(
     'sftp:download',
-    async (_event, sessionId: string, remotePath: string, localPath: string) => {
+    async (event, sessionId: string, remotePath: string, localPath: string) => {
       try {
         const service = sftpPool.getConnection(sessionId)
-        await service.downloadFile(remotePath, localPath)
+        const window = BrowserWindow.fromWebContents(event.sender)
+        if (!window) {
+          throw new Error('BrowserWindow not found')
+        }
+
+        // 进度回调函数
+        const onProgress = (progress: number) => {
+          window.webContents.send('sftp:downloadProgress', {
+            sessionId,
+            localPath,
+            remotePath,
+            progress,
+            size: 0,
+            transferredSize: 0,
+            speed: 0
+          })
+        }
+
+        await service.downloadFile(remotePath, localPath, onProgress)
         return { success: true }
       } catch (error: any) {
         return { success: false, error: error.message }
@@ -68,10 +86,30 @@ export function registerSFTPIpcHandlers(): void {
    */
   ipcMain.handle(
     'sftp:downloadFolder',
-    async (_event, sessionId: string, remotePath: string, localPath: string) => {
+    async (event, sessionId: string, remotePath: string, localPath: string) => {
       try {
         const service = sftpPool.getConnection(sessionId)
-        await service.downloadFolder(remotePath, localPath)
+        const window = BrowserWindow.fromWebContents(event.sender)
+        if (!window) {
+          throw new Error('BrowserWindow not found')
+        }
+
+        // 进度回调函数
+        const onProgress = (progress: number, currentFile: string) => {
+          const currentRemotePath = `${remotePath}/${currentFile}`
+          const currentLocalPath = `${localPath}/${currentFile}`
+          window.webContents.send('sftp:downloadProgress', {
+            sessionId,
+            localPath: currentLocalPath,
+            remotePath: currentRemotePath,
+            progress,
+            size: 0,
+            transferredSize: 0,
+            speed: 0
+          })
+        }
+
+        await service.downloadFolder(remotePath, localPath, onProgress)
         return { success: true }
       } catch (error: any) {
         return { success: false, error: error.message }
@@ -84,10 +122,28 @@ export function registerSFTPIpcHandlers(): void {
    */
   ipcMain.handle(
     'sftp:upload',
-    async (_event, sessionId: string, localPath: string, remotePath: string) => {
+    async (event, sessionId: string, localPath: string, remotePath: string) => {
       try {
         const service = sftpPool.getConnection(sessionId)
-        await service.uploadFile(localPath, remotePath)
+        const window = BrowserWindow.fromWebContents(event.sender)
+        if (!window) {
+          throw new Error('BrowserWindow not found')
+        }
+        
+        // 带进度回调的上传
+        await service.uploadFile(localPath, remotePath, (progress: number, size: number, transferredSize: number, speed: number) => {
+          // 发送进度事件到渲染进程
+          window.webContents.send('sftp:uploadProgress', {
+            sessionId,
+            localPath,
+            remotePath,
+            progress,
+            size,
+            transferredSize,
+            speed
+          })
+        })
+        
         return { success: true }
       } catch (error: any) {
         return { success: false, error: error.message }
@@ -100,7 +156,7 @@ export function registerSFTPIpcHandlers(): void {
    */
   ipcMain.handle(
     'sftp:uploadFolder',
-    async (_event, sessionId: string, localPath: string, remotePath: string) => {
+    async (event, sessionId: string, localPath: string, remotePath: string) => {
       try {
         console.log('uploadFolder 被调用:', { sessionId, localPath, remotePath })
         // 检查本地路径是否存在
@@ -109,7 +165,25 @@ export function registerSFTPIpcHandlers(): void {
           return { success: false, error: `本地路径不存在：${localPath}` }
         }
         const service = sftpPool.getConnection(sessionId)
-        await service.uploadFolder(localPath, remotePath)
+        const window = BrowserWindow.fromWebContents(event.sender)
+        if (!window) {
+          throw new Error('BrowserWindow not found')
+        }
+        
+        // 带进度回调的上传
+        await service.uploadFolder(localPath, remotePath, (progress: number, currentFile: string, size: number, transferredSize: number, speed: number) => {
+          // 发送进度事件到渲染进程
+          window.webContents.send('sftp:uploadProgress', {
+            sessionId,
+            localPath: currentFile,
+            remotePath,
+            progress,
+            size,
+            transferredSize,
+            speed
+          })
+        })
+        
         return { success: true }
       } catch (error: any) {
         console.error('uploadFolder error:', error.message)
@@ -134,10 +208,23 @@ export function registerSFTPIpcHandlers(): void {
   /**
    * 删除远程文件
    */
-  ipcMain.handle('sftp:delete', async (_event, sessionId: string, remotePath: string) => {
+  ipcMain.handle('sftp:delete', async (event, sessionId: string, remotePath: string) => {
     try {
       const service = sftpPool.getConnection(sessionId)
-      await service.deleteFile(remotePath)
+      const window = BrowserWindow.fromWebContents(event.sender)
+      if (!window) {
+        throw new Error('BrowserWindow not found')
+      }
+
+      // 进度回调函数
+      const onProgress = (currentPath: string) => {
+        window.webContents.send('sftp:deleteProgress', {
+          sessionId,
+          currentPath
+        })
+      }
+
+      await service.deleteFile(remotePath, onProgress)
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }
@@ -157,21 +244,28 @@ export function registerSFTPIpcHandlers(): void {
   })
 
   /**
-   * 选择本地文件
+   * 取消上传
    */
-  ipcMain.handle('sftp:selectLocalFile', async (_event, options: { selectFolder?: boolean }) => {
+  ipcMain.handle('sftp:cancelUpload', async (_event, sessionId: string) => {
     try {
-      const window = BrowserWindow.fromWebContents(_event.sender)
-      const result = await dialog.showOpenDialog(window!, {
-        properties: options.selectFolder ? ['openDirectory'] : ['openFile'],
-        title: options.selectFolder ? '选择文件夹' : '选择文件'
-      })
-
-      if (!result.canceled && result.filePaths.length > 0) {
-        return { success: true, path: result.filePaths[0] }
+      const service = sftpPool.getConnection(sessionId)
+      if (service) {
+        service.cancelUpload()
       }
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
 
-      return { success: false, error: '用户取消选择' }
+  /**
+   * 获取用户主目录
+   */
+  ipcMain.handle('sftp:getHomeDir', async () => {
+    try {
+      // 返回当前用户的家目录
+      const homeDir = require('os').homedir()
+      return { success: true, data: homeDir }
     } catch (error: any) {
       return { success: false, error: error.message }
     }
@@ -184,6 +278,39 @@ export function registerSFTPIpcHandlers(): void {
     try {
       const files = await getLocalDirectoryContents(localPath)
       return { success: true, data: files }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  /**
+   * 选择本地文件
+   */
+  ipcMain.handle('sftp:selectLocalFile', async (_event, options: { selectFolder?: boolean }) => {
+    try {
+      const result = await dialog.showOpenDialog({
+        properties: options?.selectFolder ? ['openDirectory'] : ['openFile'],
+        defaultPath: require('os').homedir()
+      })
+
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false }
+      }
+
+      return { success: true, path: result.filePaths[0] }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  /**
+   * 创建本地文件夹
+   */
+  ipcMain.handle('sftp:create-local-folder', async (_event, parentPath: string, folderName: string) => {
+    try {
+      const fullPath = path.join(parentPath, folderName)
+      await fs.promises.mkdir(fullPath, { recursive: true })
+      return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }
     }
@@ -203,7 +330,7 @@ async function getLocalDirectoryContents(dirPath: string): Promise<FileInfo[]> {
 
       const files: FileInfo[] = []
 
-      // 添加父目录
+      // 添加父目录（用于 UI 导航）
       const parentDir = path.dirname(dirPath)
       if (parentDir !== dirPath) {
         files.push({
@@ -217,6 +344,11 @@ async function getLocalDirectoryContents(dirPath: string): Promise<FileInfo[]> {
 
       // 处理文件列表
       for (const dirent of dirents) {
+        // 跳过 . 和 .. 目录
+        if (dirent.name === '.' || dirent.name === '..') {
+          continue
+        }
+        
         const fullPath = path.join(dirPath, dirent.name)
         
         try {
@@ -228,7 +360,7 @@ async function getLocalDirectoryContents(dirPath: string): Promise<FileInfo[]> {
             size: stats.size,
             modifyTime: stats.mtime
           })
-        } catch (error) {
+        } catch (error: any) {
           // 跳过无法访问的文件
           console.warn(`无法访问文件：${fullPath}`, error)
         }

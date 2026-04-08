@@ -21,7 +21,7 @@
             <h3>主题设置</h3>
             <el-form label-width="100px">
               <el-form-item label="主题模式">
-                <el-radio-group v-model="settingsStore.theme" @change="handleThemeChange">
+                <el-radio-group v-model="localTheme" @change="handleThemeChange">
                   <el-radio value="dark">深色</el-radio>
                   <el-radio value="light">浅色</el-radio>
                 </el-radio-group>
@@ -174,6 +174,9 @@ const settingsStore = useSettingsStore()
 
 // 当前激活的标签页
 const activeTab = ref('appearance')
+
+// 本地主题状态（用于避免初始化时触发 change 事件）
+const localTheme = ref(settingsStore.theme)
 
 /**
  * 设置后返回主页

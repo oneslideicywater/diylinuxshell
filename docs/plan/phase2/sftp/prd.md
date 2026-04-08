@@ -1,0 +1,387 @@
+# SFTP 文件传输功能 - 产品需求文档
+
+## 1. 文档信息
+
+| 项目 | 内容 |
+|------|------|
+| 产品名称 | DIY-Linux-Shell |
+| 版本 | V1.1 |
+| 阶段 | Phase 2 |
+| 文档状态 | 已完成 |
+| 更新日期 | 2026-04-08 |
+| 父文档 | [Phase 2 PRD](../prd.md) |
+
+---
+
+## 2. 产品概述
+
+### 2.1 功能定位
+
+SFTP 文件传输功能提供类似 Xftp 的双面板文件管理界面，支持本地和远程服务器之间的文件传输，满足用户在本地和远程服务器之间高效传输文件的需求。
+
+### 2.2 核心价值
+
+| 价值点 | 说明 |
+|--------|------|
+| 直观操作 | 双面板设计，本地和远程文件并列显示 |
+| 高效传输 | 支持拖拽、右键菜单等多种传输方式 |
+| 进度可视 | 树形传输状态显示，实时掌握传输进度 |
+| 批量操作 | 支持多文件选择和批量传输 |
+
+---
+
+## 3. 功能需求
+
+### 3.1 功能列表
+
+| 功能模块 | 功能点 | 优先级 | 状态 |
+|----------|--------|--------|------|
+| 基础 UI | 双面板布局 | P0 | ✅ |
+| 基础 UI | 本地文件列表 | P0 | ✅ |
+| 基础 UI | 远程文件列表 | P0 | ✅ |
+| 基础 UI | 工具栏 | P0 | ✅ |
+| 文件操作 | 文件上传 | P0 | ✅ |
+| 文件操作 | 文件下载 | P0 | ✅ |
+| 文件操作 | 新建文件夹 | P0 | ✅ |
+| 文件操作 | 删除文件 | P0 | ✅ |
+| 文件操作 | 文件夹上传（递归） | P1 | ✅ |
+| 文件操作 | 文件夹下载（递归） | P1 | ✅ |
+| 右键菜单 | 本地右键菜单 | P1 | ✅ |
+| 右键菜单 | 远程右键菜单 | P1 | ✅ |
+| 右键菜单 | 分布式管理 | P1 | ✅ |
+| 进度管理 | 进度状态栏 | P1 | ✅ |
+| 进度管理 | 树形传输状态 | P1 | ✅ |
+| 进度管理 | 取消传输 | P1 | ✅ |
+| 用户体验 | 主题适配 | P2 | ✅ |
+| 用户体验 | 右键菜单互斥显示 | P2 | ✅ |
+
+
+**验收标准**：
+- [x] 右键点击弹出对应菜单
+- [x] 菜单项根据上下文显示
+- [x] 同一时间只有一个菜单显示
+- [x] 点击别处菜单关闭
+
+
+---
+
+## 4. 技术架构
+
+### 4.1 组件结构
+
+```
+SftpTransfer.vue (主组件)
+├── SftpLocal.vue (本地文件面板)
+├── SftpRemote.vue (远程文件面板)
+└── SftpStatusContainer.vue (状态容器)
+    ├── SftpTaskStatus.vue (单个任务状态 - 新增)
+    │   ├── SftpStatusHeader.vue (状态头 - 表头)
+    │   └── SftpTransferTreeNode.vue (树节点)
+    ├── SftpTaskStatus.vue (第二个任务)
+    │   ├── SftpStatusHeader.vue
+    │   └── SftpTransferTreeNode.vue
+    └── ... (多个任务实例)
+```
+
+### 4.2 状态管理
+
+**共享状态**：
+- `transferTasks`: 传输任务数组（每个任务包含节点数组，核心数据结构）
+- `globalContextMenuOwner`: 右键菜单所有者
+
+**状态说明**：
+- `transferTasks`: 传输任务数组，每个 `TransferTask` 包含一个 `TransferNode[]` 数组，用于管理多个传输任务
+- `globalContextMenuOwner`: 用于管理右键菜单的分布式状态，确保同一时间只有一个菜单显示
+
+**组件职责**：
+- `SftpLocal`: 维护 `uploadTasks: TransferTask[]` 数组，管理所有上传任务
+- `SftpRemote`: 维护 `downloadTasks: TransferTask[]` 数组，管理所有下载任务
+- `SftpTransfer`: 合并所有任务到 `transferTasks` 数组，统一传递给状态容器
+- `SftpStatusContainer`: 接收 `transferTasks: TransferTask[]` 数组，遍历渲染多个 `SftpTaskStatus` 组件
+- `SftpTaskStatus`: **新增组件**，接收单个 `TransferTask`，管理单个任务的树形进度显示
+  - 包含 `SftpStatusHeader` 显示表头
+  - 包含 `SftpTransferTreeNode` 显示每个节点的传输状态
+  - 提供任务级别的操作（取消整个任务、展开/折叠所有节点）
+  - 维护 `SftpTransferTreeNode` 数组，管理节点级别的显示和交互
+- `SftpStatusHeader`: **仅显示表头列**（名称、状态、进度、大小、本地路径、远程路径、速度、剩余时间、经过时间）
+- `SftpTransferTreeNode`: 显示单个节点的传输状态，支持展开/折叠
+
+### 4.3 数据流
+
+```
+SftpLocal (uploadTasks: TransferTask[])
+    ↓ emit('upload-tasks-update', tasks)
+SftpTransfer
+    ↓ merge
+SftpRemote (downloadTasks: TransferTask[])
+    ↓ emit('download-tasks-update', tasks)
+SftpTransfer
+    ↓ :transferTasks="mergedTasks"
+SftpStatusContainer
+    ↓ v-for="task in transferTasks"
+SftpTaskStatus (v-for 循环，每个任务一个实例)
+    ↓ :task="task"
+    ├─ SftpStatusHeader (仅显示表头)
+    └─ SftpTransferTreeNode (v-for="node in task.nodes")
+        ↓ 递归显示子节点
+```
+
+### 4.4 组件设计详解
+
+#### 4.4.1 SftpTaskStatus 组件（新增）
+
+**Props**:
+```typescript
+interface Props {
+  task: TransferTask  // 单个传输任务
+}
+```
+
+**职责**：
+- 显示单个传输任务的完整树形进度
+- 管理该任务的展开/折叠状态
+- 提供任务级别的操作按钮（取消任务、全部展开、全部折叠）
+- 显示任务的总体进度统计（总大小、已传输、速度、剩余时间等）
+- **维护 `SftpTransferTreeNode` 数组**，管理节点级别的显示和交互
+
+**内部结构**：
+```
+SftpTaskStatus
+├── 任务工具栏
+│   ├── 任务标题（文件名/文件夹名）
+│   ├── 总体进度条
+│   ├── 速度/剩余时间统计
+│   ├── [全部展开] [全部折叠] [取消] 按钮
+├── SftpStatusHeader
+│   └── 表头列（名称、状态、进度、大小、本地路径、远程路径、速度、剩余时间、经过时间）
+└── SftpTransferTreeNode (v-for="node in task.nodes")
+    └── 递归显示子节点
+```
+
+#### 4.4.2 SftpStatusContainer 组件
+
+**Props**:
+```typescript
+interface Props {
+  localFileCount: number
+  remoteFileCount: number
+  status: 'ready' | 'transferring' | 'uploading' | 'downloading' | 'deleting'
+  currentPath?: string
+  transferTasks: TransferTask[]  // 传输任务数组
+}
+```
+
+**职责**：
+- 接收并管理所有传输任务
+- 遍历 `transferTasks` 数组，为每个任务渲染一个 `SftpTaskStatus` 组件
+- 管理全局的展开/折叠状态
+- 显示简化的状态栏（文件数量、当前状态）
+
+**模板结构**：
+```vue
+<template>
+  <div class="sftp-status-container">
+    <!-- 简化状态栏 -->
+    <div class="sftp-footer">
+      <div class="footer-item">本地：{{ localFileCount }} 个项目</div>
+      <div class="footer-item">远程：{{ remoteFileCount }} 个项目</div>
+      <div class="footer-status">状态：{{ status }}</div>
+    </div>
+    
+    <!-- 多个任务状态 -->
+    <div class="task-list">
+      <SftpTaskStatus
+        v-for="task in transferTasks"
+        :key="task.id"
+        :task="task"
+      />
+    </div>
+  </div>
+</template>
+```
+
+### 4.5 服务层
+
+**SFTP 服务**：
+- `src/renderer/src/services/sftp.ts`
+- 提供文件上传、下载、删除等方法
+- 支持进度回调
+- 支持取消操作
+
+---
+
+## 5. 数据结构
+
+### 5.1 TransferNode (传输节点)
+
+```typescript
+interface TransferNode {
+  id: string              // 唯一标识
+  name: string            // 文件/文件夹名称
+  type: 'file' | 'folder' // 类型
+  status: 'transferring' | 'completed' | 'failed' | 'cancelled' // 状态
+  progress: number        // 进度 0-100
+  localPath: string       // 本地路径
+  remotePath: string      // 远程路径
+  size: number            // 文件大小
+  transferred: number     // 已传输大小
+  children?: TransferNode[] // 子节点（文件夹）
+  expanded?: boolean      // 是否展开
+  taskId?: string         // 传输任务 ID
+  error?: string          // 错误信息
+}
+```
+
+### 5.2 TransferTask (传输任务)
+
+```typescript
+interface TransferTask {
+  id: string              // 任务 ID
+  type: 'upload' | 'download' // 传输类型
+  status: 'pending' | 'active' | 'completed' | 'cancelled' // 任务状态
+  nodes: TransferNode[]   // 传输节点列表
+  
+  // 传输进度统计
+  totalBytes: number      // 待传输的总字节数
+  transferredBytes: number // 已传输的字节数
+  
+  // 时间统计
+  remainingTime: number // 还需多长时间完成传输（秒）
+  elapsedTime: number   // 已消耗时间（秒）
+  
+  createdAt: number       // 创建时间
+  completedAt?: number    // 完成时间
+}
+```
+
+**字段说明**：
+- `totalBytes`: 当前任务待传输的总字节数，用于计算当前任务的进度百分比
+- `transferredBytes`: 当前任务已传输的字节数，实时更新
+- `remainingTime`: 基于当前传输速度预估的剩余时间（秒）
+- `elapsedTime`: 从传输开始到当前已经消耗的时间（秒）
+
+---
+
+## 6. 交互流程
+
+### 6.1 上传文件流程
+
+```
+用户操作（拖拽/右键）
+    ↓
+SftpLocal 组件触发 upload 事件
+    ↓
+SftpTransfer 处理 upload 事件
+    ↓
+创建 TransferTask（状态：active）和 TransferNode（状态：transferring）
+    ↓
+调用 SftpService.upload()
+    ↓
+进度回调 → 更新 TransferNode.progress 和 TransferTask.transferredBytes
+    ↓
+传输完成 → 更新 TransferNode.status = 'completed' 和 TransferTask.status = 'completed'
+    ↓
+刷新远程文件列表
+```
+
+### 6.2 取消上传流程
+
+```
+用户点击取消按钮
+    ↓
+触发 cancelTransfer(taskId)
+    ↓
+调用 SftpService.cancelUpload(taskId)
+    ↓
+更新 TransferTask.status = 'cancelled'
+    ↓
+更新所有关联的 TransferNode.status = 'cancelled'
+    ↓
+清理传输任务
+```
+
+### 6.3 右键菜单显示流程
+
+```
+用户右键点击文件
+    ↓
+SftpLocal/SftpRemote 触发 contextmenu 事件
+    ↓
+调用 requestContextMenu(owner, closeCallback)
+    ↓
+检查 globalContextMenuOwner
+    ↓
+如果有其他组件在显示，通知关闭
+    ↓
+设置自己为当前所有者
+    ↓
+显示右键菜单
+```
+
+---
+
+## 7. 性能优化
+
+### 7.1 大文件传输
+
+- 使用流式传输
+- 分块处理
+- 避免内存溢出
+
+### 7.2 大量文件传输
+
+- 批量传输优化
+- 并发控制
+- 进度合并显示
+
+### 7.3 文件夹递归
+
+- 深度优先遍历
+- 并发传输子文件
+- 树形结构实时更新
+
+---
+
+## 8. 测试用例
+
+### 8.1 功能测试
+
+- [x] 上传单个文件
+- [x] 上传文件夹
+- [x] 下载单个文件
+- [x] 下载文件夹
+- [x] 新建文件夹
+- [x] 删除文件
+- [x] 取消上传
+- [x] 右键菜单显示
+
+### 8.2 边界测试
+
+- [x] 超大文件传输
+- [x] 大量小文件传输
+- [x] 深层嵌套文件夹
+- [x] 网络中断处理
+
+### 8.3 UI 测试
+
+- [x] 主题切换
+- [x] 右键菜单互斥
+- [x] 进度条动画
+- [x] 树形展开/折叠
+
+---
+
+## 9. 相关文档
+
+- [Phase 2 PRD](../prd.md)
+- [Phase 2 Plan](../plan.md)
+- [SFTP 组件共享状态](../../components/sftp/share.md)
+- [SFTP 实现计划](./plan.md)
+
+---
+
+## 10. 更新日志
+
+| 日期 | 版本 | 更新内容 | 作者 |
+|------|------|----------|------|
+| 2026-04-08 | V1.0 | 初始版本 | - |

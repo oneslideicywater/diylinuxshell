@@ -4,6 +4,19 @@
 
 Phase 1 是 DIY-Linux-Shell 项目的 MVP（最小可行产品）阶段，目标是实现核心 SSH 连接功能，让用户能够通过密码认证连接远程服务器并进行终端操作。
 
+**核心功能范围**：
+- ✅ SSH 会话管理（创建、编辑、删除）
+- ✅ 密码认证连接
+- ✅ 终端操作（输入、输出、调整大小）
+- ✅ 多标签页支持
+- ✅ 会话状态管理
+
+**不包含的功能**（将在后续 Phase 完成）：
+- ❌ SFTP 文件传输（Phase 2）
+- ❌ 命令片段管理（Phase 4）
+- ❌ 密钥认证（Phase 2）
+- ❌ 会话分组管理（Phase 2）
+
 **预计工期**：1 周
 
 **前置依赖**：Phase 0 项目初始化已完成
@@ -68,7 +81,25 @@ Phase 1 是 DIY-Linux-Shell 项目的 MVP（最小可行产品）阶段，目标
 
 ---
 
-## 3. 模块实现顺序
+## 3. 与其他 Phase 的关系
+
+### Phase 2: SFTP 文件传输
+- **SFTP 功能**：双面板文件传输（类似 Xftp）
+- **会话分组**：按项目/环境组织会话
+- **密钥认证**：支持 SSH 密钥认证
+- **主题配置**：完善主题系统
+
+### Phase 3: （待规划）
+
+### Phase 4: 命令片段管理
+- **命令片段**：快速插入常用命令
+- **命令分组**：按场景组织命令片段
+- **命令搜索**：快速查找命令
+- **标签管理**：多维度标记命令
+
+---
+
+## 4. 模块实现顺序
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -110,11 +141,11 @@ Phase 1 是 DIY-Linux-Shell 项目的 MVP（最小可行产品）阶段，目标
 
 ---
 
-## 4. 详细实现步骤
+## 5. 详细实现步骤
 
-### 4.1 主进程服务层
+### 5.1 主进程服务层
 
-#### 4.1.1 StoreService (数据存储服务)
+#### 5.1.1 StoreService (数据存储服务)
 
 **文件**：`src/main/services/store.ts`
 
@@ -144,7 +175,7 @@ class StoreService {
 }
 ```
 
-#### 4.1.2 CryptoService (加密服务)
+#### 5.1.2 CryptoService (加密服务)
 
 **文件**：`src/main/services/crypto.ts`
 
@@ -170,7 +201,7 @@ class CryptoService {
 }
 ```
 
-#### 4.1.3 SSHManager (SSH 连接管理器)
+#### 5.1.3 SSHManager (SSH 连接管理器)
 
 **文件**：`src/main/services/ssh-manager.ts`
 
@@ -202,9 +233,9 @@ class SSHManager {
 }
 ```
 
-### 4.2 IPC 通信层
+### 5.2 IPC 通信层
 
-#### 4.2.1 Session IPC (会话相关)
+#### 5.2.1 Session IPC (会话相关)
 
 **文件**：`src/main/ipc/session.ts`
 
@@ -220,7 +251,7 @@ class SSHManager {
 | `session:disconnect` | handle | 断开会话 |
 | `session:get-status` | handle | 获取连接状态 |
 
-#### 4.2.2 Terminal IPC (终端相关)
+#### 5.2.2 Terminal IPC (终端相关)
 
 **文件**：`src/main/ipc/terminal.ts`
 
@@ -233,9 +264,9 @@ class SSHManager {
 | `terminal:close` | send | 连接关闭（主进程推送） |
 | `terminal:error` | send | 连接错误（主进程推送） |
 
-### 4.3 状态管理层
+### 5.3 状态管理层
 
-#### 4.3.1 SessionStore
+#### 5.3.1 SessionStore
 
 **文件**：`src/renderer/src/stores/session.ts`
 
@@ -254,7 +285,7 @@ class SSHManager {
 - `updateSessionStatus(id, status)` - 更新会话状态
 - `setActiveSession(id)` - 设置激活会话
 
-#### 4.3.2 TerminalStore
+#### 5.3.2 TerminalStore
 
 **文件**：`src/renderer/src/stores/terminal.ts`
 
@@ -272,16 +303,16 @@ class SSHManager {
 - `setActiveTab(id)` - 设置激活标签页
 - `updateTabTitle(id, title)` - 更新标签页标题
 
-### 4.4 UI 组件层
+### 5.4 UI 组件层
 
-#### 4.4.1 布局组件
+#### 5.4.1 布局组件
 
 | 组件 | 功能 |
 |------|------|
 | `AppLayout.vue` | 应用主布局，包含标题栏、侧边栏、主内容区 |
 | `Sidebar.vue` | 左侧边栏，包含会话列表、操作按钮 |
 
-#### 4.4.2 会话组件
+#### 5.4.2 会话组件
 
 | 组件 | 功能 |
 |------|------|
@@ -289,7 +320,7 @@ class SSHManager {
 | `SessionItem.vue` | 单个会话项，显示会话信息和操作按钮 |
 | `SessionForm.vue` | 会话表单，创建/编辑会话 |
 
-#### 4.4.3 终端组件
+#### 5.4.3 终端组件
 
 | 组件 | 功能 |
 |------|------|
@@ -299,9 +330,9 @@ class SSHManager {
 
 ---
 
-## 5. 文件产出清单
+## 6. 文件产出清单
 
-### 5.1 主进程文件
+### 6.1 主进程文件
 
 | 文件路径 | 功能描述 |
 |----------|----------|
@@ -311,7 +342,7 @@ class SSHManager {
 | `src/main/ipc/session.ts` | 会话 IPC 处理 |
 | `src/main/ipc/terminal.ts` | 终端 IPC 处理 |
 
-### 5.2 渲染进程文件
+### 6.2 渲染进程文件
 
 | 文件路径 | 功能描述 |
 |----------|----------|
@@ -326,7 +357,7 @@ class SSHManager {
 | `src/renderer/src/components/terminal/TerminalTabs.vue` | 标签页栏 |
 | `src/renderer/src/components/terminal/TerminalTab.vue` | 单个标签页 |
 
-### 5.3 测试文件
+### 6.3 测试文件
 
 | 文件路径 | 功能描述 |
 |----------|----------|
