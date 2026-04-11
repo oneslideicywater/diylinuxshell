@@ -104,9 +104,10 @@
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import type { Session } from '@shared/types'
 import type { TransferTask } from '@shared/types/sftp'
-import { loadRemoteFiles, handleRemoteDblClick, getSelectedRemoteFile, remoteUp as remoteUpRemote, createRemoteFolder as createRemoteFolderUtil } from './script/remote'
+
 import { formatSize } from '@/utils/fs-utils'
 import { requestContextMenu, clearContextMenuOwner } from './script/globalState'
+import { loadRemoteFiles, remoteUpRemote, handleRemoteDblClick, type RemoteFileState } from './script/remote'
 
 /**
  * Props 定义
@@ -120,9 +121,13 @@ interface Props {
   selectedRemote: string
   /** 当前会话 */
   session: Session | null
+  /** 下载任务数组 */
+  downloadTasks: TransferTask[]
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  downloadTasks: () => []
+})
 
 /**
  * Emits 定义
@@ -142,8 +147,6 @@ const emit = defineEmits<{
   'create-folder': []
   /** 删除远程文件事件 */
   'delete-remote': [path: string]
-  /** 下载任务更新事件 */
-  'download-tasks-update': [tasks: TransferTask[]]
 }>()
 
 /**
@@ -153,20 +156,12 @@ const remotePath = ref(props.remotePath)
 const remoteFiles = ref(props.remoteFiles)
 const selectedRemote = ref(props.selectedRemote)
 const session = computed(() => props.session)
-
-/**
- * 下载任务数组
- */
-const downloadTasks = ref<TransferTask[]>([])
+const remoteFileCount = ref(0)
 
 /**
  * 拖拽状态
  */
 const isDraggingOver = ref(false)
-
-/**
- * 右键菜单状态
- */
 const contextMenuVisible = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
 const selectedFile = ref<any | null>(null)
@@ -196,8 +191,10 @@ watch(() => props.remotePath, (newVal) => {
   remotePath.value = newVal
 })
 
+// 监听 props 变化，同步到本地 ref（带类型保护）
 watch(() => props.remoteFiles, (newVal) => {
-  remoteFiles.value = newVal
+  // 确保 newVal 是数组类型
+  remoteFiles.value = Array.isArray(newVal) ? newVal : []
 })
 
 watch(() => props.selectedRemote, (newVal) => {
@@ -220,15 +217,27 @@ watch(selectedRemote, (newVal) => {
 })
 
 /**
+ * 创建远程文件状态对象供函数调用
+ */
+const getRemoteState = (): RemoteFileState => ({
+  remotePath,
+  remoteFiles,
+  selectedRemote,
+  remoteFileCount,
+  session: props.session
+})
+
+/**
  * 加载远程文件列表
  */
 async function loadFiles(): Promise<void> {
-  await loadRemoteFiles({
-    remotePath,
-    remoteFiles,
-    remoteFileCount: ref(0),
-    session
-  })
+  // 检查会话是否存在
+  if (!props.session) {
+    console.warn('[SftpRemote] 会话不存在，跳过加载远程文件')
+    return
+  }
+  
+  await loadRemoteFiles(getRemoteState())
 }
 
 /**
@@ -242,7 +251,7 @@ function handlePathEnter(): void {
  * 处理上级目录点击
  */
 function handleUp(): void {
-  remoteUpRemote({ remotePath, remoteFiles, remoteFileCount: ref(0), session }, {
+  remoteUpRemote(getRemoteState(), {
     posix: {
       dirname: (path: string) => {
         const idx = path.lastIndexOf('/')
@@ -263,7 +272,7 @@ function handleClick(path: string): void {
  * 处理文件双击
  */
 function handleDblClick(event: MouseEvent): void {
-  handleRemoteDblClick(event, { remotePath, remoteFiles, remoteFileCount: ref(0), session })
+  handleRemoteDblClick(event, getRemoteState())
   emit('remote-dblclick')
 }
 
@@ -449,12 +458,7 @@ async function confirmCreateFolder(): Promise<void> {
   }
   
   try {
-    await createRemoteFolderUtil({
-      remotePath,
-      remoteFiles,
-      remoteFileCount: ref(0),
-      session
-    }, ref(folderName.value.trim()), ref(false), ref(''))
+    await createRemoteFolderUtil(getRemoteState(), ref(folderName.value.trim()), ref(false), ref(''))
     closeCreateFolderDialog()
   } catch (error: any) {
     folderNameError.value = error.message || '创建文件夹失败'
@@ -474,8 +478,7 @@ onUnmounted(() => {
 // 导出函数供父组件调用
 defineExpose({
   loadFiles,
-  getSelectedFile: () => getSelectedRemoteFile({ remotePath, remoteFiles, remoteFileCount: ref(0), session }, selectedRemote),
-  downloadTasks
+  getSelectedFile: () => getSelectedRemoteFile(getRemoteState(), selectedRemote)
 })
 
 // 注意：初始化加载由父组件调用 loadFiles 触发

@@ -41,19 +41,19 @@
   overflow: hidden;
 }
 
-/* 表头 */
+/* 表头 - 使用 --header-bg 变量以支持主题切换 */
 .tree-header {
   display: flex;
-  background: var(--bg-color-soft, #252526);
+  background: var(--header-bg, var(--sidebar-bg, var(--bg-color, #252526)));
   border-bottom: 1px solid var(--border-color, #333);
   font-weight: 500;
   user-select: none;
 }
 
 .header-column {
-  padding: 8px 12px;
+  padding: 6px 12px;
   text-align: left;
-  color: var(--text-color-secondary, #888);
+  color: var(--text-secondary, var(--text-color, #888));
   border-right: 1px solid var(--border-color, #333);
   white-space: nowrap;
   overflow: hidden;
@@ -61,8 +61,8 @@
 }
 
 .name-column {
-  width: 200px;
-  min-width: 200px;
+  width: 400px;
+  min-width: 400px;
   flex-shrink: 0;
 }
 
@@ -143,6 +143,6 @@
 }
 
 .tree-content::-webkit-scrollbar-thumb:hover {
-  background: var(--text-color-secondary, #888);
+  background: var(--text-secondary, var(--text-color, #888));
 }
 </style>

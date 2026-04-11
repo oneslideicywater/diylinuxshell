@@ -9,12 +9,11 @@
     <!-- 任务表头 -->
     <SftpStatusHeader />
 
-    <!-- 传输树节点 -->
+    <!-- 传输树节点（从根节点开始渲染） -->
     <div class="tree-content">
       <SftpTransferTreeNode 
-        v-for="node in taskNodes" 
-        :key="node.id" 
-        :node="node" 
+        v-if="taskRoot"
+        :node="taskRoot" 
         :level="0"
         @update:node-expanded="handleNodeExpanded"
       />
@@ -31,11 +30,12 @@ import SftpStatusHeader from './SftpStatusHeader.vue'
  * Props 定义
  */
 interface Props {
-  /** 传输任务节点列表 */
-  taskNodes: TransferNode[]
+  /** 传输任务根节点 */
+  taskRoot: TransferNode
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
 
 /**
  * 定义组件事件

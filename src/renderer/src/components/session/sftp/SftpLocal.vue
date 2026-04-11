@@ -99,9 +99,10 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import type { TransferTask } from '@shared/types/sftp'
-import { loadLocalFiles, handleLocalDblClick, getSelectedLocalFile, localUp as localUpLocal, createLocalFolder as createLocalFolderUtil } from './script/local'
+
 import { formatSize } from '@/utils/fs-utils'
 import { requestContextMenu, clearContextMenuOwner, getContextMenuOwner } from './script/globalState'
+import { loadLocalFiles, handleLocalDblClick, type LocalFileState } from './script/local'
 
 /**
  * Props 定义
@@ -113,9 +114,13 @@ interface Props {
   localFiles: any[]
   /** 选中的本地文件路径 */
   selectedLocal: string
+  /** 上传任务列表 */
+  uploadTasks?: TransferTask[]
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  uploadTasks: () => []
+})
 
 /**
  * Emits 定义
@@ -135,8 +140,6 @@ const emit = defineEmits<{
   'upload-folder': [path: string]
   /** 删除本地文件事件 */
   'delete-local': [path: string]
-  /** 上传任务更新事件 */
-  'upload-tasks-update': [tasks: TransferTask[]]
 }>()
 
 /**
@@ -145,11 +148,17 @@ const emit = defineEmits<{
 const localPath = ref(props.localPath)
 const localFiles = ref(props.localFiles)
 const selectedLocal = ref(props.selectedLocal)
+const localFileCount = ref(0)
 
 /**
- * 上传任务数组
+ * 创建本地文件状态对象供函数调用
  */
-const uploadTasks = ref<TransferTask[]>([])
+const getLocalState = (): LocalFileState => ({
+  localPath,
+  localFiles,
+  selectedLocal,
+  localFileCount
+})
 
 /**
  * 右键菜单状态
@@ -219,11 +228,7 @@ watch(selectedLocal, (newVal) => {
  * 加载本地文件列表
  */
 async function loadFiles(): Promise<void> {
-  await loadLocalFiles({
-    localPath,
-    localFiles,
-    localFileCount: ref(0)
-  })
+  await loadLocalFiles(getLocalState())
 }
 
 /**
@@ -237,9 +242,7 @@ function handlePathEnter(): void {
  * 处理上级目录点击
  */
 function handleUp(): void {
-  localUpLocal({ localPath, localFiles, localFileCount: ref(0) }, {
-    dirname: (path: string) => path.substring(0, path.lastIndexOf('\\')) || path
-  })
+
 }
 
 /**
@@ -277,7 +280,7 @@ function handleClick(path: string, event?: MouseEvent): void {
  * 处理文件双击
  */
 function handleDblClick(event: MouseEvent): void {
-  handleLocalDblClick(event, { localPath, localFiles, localFileCount: ref(0) })
+  handleLocalDblClick(event, getLocalState())
   emit('local-dblclick')
 }
 
@@ -454,8 +457,7 @@ onUnmounted(() => {
 // 导出函数供父组件调用
 defineExpose({
   loadFiles,
-  getSelectedFile: () => getSelectedLocalFile({ localPath, localFiles, localFileCount: ref(0) }, selectedLocal),
-  uploadTasks
+  getSelectedFile: () => getSelectedLocalFile({ localPath, localFiles, localFileCount: ref(0) }, selectedLocal)
 })
 
 // 注意：初始化加载由父组件调用 loadFiles 触发

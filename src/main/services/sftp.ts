@@ -268,6 +268,35 @@ export class SFTPService {
   }
 
   /**
+   * 计算传输速度
+   * @param uploadedBytes - 已传输的字节数
+   * @param startTime - 开始时间戳
+   * @param lastUpdateTime - 上次更新时间戳
+   * @param lastUploadedBytes - 上次已传输的字节数
+   * @returns 传输速度（字节/秒）
+   */
+  private calculateTransferSpeed(
+    uploadedBytes: number,
+    startTime: number,
+    lastUpdateTime: number,
+    lastUploadedBytes: number
+  ): number {
+    const now = Date.now()
+    const timeDiff = (now - lastUpdateTime) / 1000 // 转换为秒
+    const bytesDiff = uploadedBytes - lastUploadedBytes
+    
+    // 计算瞬时速度（字节/秒）
+    const instantSpeed = timeDiff > 0 ? bytesDiff / timeDiff : 0
+    
+    // 计算平均速度（字节/秒）
+    const totalTime = (now - startTime) / 1000
+    const avgSpeed = totalTime > 0 ? uploadedBytes / totalTime : 0
+    
+    // 使用平均速度和瞬时速度的较大值，避免速度为 0
+    return Math.max(instantSpeed, avgSpeed)
+  }
+
+  /**
    * 上传文件
    */
   async uploadFile(
@@ -345,15 +374,15 @@ export class SFTPService {
               uploadedBytes += chunk.length
 
               if (onProgress && fileSize > 0) {
-                const now = Date.now()
-                const timeDiff = (now - lastUpdateTime) / 1000 // 转换为秒
-                const bytesDiff = uploadedBytes - lastUploadedBytes
-                
-                // 计算速度（字节/秒）
-                const speed = timeDiff > 0 ? bytesDiff / timeDiff : 0
+                const speed = this.calculateTransferSpeed(
+                  uploadedBytes,
+                  startTime,
+                  lastUpdateTime,
+                  lastUploadedBytes
+                )
                 
                 // 更新时间和已传输字节
-                lastUpdateTime = now
+                lastUpdateTime = Date.now()
                 lastUploadedBytes = uploadedBytes
                 
                 onProgress((uploadedBytes / fileSize) * 100, fileSize, uploadedBytes, speed)
@@ -371,10 +400,12 @@ export class SFTPService {
             // 对于空文件（0 字节），不会触发 data 事件，需要在 end 事件中触发进度回调
             // 对于非空文件，如果最后一个 data 事件的回调执行滞后，也需要在 end 事件中确保触发最后的进度回调
             if (onProgress) {
-              const now = Date.now()
-              const timeDiff = (now - lastUpdateTime) / 1000 // 转换为秒
-              const bytesDiff = uploadedBytes - lastUploadedBytes
-              const speed = timeDiff > 0 ? bytesDiff / timeDiff : 0
+              const speed = this.calculateTransferSpeed(
+                uploadedBytes,
+                startTime,
+                lastUpdateTime,
+                lastUploadedBytes
+              )
               onProgress(100, fileSize, uploadedBytes, speed)
             }
             resolve()
@@ -459,9 +490,9 @@ export class SFTPService {
       } else {
         // 上传文件
         try {
-          await this.uploadFile(localPath, remotePath, (progress) => {
+          await this.uploadFile(localPath, remotePath, (progress, size, transferredSize, speed) => {
             if (onProgress) {
-              onProgress(progress, localPath, stats.size, (stats.size * progress) / 100, 0)
+              onProgress(progress, localPath, size, transferredSize, speed)
             }
           })
         } catch (error: any) {

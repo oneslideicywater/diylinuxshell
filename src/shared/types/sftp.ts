@@ -62,10 +62,10 @@ export interface TransferTask {
   id: string
   /** 任务类型 */
   type: TransferType
-  /** 任务状态 */
-  status: 'pending' | 'active' | 'completed' | 'cancelled'
-  /** 传输节点列表 */
-  nodes: TransferNode[]
+  /** 任务状态（符合 TransferStatus 标准） */
+  status: TransferStatus
+  /** 传输根节点 */
+  root: TransferNode
   
   // 传输进度统计
   /** 待传输的总字节数 */
@@ -85,30 +85,4 @@ export interface TransferTask {
   completedAt?: number
 }
 
-/**
- * 删除任务
- */
-export interface DeleteTask {
-  /** 任务唯一标识 */
-  id: string
-  /** 文件/文件夹名称 */
-  name: string
-  /** 删除类型 */
-  type: 'file' | 'folder'
-  /** 删除来源（本地/远程） */
-  source: 'local' | 'remote'
-  /** 删除状态 */
-  status: 'pending' | 'deleting' | 'completed' | 'failed' | 'cancelled'
-  /** 文件路径（本地路径或远程路径） */
-  path: string
-  /** 文件大小（字节） */
-  size: number
-  /** 子任务（文件夹删除时使用） */
-  children?: DeleteTask[]
-  /** 错误信息 */
-  error?: string
-  /** 开始时间戳 */
-  startTime: number
-  /** 结束时间戳 */
-  endTime?: number
-}
+

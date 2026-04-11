@@ -68,38 +68,36 @@
         <!-- 本地文件浏览器 -->
         <SftpLocal
           ref="localPanelRef"
-          v-model:local-path="localPath"
-          v-model:local-files="localFiles"
-          v-model:selected-local="selectedLocal"
+          v-model:local-path="localState.localPath.value"
+          v-model:local-files="localState.localFiles.value"
+          v-model:selected-local="localState.selectedLocal.value"
+          :upload-tasks="uploadTasks"
           @local-dblclick="handleLocalDblClick"
           @upload-file="uploadFile"
           @upload-folder="uploadFolder"
           @delete-local="handleDeleteLocal"
-          @upload-tasks-update="handleUploadTasksUpdate"
         />
 
         <!-- 远程文件浏览器 -->
         <SftpRemote
           ref="remotePanelRef"
-          v-model:remote-path="remotePath"
-          v-model:remote-files="remoteFiles"
-          v-model:selected-remote="selectedRemote"
+          v-model:remote-path="remoteState.remotePath.value"
+          v-model:remote-files="remoteState.remoteFiles.value"
+          v-model:selected-remote="remoteState.selectedRemote.value"
           :session="props.session"
+          :download-tasks="downloadTasks"
           @remote-dblclick="handleRemoteDblClick"
           @download-local="downloadLocal"
           @create-folder="createRemoteFolder"
-          @delete-remote="handleDeleteRemote"
-          @download-tasks-update="handleDownloadTasksUpdate"
+          
         />
       </div>
 
       <!-- 状态栏 -->
       <SftpStatusContainer
-        :local-file-count="localFileCount"
-        :remote-file-count="remoteFileCount"
-        :current-path="statusBarCurrentPath"
-        :transfer-tasks="transferTasks"
-        :delete-tasks="deleteTasks"
+        :local-file-count="localState.localFileCount.value"
+        :remote-file-count="remoteState.remoteFileCount.value"
+       
       />
     </div>
   </div>
@@ -112,12 +110,24 @@ import type { TransferTask } from '@shared/types/sftp'
 import SftpStatusContainer from './status/SftpStatusContainer.vue'
 import SftpLocal from './SftpLocal.vue'
 import SftpRemote from './SftpRemote.vue'
+import { useSftpTransferStore } from '@/stores/sftpTransfer'
+
+import { uploadFolder as uploadFolderToServer, uploadFile as uploadSingleFileLocal } from './script/upload'
+import { downloadFile, downloadFolder } from './script/download'
+
+import {
+  createLocalFileState,
+  initLocalDefaultDir,
+  type LocalFileState
+} from './script/local'
+
+import {
+  createRemoteFileState,
+  initRemoteDefaultDir,
+  type RemoteFileState
+} from './script/remote'
 
 
-import { uploadFile as uploadFileLocal, deleteLocalFile as deleteLocalFileLocal, loadLocalFiles as loadLocalFilesUtil, uploadFolder as uploadFolderLocal } from './script/local'
-import { createRemoteFolder as createRemoteFolderRemote, loadRemoteFiles as loadRemoteFilesUtil, downloadToLocal as downloadToLocalRemote } from './script/remote'
-import { DeleteManager, createDeleteTask } from './script/deleteManager'
-import type { DeleteTask } from '@shared/types/sftp'
 
 
 /**
@@ -149,20 +159,14 @@ const emit = defineEmits<{
  */
 
 /**
- * 本地文件浏览状态（与 SftpLocal 共享）
+ * 本地文件浏览状态（使用 local.ts 中的工厂函数初始化）
  */
-const localPath = ref('')
-const localFiles = ref<any[]>([])
-const selectedLocal = ref<string>('')
-const localFileCount = ref(0)
+const localState: LocalFileState = createLocalFileState()
 
 /**
- * 远程文件浏览状态（与 SftpRemote 共享）
+ * 远程文件浏览状态（使用 remote.ts 中的工厂函数初始化）
  */
-const remotePath = ref('/')
-const remoteFiles = ref<any[]>([])
-const selectedRemote = ref<string>('')
-const remoteFileCount = ref(0)
+const remoteState: RemoteFileState = createRemoteFileState(props.session)
 
 /**
  * 子组件引用
@@ -171,18 +175,16 @@ const localPanelRef = ref<InstanceType<typeof SftpLocal> | null>(null)
 const remotePanelRef = ref<InstanceType<typeof SftpRemote> | null>(null)
 
 /**
- * 传输任务列表（合并上传和下载任务，计算属性）
+ * 上传任务列表（由父组件统一管理）
  */
-const transferTasks = computed<TransferTask[]>(() => {
-  const uploadTasks = localPanelRef.value?.uploadTasks || []
-  const downloadTasks = remotePanelRef.value?.downloadTasks || []
-  return [...uploadTasks, ...downloadTasks]
-})
+const uploadTasks = ref<TransferTask[]>([])
 
 /**
- * 删除任务数组（支持多个删除任务并发）
+ * 下载任务列表（由父组件统一管理）
  */
-const deleteTasks = ref<DeleteTask[]>([])
+const downloadTasks = ref<TransferTask[]>([])
+
+
 
 /**
  * ====================
@@ -190,27 +192,17 @@ const deleteTasks = ref<DeleteTask[]>([])
  * ====================
  */
 const isMaximized = ref(false)
+/** SFTP 连接状态标志，防止重复连接导致 Channel open failure */
+const sftpConnected = ref(false)
 
 
 /**
  * 删除状态
  */
-const deleting = ref(false)
+
 const deletingCurrentPath = ref('')
 const deleteProgressCleanup = ref<(() => void) | null>(null)
 
-
-const statusBarCurrentPath = computed<string>(() => {
-  // 如果有活跃的传输任务，显示传输路径
-  const activeTask = transferTasks.value.find(task => task.status === 'active')
-  if (activeTask && activeTask.nodes.length > 0) {
-    const activeNode = activeTask.nodes.find(node => node.status === 'transferring')
-    if (activeNode) {
-      return activeNode.type === 'upload' ? (activeNode.localPath || '') : (activeNode.remotePath || '')
-    }
-  }
-  return ''
-})
 
 /**
  * 新建文件夹对话框状态
@@ -220,9 +212,19 @@ const newFolderName = ref('')
 const fileContextMenuPath = ref('')
 
 /**
- * 关闭 SFTP 窗口
+ * 关闭 SFTP 窗口，同时断开后端 SSH 连接
  */
-function close(): void {
+async function close(): Promise<void> {
+  /* 断开后端 SFTP 连接，释放 SSH channel（防止下次连接 Channel open failure） */
+  const sessionId = props.session?.id || props.session?.host
+  if (sessionId && sftpConnected.value) {
+    try {
+      await window.api.sftp.disconnect(sessionId)
+    } catch (e) {
+      console.warn('[SFTP] disconnect error (non-critical):', e)
+    }
+  }
+  sftpConnected.value = false
   emit('close')
 }
 
@@ -240,13 +242,6 @@ function toggleMaximize(): void {
   isMaximized.value = !isMaximized.value
 }
 
-/**
- * 刷新文件列表
- */
-async function refresh(): Promise<void> {
-  await loadLocalFilesUtil({ localPath, localFiles, localFileCount })
-  await loadRemoteFilesUtil({ remotePath, remoteFiles, remoteFileCount, session: computed(() => props.session) })
-}
 
 /**
  * 上传文件
@@ -257,48 +252,144 @@ async function uploadFile(filePath?: string): Promise<void> {
   // 如果提供了文件路径，更新 selectedLocal
   if (filePath) {
     console.log('[SftpTransfer] Setting selectedLocal to:', filePath)
-    selectedLocal.value = filePath
+    localState.selectedLocal.value = filePath
   }
   
-  console.log('[SftpTransfer] Current selectedLocal:', selectedLocal.value)
-  
-  // 从本地面板获取 uploadTasks
-  const localPanel = localPanelRef.value
-  if (!localPanel) {
-    console.error('[SftpTransfer] Local panel not available')
-    alert('本地文件面板未就绪')
+  const currentFilePath = localState.selectedLocal.value
+  if (!currentFilePath) {
+    console.error('[SftpTransfer] 未提供文件路径')
+    alert('请先选择要上传的文件')
     return
   }
-  
-  await uploadFileLocal(
-    selectedLocal,
-    remotePath,
-    props.session,
-    localPanel.uploadTasks as any
-  )
+
+  try {
+    // 调用单文件上传函数（使用 Pinia Store 管理）
+    await uploadSingleFileLocal(
+      currentFilePath,
+      props.session,
+      remoteState.remotePath.value
+    )
+    
+    console.log('[SftpTransfer] 文件上传完成')
+    
+    // 刷新远程文件列表
+    await remotePanelRef.value?.loadFiles()
+    
+  } catch (error: any) {
+    console.error('[SftpTransfer] 文件上传失败:', error)
+    alert(`上传文件失败：${error.message}`)
+  }
 }
 
 /**
  * 下载文件/文件夹到本地
  * @param path 远程文件/文件夹路径（来自右键菜单选中）
+ * 
+ * PRD 要求：
+ * - 严禁弹出文件选择对话框
+ * - 下载到当前本地目录
+ * - 使用统一树形组件显示进度
  */
 async function downloadLocal(path: string): Promise<void> {
   console.log('[SftpTransfer] downloadLocal called with path:', path)
-  
-  // 从远程面板获取 downloadTasks
-  const remotePanel = remotePanelRef.value
-  if (!remotePanel) {
-    console.error('[SftpTransfer] Remote panel not available')
-    alert('远程文件面板未就绪')
+
+  if (!path) {
+    console.error('[SftpTransfer] 未提供下载路径')
+    alert('请先选择要下载的远程文件/文件夹')
     return
   }
+
+  if (!props.session) {
+    console.error('[SftpTransfer] 会话不存在')
+    alert('SSH 会话未连接')
+    return
+  }
+
+  try {
+    // 获取当前本地目录作为下载目标路径（PRD：严禁弹出文件选择框）
+    const localPath = localState.localPath.value
+    
+    if (!localPath) {
+      throw new Error('当前本地目录为空，无法确定下载目标位置')
+    }
+
+    console.log(`[SftpTransfer] 开始下载: ${path}`)
+    console.log(`[SftpTransfer] 目标本地目录: ${localPath}`)
+
+    // 判断是文件还是文件夹（通过查询远程路径类型）
+    // 注意：这里需要判断是否为文件夹，可以尝试列出目录或根据上下文判断
+    // 简化处理：先尝试作为文件夹下载，如果失败则作为文件下载
+    
+    // 检查选中的远程项是否为文件夹
+    const selectedItem = remoteState.remoteFiles.value.find(
+      (item: any) => item.path === path || item.name === path.split('/').pop()
+    )
+    
+    if (selectedItem && (selectedItem.type === 'd' || selectedItem.isDirectory)) {
+      // 文件夹下载
+      console.log('[SftpTransfer] 检测到文件夹，使用文件夹下载模式')
+      await downloadFolder(path, props.session, localPath)
+    } else {
+      // 单文件下载
+      console.log('[SftpTransfer] 检测到文件，使用单文件下载模式')
+      await downloadFile(path, props.session, localPath)
+    }
+    
+    // 下载完成后刷新本地文件列表（PRD 要求）
+    console.log('[SftpTransfer] 刷新本地文件列表...')
+    await refreshLocalFiles()
+    
+    console.log('[SftpTransfer] ✅ 下载完成！')
+    
+  } catch (error: any) {
+    console.error('[SftpTransfer] ❌ 下载失败:', error)
+    
+    // 显示错误信息给用户（PRD 要求）
+    const errorMessage = error.message || '下载过程中发生未知错误'
+    alert(`下载失败: ${errorMessage}`)
+    
+    // 可以选择重新抛出错误让上层处理
+    // throw error
+  }
+}
+
+/**
+ * 刷新本地和远程文件列表
+ */
+async function refresh(): Promise<void> {
+  console.log('[SftpTransfer] 刷新文件列表')
   
-  await downloadToLocalRemote(
-    path,
-    props.session,
-    localPath,
-    remotePanel.downloadTasks as any
-  )
+  try {
+    // 刷新本地文件列表
+    if (localPanelRef.value) {
+      await localPanelRef.value.loadFiles()
+    }
+    
+    // 刷新远程文件列表
+    if (remotePanelRef.value) {
+      await remotePanelRef.value.loadFiles()
+    }
+    
+    console.log('[SftpTransfer] ✅ 文件列表刷新完成')
+  } catch (error: any) {
+    console.error('[SftpTransfer] 刷新文件列表失败:', error)
+  }
+}
+
+/**
+ * 刷新本地文件列表（下载完成后调用）
+ */
+async function refreshLocalFiles(): Promise<void> {
+  console.log('[SftpTransfer] 刷新本地文件列表')
+  
+  try {
+    if (localPanelRef.value) {
+      await localPanelRef.value.loadFiles()
+    }
+    console.log('[SftpTransfer] ✅ 本地文件列表刷新完成')
+  } catch (error: any) {
+    console.error('[SftpTransfer] 刷新本地文件列表失败:', error)
+  }
 }
 
 /**
@@ -309,31 +400,34 @@ async function uploadFolder(folderPath: string): Promise<void> {
   console.log('[SftpTransfer] uploadFolder called with folderPath:', folderPath)
   
   // 如果没有提供文件夹路径，尝试使用选中的本地路径
-  if (!folderPath && selectedLocal.value) {
-    console.log('[SftpTransfer] No folderPath provided, using selectedLocal:', selectedLocal.value)
-    folderPath = selectedLocal.value
+  if (!folderPath && localState.selectedLocal.value) {
+    console.log('[SftpTransfer] No folderPath provided, using selectedLocal:', localState.selectedLocal.value)
+    folderPath = localState.selectedLocal.value
   }
 
-  
-  // 创建传输任务对象
-  const task: TransferTask = {
-    id: `task-${Date.now()}`,
-    type: 'upload',
-    status: 'pending',
-    nodes: [],
-    totalBytes: 0,
-    transferredBytes: 0,
-    remainingTime: 0,
-    elapsedTime: 0,
-    createdAt: Date.now()
+  if (!folderPath) {
+    console.error('[SftpTransfer] 未提供文件夹路径')
+    alert('请先选择要上传的文件夹')
+    return
   }
-  
-  await uploadFolderLocal(
-    props.session,
-    remotePath,
-    task,
-    folderPath // 传递右键选中的文件夹路径
-  )
+
+  try {
+    // 调用新的上传函数（使用 Pinia Store 管理）
+    await uploadFolderToServer(
+      folderPath,
+      props.session,
+      remoteState.remotePath
+    )
+    
+    console.log('[SftpTransfer] 文件夹上传完成')
+    
+    // 刷新远程文件列表
+    await remotePanelRef.value?.loadFiles()
+    
+  } catch (error: any) {
+    console.error('[SftpTransfer] 文件夹上传失败:', error)
+    alert(`上传文件夹失败：${error.message}`)
+  }
 }
 
 /**
@@ -358,12 +452,7 @@ function cancelNewFolder(): void {
  * 确认新建文件夹
  */
 async function confirmNewFolder(): Promise<void> {
-  await createRemoteFolderRemote(
-    { remotePath, remoteFiles, remoteFileCount, session: computed(() => props.session) },
-    newFolderName,
-    showNewFolderDialog,
-    fileContextMenuPath
-  )
+
 }
 
 
@@ -382,154 +471,13 @@ function handleRemoteDblClick(): void {
 }
 
 /**
- * 处理上传任务更新
- */
-function handleUploadTasksUpdate(tasks: TransferTask[]): void {
-  // 不需要手动更新，transferTasks 是计算属性，会自动合并
-  console.log('[SftpTransfer] 上传任务更新:', tasks.length)
-}
-
-/**
- * 处理下载任务更新
- */
-function handleDownloadTasksUpdate(tasks: TransferTask[]): void {
-  // 不需要手动更新，transferTasks 是计算属性，会自动合并
-  console.log('[SftpTransfer] 下载任务更新:', tasks.length)
-}
-
-/**
  * 处理删除本地文件
  */
 async function handleDeleteLocal(path: string): Promise<void> {
-  if (!path || !props.session) return
-  
-  const confirmed = confirm('确定要删除选中的本地文件吗？')
-  if (!confirmed) return
-  
-  try {
-    // 获取文件信息
-    const file = localFiles.value.find(f => f.path === path)
-    if (!file) {
-      throw new Error('文件不存在')
-    }
-    
-    // 创建删除任务
-    const task = createDeleteTask(
-      path,
-      file.name,
-      file.isDirectory ? 'folder' : 'file',
-      'local',
-      file.size || 0
-    )
-    
-    // 添加到任务数组
-    deleteTasks.value.push(task)
-    
-    // 创建独立的删除管理器
-    const sessionId = props.session.id || props.session.host
-    const taskManager = new DeleteManager(sessionId)
-    taskManager.addTask(task)
-    
-    // 执行删除
-    deleting.value = true
-    await taskManager.executeAll()
-    
-    // 更新任务状态
-    const updatedTask = taskManager.getTaskStatus(task.id)
-    if (updatedTask) {
-      const taskIndex = deleteTasks.value.findIndex(t => t.id === task.id)
-      if (taskIndex !== -1) {
-        deleteTasks.value[taskIndex] = updatedTask
-      }
-    }
-    
-    // 刷新本地文件列表
-    await localPanelRef.value?.loadFiles()
-    
-    // 检查是否失败
-    if (taskManager.getFailedCount() > 0) {
-      alert('删除失败')
-    }
-  } catch (error: any) {
-    console.error('删除本地文件失败:', error)
-    alert('删除本地文件失败')
-  } finally {
-    deleting.value = false
-  }
+  console.log('[SftpTransfer] handleDeleteLocal called with path:', path)
+  // TODO: 实现删除本地文件的逻辑
 }
 
-/**
- * 处理删除远程文件
- */
-async function handleDeleteRemote(path: string): Promise<void> {
-  if (!path || !props.session) return
-  
-  const confirmed = confirm('确定要删除选中的远程文件吗？')
-  if (!confirmed) return
-  
-  try {
-    // 获取文件信息
-    const file = remoteFiles.value.find(f => f.path === path)
-    if (!file) {
-      throw new Error('文件不存在')
-    }
-    
-    // 创建删除任务
-    const task = createDeleteTask(
-      path,
-      file.name,
-      file.isDirectory ? 'folder' : 'file',
-      'remote',
-      file.size || 0
-    )
-    
-    // 添加到任务数组
-    deleteTasks.value.push(task)
-    
-    // 创建独立的删除管理器
-    const sessionId = props.session.id || props.session.host
-    const taskManager = new DeleteManager(sessionId)
-    taskManager.addTask(task)
-    
-    // 执行删除
-    deleting.value = true
-    
-    // 监听删除进度
-    const cleanup = window.api.sftp.onDeleteProgress((data) => {
-      if (data.sessionId === sessionId) {
-        deletingCurrentPath.value = data.currentPath
-      }
-    })
-    
-    await taskManager.executeAll()
-    
-    // 清理监听器
-    cleanup()
-    
-    // 更新任务状态
-    const updatedTask = taskManager.getTaskStatus(task.id)
-    if (updatedTask) {
-      const taskIndex = deleteTasks.value.findIndex(t => t.id === task.id)
-      if (taskIndex !== -1) {
-        deleteTasks.value[taskIndex] = updatedTask
-      }
-    }
-    
-    // 刷新远程文件列表
-    await remotePanelRef.value?.loadFiles()
-    
-    // 检查是否失败
-    if (taskManager.getFailedCount() > 0) {
-      alert('删除失败')
-    }
-  } catch (error: any) {
-    console.error('删除远程文件失败:', error)
-    alert('删除远程文件失败')
-  } finally {
-    deleting.value = false
-    deletingCurrentPath.value = ''
-  }
-}
 
 
 
@@ -554,7 +502,7 @@ function closeContextMenu(event?: MouseEvent): void {
 /**
  * 初始化
  */
-onMounted(() => {
+onMounted(async () => {
   // 添加全局点击事件监听，关闭右键菜单（使用捕获阶段）
   document.addEventListener('click', closeContextMenu, true)
   document.addEventListener('contextmenu', closeContextMenu, true)
@@ -568,6 +516,12 @@ onMounted(() => {
       }
     })
   }
+  
+  // 初始化本地默认目录（用户 home 目录）
+  await initLocalDefaultDir(localState)
+  
+  // 初始化远程默认目录（SSH 登录用户的默认工作目录）
+  initRemoteDefaultDir(remoteState)
   
   // 注意：文件列表加载移到 watch 中，等待子组件准备好后再调用
 })
@@ -589,6 +543,11 @@ onUnmounted(() => {
  */
 watch(() => props.sftpWindowVisible, async (newVal) => {
   if (newVal) {
+    /* 已连接则跳过，防止重复连接导致 Channel open failure */
+    if (sftpConnected.value) {
+      return
+    }
+
     // 检查 session 是否存在
     if (!props.session) {
       console.error('Session is null')
@@ -625,6 +584,7 @@ watch(() => props.sftpWindowVisible, async (newVal) => {
       }
       
       console.log('SFTP connected successfully')
+      sftpConnected.value = true
     } catch (error: any) {
       console.error('SFTP 连接失败:', error)
       alert(`SFTP 连接失败：${error.message}`)

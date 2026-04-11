@@ -5,11 +5,11 @@
  */
 
 <template>
-  <div class="tree-node" :style="{ paddingLeft: (level * 20) + 'px' }">
+  <div class="tree-node">
     <!-- 节点内容 -->
     <div v-if="node" class="node-row" :class="{ 'is-folder': node.isDirectory, 'is-error': node.status === 'error' }">
-      <!-- 名称列 -->
-      <div class="column name-column">
+      <!-- 名称列（根据层级动态调整左侧缩进） -->
+      <div class="column name-column" :style="{ paddingLeft: (level * 20) + 'px' }">
         <!-- 文件夹展开/折叠图标 -->
         <span v-if="node.isDirectory" class="expand-icon" @click="toggleExpand">
           <svg v-if="isExpanded" width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -18,6 +18,10 @@
           <svg v-else width="12" height="12" viewBox="0 0 12 12" fill="none">
             <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
+        </span>
+        <!-- 文件的占位图标（不可见，用于保持与文件夹的对齐） -->
+        <span v-else class="expand-placeholder">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"></svg>
         </span>
         <!-- 文件类型图标 -->
         <span class="file-icon" :class="{ 'is-folder': node.isDirectory }">
@@ -202,18 +206,17 @@ const statusText = computed(() => {
 
 /* 列样式 */
 .column {
-  padding: 0 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding: 6px 12px;
+  display: flex;
+  align-items: center;
 }
 
 .name-column {
   display: flex;
   align-items: center;
   gap: 4px;
-  width: 200px;
-  min-width: 200px;
+  width: 400px;
+  min-width: 400px;
   flex-shrink: 0;
 }
 
@@ -222,10 +225,19 @@ const statusText = computed(() => {
   display: flex;
   align-items: center;
   color: var(--text-color-secondary, #666666);
+  flex-shrink: 0;
 }
 
 .expand-icon:hover {
   color: var(--text-color, #333333);
+}
+
+/* 文件节点的占位图标（与展开/折叠图标同尺寸，保持对齐） */
+.expand-placeholder {
+  display: flex;
+  align-items: center;
+  visibility: hidden;  /* 不可见但占据空间 */
+  flex-shrink: 0;
 }
 
 .file-icon {
@@ -276,6 +288,9 @@ const statusText = computed(() => {
   flex: 1;
   min-width: 200px;
   color: var(--text-color-secondary, #999999);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .arrow-column {
@@ -290,6 +305,9 @@ const statusText = computed(() => {
   flex: 1;
   min-width: 200px;
   color: var(--text-color-secondary, #999999);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .speed-column {

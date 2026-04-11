@@ -85,45 +85,47 @@ SftpTransfer.vue (主组件)
 
 ### 4.2 状态管理
 
-**共享状态**：
-- `transferTasks`: 传输任务数组（每个任务包含节点数组，核心数据结构）
-- `globalContextMenuOwner`: 右键菜单所有者
+**Pinia Store**：
+- `useSftpStore()`: SFTP 状态管理 Store
+- `transferTasks: TransferTask[]`: 传输任务数组（响应式）
 
 **状态说明**：
-- `transferTasks`: 传输任务数组，每个 `TransferTask` 包含一个 `TransferNode[]` 数组，用于管理多个传输任务
+- `transferTasks`: 传输任务数组，每个 `TransferTask` 包含一个根节点 `root: TransferNode`，用于管理传输任务
 - `globalContextMenuOwner`: 用于管理右键菜单的分布式状态，确保同一时间只有一个菜单显示
 
 **组件职责**：
-- `SftpLocal`: 维护 `uploadTasks: TransferTask[]` 数组，管理所有上传任务
-- `SftpRemote`: 维护 `downloadTasks: TransferTask[]` 数组，管理所有下载任务
-- `SftpTransfer`: 合并所有任务到 `transferTasks` 数组，统一传递给状态容器
-- `SftpStatusContainer`: 接收 `transferTasks: TransferTask[]` 数组，遍历渲染多个 `SftpTaskStatus` 组件
-- `SftpTaskStatus`: **新增组件**，接收单个 `TransferTask`，管理单个任务的树形进度显示
+- `SftpLocal`: 本地文件面板组件，触发上传事件
+- `SftpRemote`: 远程文件面板组件，触发下载事件
+- `SftpTransfer`: 主容器组件，协调各子组件，调用 Store 更新任务状态
+- `SftpStatusContainer`: 状态容器组件，从 Store 读取 `transferTasks`，遍历渲染多个 `SftpTaskStatus` 组件
+- `SftpTaskStatus`: **任务状态组件**，接收单个 `TransferTask`，管理单个任务的树形进度显示
   - 包含 `SftpStatusHeader` 显示表头
-  - 包含 `SftpTransferTreeNode` 显示每个节点的传输状态
+  - 包含 `SftpTransferTreeNode` 显示根节点及子节点的传输状态
   - 提供任务级别的操作（取消整个任务、展开/折叠所有节点）
-  - 维护 `SftpTransferTreeNode` 数组，管理节点级别的显示和交互
 - `SftpStatusHeader`: **仅显示表头列**（名称、状态、进度、大小、本地路径、远程路径、速度、剩余时间、经过时间）
-- `SftpTransferTreeNode`: 显示单个节点的传输状态，支持展开/折叠
+- `SftpTransferTreeNode`: 显示单个节点的传输状态，支持展开/折叠，递归显示子节点
 
 ### 4.3 数据流
 
 ```
-SftpLocal (uploadTasks: TransferTask[])
-    ↓ emit('upload-tasks-update', tasks)
-SftpTransfer
-    ↓ merge
-SftpRemote (downloadTasks: TransferTask[])
-    ↓ emit('download-tasks-update', tasks)
-SftpTransfer
-    ↓ :transferTasks="mergedTasks"
-SftpStatusContainer
-    ↓ v-for="task in transferTasks"
-SftpTaskStatus (v-for 循环，每个任务一个实例)
-    ↓ :task="task"
-    ├─ SftpStatusHeader (仅显示表头)
-    └─ SftpTransferTreeNode (v-for="node in task.nodes")
-        ↓ 递归显示子节点
+用户操作（上传/下载）
+    ↓
+SftpLocal / SftpRemote 触发事件
+    ↓
+SftpTransfer 处理事件
+    ↓
+创建 TransferTask（根节点 + 任务信息）
+    ↓
+调用 useSftpStore().addTask(task)
+    ↓
+Pinia Store 更新 transferTasks 数组（响应式）
+    ↓
+SftpStatusContainer 自动渲染（v-for="task in store.transferTasks"）
+    ↓
+SftpTaskStatus (:task="task")
+    ↓ :node="task.root"
+SftpTransferTreeNode
+    ↓ 递归显示子节点（v-for="child in node.children"）
 ```
 
 ### 4.4 组件设计详解
@@ -234,12 +236,14 @@ interface TransferNode {
 
 ### 5.2 TransferTask (传输任务)
 
+批量任务场景用多个TransferNode表示
+
 ```typescript
 interface TransferTask {
   id: string              // 任务 ID
   type: 'upload' | 'download' // 传输类型
   status: 'pending' | 'active' | 'completed' | 'cancelled' // 任务状态
-  nodes: TransferNode[]   // 传输节点列表
+  root: TransferNode      // 根节点（单文件/文件夹为根
   
   // 传输进度统计
   totalBytes: number      // 待传输的总字节数
@@ -255,10 +259,9 @@ interface TransferTask {
 ```
 
 **字段说明**：
+- `root`: 传输任务的根节点，单文件/文件夹传输时直接使用该节点，批量传输时使用虚拟根节点
 - `totalBytes`: 当前任务待传输的总字节数，用于计算当前任务的进度百分比
 - `transferredBytes`: 当前任务已传输的字节数，实时更新
-- `remainingTime`: 基于当前传输速度预估的剩余时间（秒）
-- `elapsedTime`: 从传输开始到当前已经消耗的时间（秒）
 
 ---
 

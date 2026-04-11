@@ -376,41 +376,39 @@ export function closeContextMenu(owner: 'local' | 'remote'): void {
 
 ## 5. 文件清单
 
-### 5.1 组件文件
+### 5.1 SFTP 文件夹树形结构
+
+```
+src/renderer/src/components/session/sftp/
+├── script/                   # 脚本和工具函数目录
+│   ├── index.ts              # 统一导出所有组件和工具函数
+│   ├── transfer-tree.ts      # 传输树节点操作工具（创建、更新、扫描节点）
+│   ├── local.ts              # 本地文件操作工具函数（上传、删除、加载文件）
+│   ├── remote.ts             # 远程文件操作工具函数（上传、下载、删除、加载文件）
+│   ├── deleteManager.ts      # 删除任务管理器（管理批量删除任务的执行和取消）
+│   ├── globalState.ts        # 全局状态管理（已废弃，由组件自行管理状态）
+│   └── globalState.test.ts   # 全局状态测试（已废弃）
+├── status/                   # 状态显示相关组件
+│   ├── SftpStatusContainer.vue  # 状态容器组件（底部状态栏）
+│   ├── SftpStatusHeader.vue     # 状态头组件（表头 + 树形列表）
+│   ├── SftpTransferTreeNode.vue # 树节点组件（显示单个传输节点）
+│   └── SftpTaskStatus.vue       # 任务状态组件（显示任务进度和详情）
+├── SftpLocal.vue             # 本地文件浏览器组件（显示和操作本地文件）
+├── SftpRemote.vue            # 远程文件浏览器组件（显示和操作远程文件）
+├── SftpTransfer.vue          # 主组件（整合本地、远程和状态显示）
+└── arch.md                   # SFTP 组件架构文档
+```
+
+### 5.2 相关文件
 
 | 文件路径 | 功能描述 | 状态 |
 |----------|----------|------|
-| `src/renderer/src/components/session/sftp/SftpLocal.vue` | 本地文件面板 | ✅ |
-| `src/renderer/src/components/session/sftp/SftpRemote.vue` | 远程文件面板 | ✅ |
-| `src/renderer/src/components/session/sftp/SftpTransfer.vue` | 主容器组件 | ✅ |
-| `src/renderer/src/components/session/sftp/SftpStatusBar.vue` | 状态栏组件 | ✅ |
-| `src/renderer/src/components/session/sftp/SftpTransferTree.vue` | 传输树组件 | ✅ |
-| `src/renderer/src/components/session/sftp/TreeNode.vue` | 树节点组件 | ✅ |
-
-### 5.2 状态管理文件
-
-| 文件路径 | 功能描述 | 状态 |
-|----------|----------|------|
-| `src/renderer/src/components/session/sftp/globalState.ts` | 全局状态管理 | ✅ |
-| `src/renderer/src/components/session/sftp/globalState.test.ts` | 状态管理测试 | ✅ |
-
-### 5.3 服务层文件
-
-| 文件路径 | 功能描述 | 状态 |
-|----------|----------|------|
-| `src/renderer/src/services/sftp.ts` | SFTP 服务 | ✅ |
-
-### 5.4 类型定义文件
-
-| 文件路径 | 功能描述 | 状态 |
-|----------|----------|------|
-| `src/shared/types/index.ts` | TransferNode, TransferTask | ✅ |
-
-### 5.5 测试文件
-
-| 文件路径 | 功能描述 | 状态 |
-|----------|----------|------|
+| `src/main/services/sftp.ts` | SFTP 服务实现（主进程） | ✅ |
+| `src/shared/types/sftp.ts` | SFTP 相关类型定义（TransferNode, TransferTask, DeleteTask 等） | ✅ |
 | `e2e/sftp.e2e.spec.ts` | SFTP 功能 E2E 测试 | ✅ |
+| `docs/plan/phase2/sftp/plan.md` | SFTP 实现计划文档 | ✅ |
+| `docs/plan/phase2/sftp/prd.md` | SFTP 产品需求文档 | ✅ |
+| `src/renderer/src/components/session/sftp/arch.md` | SFTP 组件架构文档 | ✅ |
 
 ---
 
