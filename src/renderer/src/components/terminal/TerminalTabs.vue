@@ -6,18 +6,6 @@
 
 <template>
   <div class="terminal-tabs">
-    <!-- 标签页列表 -->
-    <div class="tabs-container">
-      <TerminalTab
-        v-for="tab in tabs"
-        :key="tab.id"
-        :tab="tab"
-        :active="tab.id === activeTabId"
-        @click="handleSelectTab(tab.id)"
-        @close="handleCloseTab(tab.id)"
-      />
-    </div>
-
     <!-- 新建标签按钮（+号按钮） -->
     <!-- 点击后打开会话列表，用户可以选择一个会话创建新的终端标签页 -->
     <button class="new-tab-btn" title="新建标签" @click="handleNewTab">
@@ -29,26 +17,54 @@
         <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" />
       </svg>
     </button>
+
+    <!-- 标签页列表（包含 SSH 终端和 SFTP 文件传输） -->
+    <div class="tabs-container">
+      <TerminalTab
+        v-for="tab in tabs"
+        :key="tab.id"
+        :tab="tab"
+        :active="tab.id === activeTabId"
+        @click="handleSelectTab(tab.id)"
+        @close="handleCloseTab(tab.id)"
+      />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useTerminalStore } from '@/stores/terminal'
 import { useSessionStore } from '@/stores/session'
+import type { Tab } from '@shared/types'
 import TerminalTab from './TerminalTab.vue'
 
 // 状态管理
 const terminalStore = useTerminalStore()
 const sessionStore = useSessionStore()
 
+// 定义属性
+// 支持外部传入过滤后的标签页列表（用于 SSH/SFTP 模式切换）
+const props = withDefaults(defineProps<{
+  /** 外部传入的标签页列表（可选，不传则使用 store 中的全部标签） */
+  tabs?: Tab[]
+}>(), {
+  tabs: undefined
+})
+
 // 定义事件
 const emit = defineEmits<{
   (e: 'new-tab'): void
+  (e: 'mode-change', mode: 'ssh' | 'sftp'): void
 }>()
 
-// 标签页列表
-const tabs = computed(() => terminalStore.tabs)
+// 标签页列表（优先使用外部传入的，否则从 store 获取）
+const tabs = computed(() => {
+  if (props.tabs) {
+    return props.tabs
+  }
+  return terminalStore.tabs
+})
 
 // 当前激活的标签页
 const activeTabId = computed(() => terminalStore.activeTabId)
@@ -124,5 +140,37 @@ const handleNewTab = () => {
 .new-tab-btn:hover {
   background-color: var(--hover-bg, #3c3c3c);
   color: var(--text-color, #cccccc);
+}
+
+/* SSH/SFTP 模式切换按钮 */
+.mode-switch-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #808080);
+  cursor: pointer;
+  border-radius: 4px;
+  flex-shrink: 0;
+  margin-right: 4px;
+  transition: all 0.2s ease;
+}
+
+.mode-switch-btn:hover {
+  background-color: var(--hover-bg, #3c3c3c);
+  color: var(--text-color, #cccccc);
+}
+
+/* SFTP 模式下的激活状态 */
+.mode-switch-btn.sftp-mode {
+  color: var(--primary-color, #409eff);
+  background-color: rgba(64, 158, 255, 0.1);
+}
+
+.mode-switch-btn.sftp-mode:hover {
+  background-color: rgba(64, 158, 255, 0.2);
 }
 </style>

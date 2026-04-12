@@ -101,8 +101,8 @@ import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import type { TransferTask } from '@shared/types/sftp'
 
 import { formatSize } from '@/utils/fs-utils'
-import { requestContextMenu, clearContextMenuOwner, getContextMenuOwner } from './script/globalState'
-import { loadLocalFiles, handleLocalDblClick, type LocalFileState } from './script/local'
+import { requestContextMenu, clearContextMenuOwner } from './script/globalState'
+import { loadLocalFiles, handleLocalDblClick, localUp, type LocalFileState } from './script/local'
 
 /**
  * Props 定义
@@ -156,7 +156,6 @@ const localFileCount = ref(0)
 const getLocalState = (): LocalFileState => ({
   localPath,
   localFiles,
-  selectedLocal,
   localFileCount
 })
 
@@ -240,9 +239,16 @@ function handlePathEnter(): void {
 
 /**
  * 处理上级目录点击
+ * 跨平台兼容：根据路径分隔符自动检测 Windows/Linux/macOS
  */
 function handleUp(): void {
-
+  localUp(getLocalState(), {
+    dirname: (p: string) => {
+      const sep = p.includes('\\') ? '\\' : '/'
+      const idx = p.lastIndexOf(sep)
+      return idx > 0 ? p.substring(0, idx) : (sep === '/' ? '/' : p.substring(0, 3))
+    }
+  })
 }
 
 /**
@@ -263,8 +269,7 @@ function handleClick(path: string, event?: MouseEvent): void {
     
     if (lastIndex !== -1 && currentIndex !== -1) {
       // 找到范围内的所有文件
-      const start = Math.min(lastIndex, currentIndex)
-      const end = Math.max(lastIndex, currentIndex)
+
       // 选中范围内的所有文件（这里简化为选中最后一个）
       selectedLocal.value = path
     } else {

@@ -178,9 +178,18 @@ const api: CustomAPI = {
    * SFTP 文件传输相关方法
    */
   sftp: {
-    // 连接 SFTP 服务器
-    connect: (sessionId: string, config: { host: string; port: number; username: string; password?: string }): Promise<{ success: boolean; error?: string }> => 
-      ipcRenderer.invoke('sftp:connect', sessionId, config),
+    /**
+     * 连接 SFTP 服务器（安全改进版）
+     * 
+     * 改进说明：
+     * - 旧接口：connect(sessionId, config) ← 需要传入完整配置（含密码）
+     * - 新接口：connect(sftpConnectionId, sessionId) ← 只传两个 ID，配置从主进程 Store 获取
+     * 
+     * @param sftpConnectionId - SFTP 连接标识符（每个标签独立，用于建立独立的 SSH/SFTP 连接）
+     * @param sessionId - 会话标识符（用于从主进程 Store 查找连接配置）
+     */
+    connect: (sftpConnectionId: string, sessionId: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:connect', sftpConnectionId, sessionId),
     
     // 列出远程目录内容
     listDir: (sessionId: string, remotePath: string): Promise<{ success: boolean; data?: any[]; error?: string }> => 
@@ -267,6 +276,10 @@ const api: CustomAPI = {
     // 创建本地文件夹
     createLocalFolder: (parentPath: string, folderName: string): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('sftp:create-local-folder', parentPath, folderName),
+
+    // 确保本地目录存在（递归创建）
+    ensureDir: (dirPath: string): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:ensure-dir', dirPath),
 
     // 监听删除本地文件进度
     onDeleteLocalProgress: (callback: (data: { currentPath: string }) => void) => {

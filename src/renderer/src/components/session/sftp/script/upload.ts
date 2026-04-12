@@ -365,12 +365,13 @@ export async function uploadFile(
       elapsed: ''
     }
     
-    // 创建传输任务并添加到 Store
+    // 创建传输任务并添加到 Store（包含必需的 connectionId 字段）
     const task: TransferTask = {
       id: `task-${Date.now()}`,
       type: 'upload',
       status: 'pending',  // 初始状态为待开始，符合 TransferStatus 标准
       root: fileNode,
+      connectionId: session?.id || session?.host || 'unknown',
       totalBytes: 0, // 稍后更新
       transferredBytes: 0,
       remainingTime: 0,
@@ -440,12 +441,13 @@ export async function uploadFolder(
     
     console.log(`[upload] 扫描完成：${scanResult.totalFiles} 个文件，总大小 ${formatSize(scanResult.totalBytes)}`)
     
-    // 第二步：创建传输任务并添加到 Store（返回 reactive 对象）
+    // 第二步：创建传输任务并添加到 Store（返回 reactive 对象，包含必需的 connectionId）
     const task: TransferTask = {
       id: `task-${Date.now()}`,
       type: 'upload',
       status: 'pending',  // 初始状态为待开始，符合 TransferStatus 标准
       root: rootNode,
+      connectionId: session?.id || session?.host || 'unknown',
       totalBytes: scanResult.totalBytes,
       transferredBytes: 0,
       remainingTime: 0,

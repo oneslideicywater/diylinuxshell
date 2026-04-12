@@ -8,7 +8,7 @@
 <template>
   <div 
     class="terminal-tab" 
-    :class="{ active }" 
+    :class="{ active, 'sftp-tab': tab.type === 'sftp' }" 
     @click="$emit('click')"
     @contextmenu.prevent="handleContextMenu"
   >
@@ -17,6 +17,19 @@
       <span class="status-dot"></span>
     </span>
 
+    <!-- 标签类型图标：SFTP 显示文件夹图标 -->
+    <span v-if="tab.type === 'sftp'" class="type-icon sftp-icon" title="SFTP 文件传输">
+      <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+        <path
+          d="M10 1H4a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V5l-2-2zM10 1v4h4"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    </span>
+    
     <!-- 标签标题 -->
     <span class="tab-title">{{ tab.title }}</span>
 
@@ -315,6 +328,32 @@ const handleEditFromError = (sessionId: string): void => {
 
 .terminal-tab.active {
   background-color: var(--tab-active-bg, #1e1e1e);
+}
+
+/* SFTP 标签页特殊样式 */
+.terminal-tab.sftp-tab {
+  background: linear-gradient(135deg, var(--tab-bg, #2d2d2d) 0%, rgba(76, 175, 80, 0.1) 100%);
+}
+
+.terminal-tab.sftp-tab:hover {
+  background: linear-gradient(135deg, var(--tab-hover-bg, #3c3c3c) 0%, rgba(76, 175, 80, 0.15) 100%);
+}
+
+.terminal-tab.sftp-tab.active {
+  background: linear-gradient(135deg, var(--tab-active-bg, #1e1e1e) 0%, rgba(76, 175, 80, 0.2) 100%);
+}
+
+/* 标签类型图标 */
+.type-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary, #999);
+  flex-shrink: 0;
+}
+
+.type-icon.sftp-icon {
+  color: #4CAF50;
 }
 
 /* 连接状态指示器 */

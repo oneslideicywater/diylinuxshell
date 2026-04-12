@@ -10,11 +10,34 @@
     <header class="app-header">
       <div class="header-left" :style="{ width: `${sidebarWidth}px` }">
         <span class="app-title">DIY Linux Shell</span>
+        <!-- SSH/SFTP 模式切换开关 -->
+        <div class="mode-switch">
+          <button 
+            :class="['mode-btn', { active: currentMode === 'ssh' }]"
+            @click="switchMode('ssh')"
+            title="SSH 终端模式"
+          >
+            SSH
+          </button>
+          <button 
+            :class="['mode-btn', { active: currentMode === 'sftp' }]"
+            @click="switchMode('sftp')"
+            title="SFTP 文件传输模式"
+          >
+            SFTP
+          </button>
+        </div>
       </div>
       <div class="header-center">
         <!-- 标签页区域 -->
+        <!-- 根据当前模式显示对应类型的标签页 -->
         <!-- 修复 BUG-009: 监听 new-tab 事件，触发新建会话流程 -->
-        <TerminalTabs @new-tab="emit('add-session')" />
+        <!-- 监听 mode-change 事件，切换 SSH/SFTP 模式 -->
+        <TerminalTabs 
+          :tabs="currentMode === 'ssh' ? sshTabs : sftpTabs"
+          @new-tab="emit('add-session')" 
+          @mode-change="handleModeChange"
+        />
       </div>
       <div class="header-right">
         <!-- 窗口控制按钮 -->
@@ -47,7 +70,7 @@
       >
         <Sidebar 
           @add-session="(groupId?: string) => emit('add-session', groupId)" 
-          @edit-session="(s) => emit('edit-session', s)" 
+          @edit-session="(s) => { console.log('[AppLayout] 收到 edit-session, session:', s?.name, 'id:', s?.id); emit('edit-session', s) }" 
           @open-settings="emit('open-settings')" 
         />
       </aside>
@@ -65,18 +88,40 @@
       <!-- 主内容区 -->
       <main class="app-main">
         <slot>
-          <!-- 默认内容：终端区域 -->
-          <!-- 为每个标签页创建独立的终端实例，切换时保持各自的状态和历史记录 -->
+          <!-- 默认内容：终端/SFTP 区域 -->
+          <!-- 根据当前模式显示不同内容 -->
           <div class="terminal-area">
-            <template v-for="tab in tabs" :key="tab.id">
-              <XTerminal 
-                v-show="tab.id === activeTabId" 
-                :tab="tab" 
-              />
+            <!-- SSH 模式：显示 SSH 终端标签页 -->
+            <template v-if="currentMode === 'ssh'">
+              <template v-for="tab in sshTabs" :key="tab.id">
+                <XTerminal 
+                  v-show="tab.id === activeTabId" 
+                  :tab="tab" 
+                />
+              </template>
+              <!-- SSH 空状态提示 -->
+              <div v-if="sshTabs.length === 0" class="empty-state">
+                <p>请选择或创建一个 SSH 会话</p>
+              </div>
             </template>
-            <div v-if="tabs.length === 0" class="empty-state">
-              <p>请选择或创建一个会话</p>
-            </div>
+
+            <!-- SFTP 模式：显示 SFTP 文件传输标签页 -->
+            <template v-else>
+              <template v-for="tab in sftpTabs" :key="tab.id">
+                <SftpTransfer
+                  v-show="tab.id === activeTabId"
+                  :sftp-window-visible="true"
+                  :session-id="tab.sessionId"
+                  :embedded="true"
+                  :sftp-connection-id="tab.sftpConnectionId"
+                  @close="handleCloseSftp(tab)"
+                />
+              </template>
+              <!-- SFTP 空状态提示 -->
+              <div v-if="sftpTabs.length === 0" class="empty-state">
+                <p>请选择或创建一个 SFTP 会话</p>
+              </div>
+            </template>
           </div>
         </slot>
       </main>
@@ -90,6 +135,7 @@ import { useTerminalStore } from '@/stores/terminal'
 import Sidebar from './Sidebar.vue'
 import TerminalTabs from '@/components/terminal/TerminalTabs.vue'
 import XTerminal from '@/components/terminal/XTerminal.vue'
+import SftpTransfer from '@/components/session/sftp/SftpTransfer.vue'
 import type { Session } from '@shared/types'
 
 // 终端状态管理
@@ -111,8 +157,21 @@ const activeTabId = computed(() => terminalStore.activeTabId)
 // 当前激活的标签页
 const activeTab = computed(() => terminalStore.activeTab)
 
+// SSH 终端标签页（过滤出 type 为 ssh 或未定义的）
+const sshTabs = computed(() => {
+  return tabs.value.filter(tab => tab.type === 'ssh' || !tab.type)
+})
+
+// SFTP 文件传输标签页（过滤出 type 为 sftp 的）
+const sftpTabs = computed(() => {
+  return tabs.value.filter(tab => tab.type === 'sftp')
+})
+
 // 窗口最大化状态
 const isMaximized = ref(false)
+
+// 当前模式：SSH 或 SFTP（从 store 获取）
+const currentMode = computed(() => terminalStore.currentMode)
 
 // 侧边栏宽度相关
 const SIDEBAR_MIN_WIDTH = 200
@@ -228,6 +287,50 @@ const handleClose = () => {
   window.api.windowClose()
 }
 
+/**
+ * 处理模式切换事件（从 TerminalTabs 接收）
+ * @param mode - 目标模式：'ssh' 或 'sftp'
+ */
+const handleModeChange = (mode: 'ssh' | 'sftp') => {
+  terminalStore.switchMode(mode)
+}
+
+/**
+ * 切换 SSH/SFTP 模式（从开关按钮触发）
+ * @param mode - 目标模式：'ssh' 或 'sftp'
+ */
+const switchMode = (mode: 'ssh' | 'sftp') => {
+  // 调用 store 的方法切换模式
+  terminalStore.switchMode(mode)
+}
+
+/**
+ * 处理关闭 SFTP 窗口事件
+ * 切换回 SSH 模式
+ */
+/**
+ * 关闭 SFTP 标签页
+ * 断开独立的 SFTP 连接并移除标签
+ * @param tab 要关闭的 SFTP 标签页
+ */
+const handleCloseSftp = async (tab: any) => {
+  if (tab?.id) {
+    // 断开该标签的独立 SFTP 连接
+    if (tab.sftpConnectionId) {
+      try {
+        await window.api.sftp.disconnect(tab.sftpConnectionId)
+        console.log(`[AppLayout] 断开 SFTP 连接: ${tab.sftpConnectionId}`)
+      } catch (e: any) {
+        console.warn(`[AppLayout] 断开 SFTP 连接失败（非关键错误）:`, e.message)
+      }
+    }
+    
+    // 关闭标签页
+    terminalStore.closeTab(tab.id)
+    console.log(`[AppLayout] 关闭 SFTP 标签页: ${tab.title}`)
+  }
+}
+
 // 监听窗口状态变化
 let cleanupMaximize: (() => void) | null = null
 let cleanupUnmaximize: (() => void) | null = null
@@ -287,6 +390,40 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-color, #cccccc);
+}
+
+/* SSH/SFTP 模式切换开关 */
+.mode-switch {
+  display: flex;
+  align-items: center;
+  margin-left: 16px;
+  background-color: var(--bg-secondary, #2d2d30);
+  border-radius: 4px;
+  padding: 2px;
+  -webkit-app-region: no-drag; /* 允许点击 */
+}
+
+.mode-btn {
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 500;
+  border: none;
+  background-color: transparent;
+  color: var(--text-color-secondary, #858585);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.mode-btn:hover {
+  color: var(--text-color, #cccccc);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.mode-btn.active {
+  background-color: var(--primary-color, #0e7490);
+  color: #ffffff;
 }
 
 .header-center {

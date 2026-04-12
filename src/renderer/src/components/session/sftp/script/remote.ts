@@ -8,6 +8,11 @@ import type { Ref } from 'vue'
 
 /**
  * 远程文件状态接口
+ * 
+ * 安全改进（v2）：
+ * - 移除 session 字段，改用 connectionId
+ * - connectionId 是 SFTP 连接池中的唯一标识符（每个 tab 独立）
+ * - 避免在渲染进程传递会话对象，增强安全性
  */
 export interface RemoteFileState {
   /** 当前远程路径 */
@@ -18,22 +23,26 @@ export interface RemoteFileState {
   selectedRemote: Ref<string>
   /** 远程文件数量 */
   remoteFileCount: Ref<number>
-  /** 会话信息 */
-  session: any
+  /**
+   * SFTP 连接标识符（每个 SFTP 标签独立）
+   * 用于在连接池中查找对应的 SFTP 连接
+   * 对应主进程中 sftpPool.getConnection(connectionId) 的 key
+   */
+  connectionId: string
 }
 
 /**
  * 创建并初始化远程文件状态对象
- * @param session - SSH 会话对象（可为 null）
+ * @param connectionId - SFTP 连接标识符（来自 tab.sftpConnectionId）
  * @returns 远程文件状态对象（包含初始化的响应式变量）
  */
-export function createRemoteFileState(session: any = null): RemoteFileState {
+export function createRemoteFileState(connectionId: string = ''): RemoteFileState {
   return {
     remotePath: ref('/'),
     remoteFiles: ref<any[]>([]),
     selectedRemote: ref<string>(''),
     remoteFileCount: ref(0),
-    session
+    connectionId
   }
 }
 
@@ -51,33 +60,26 @@ export function initRemoteDefaultDir(state: RemoteFileState): void {
 
 /**
  * 加载远程文件列表
- * @param state - 远程文件状态对象
+ * @param state - 远程文件状态对象（包含 connectionId）
  */
 export async function loadRemoteFiles(state: RemoteFileState): Promise<void> {
   try {
-    // 安全获取 session ID
-    if (!state.session) {
-      console.warn('[remote] 会话不存在，无法加载远程文件')
+    // 安全检查 connectionId
+    if (!state.connectionId) {
+      console.warn('[remote] connectionId 不存在，无法加载远程文件')
       state.remoteFiles.value = []
       state.remoteFileCount.value = 0
       return
     }
     
-    const sessionId = state.session.id || (state.session as any).host
-    
-    if (!sessionId) {
-      console.error('[remote] 无法获取会话 ID，请检查连接状态')
-      state.remoteFiles.value = []
-      state.remoteFileCount.value = 0
-      return
-    }
-    
-    const result = await window.api.sftp.listDir(sessionId, state.remotePath.value)
+    // 使用 connectionId 调用 SFTP API（对应主进程连接池的 key）
+    const result = await window.api.sftp.listDir(state.connectionId, state.remotePath.value)
     
     // 确保 result.data 是数组，否则使用空数组
     if (result.success && Array.isArray(result.data)) {
       state.remoteFiles.value = result.data
       state.remoteFileCount.value = result.data.length
+      console.log(`[remote] ✅ 成功加载 ${result.data.length} 个文件/文件夹`)
     } else {
       console.error('加载远程文件失败:', result.error)
       state.remoteFiles.value = []
@@ -116,21 +118,14 @@ export async function remoteUpRemote(
 
 /**
  * 创建远程文件夹
- * @param state - 远程文件状态对象
+ * @param state - 远程文件状态对象（包含 connectionId）
  * @param folderName - 文件夹名称
  */
 export async function remoteMkdir(state: RemoteFileState, folderName: string): Promise<void> {
   try {
-    // 安全检查 session
-    if (!state.session) {
-      alert('会话不存在，无法创建文件夹')
-      return
-    }
-    
-    const sessionId = state.session.id || (state.session as any).host
-    
-    if (!sessionId) {
-      alert('无法获取会话 ID，请检查连接状态')
+    // 安全检查 connectionId
+    if (!state.connectionId) {
+      alert('SFTP 连接不存在，无法创建文件夹')
       return
     }
     
@@ -138,40 +133,37 @@ export async function remoteMkdir(state: RemoteFileState, folderName: string): P
       ? `/${folderName}` 
       : `${state.remotePath.value}/${folderName}`
     
-    const result = await window.api.sftp.mkdir(sessionId, fullPath)
+    // 使用 connectionId 调用 SFTP API
+    const result = await window.api.sftp.mkdir(state.connectionId, fullPath)
     
     if (result.success) {
+      console.log('[remote] ✅ 文件夹创建成功:', fullPath)
       // 创建成功后重新加载文件列表
       await loadRemoteFiles(state)
     } else {
       alert(`创建文件夹失败：${result.error}`)
     }
   } catch (error: any) {
+    console.error('[remote] 创建文件夹异常:', error)
     alert(`创建文件夹失败：${error.message}`)
   }
 }
 
 /**
  * 删除远程文件或文件夹
- * @param state - 远程文件状态对象
+ * @param state - 远程文件状态对象（包含 connectionId）
  * @param path - 要删除的路径
  */
 export async function remoteDeleteFile(state: RemoteFileState, path: string): Promise<void> {
   try {
-    // 安全检查 session
-    if (!state.session) {
-      alert('会话不存在，无法删除文件')
+    // 安全检查 connectionId
+    if (!state.connectionId) {
+      alert('SFTP 连接不存在，无法删除文件')
       return
     }
     
-    const sessionId = state.session.id || (state.session as any).host
-    
-    if (!sessionId) {
-      alert('无法获取会话 ID，请检查连接状态')
-      return
-    }
-    
-    const result = await window.api.sftp.delete(sessionId, path)
+    // 使用 connectionId 调用 SFTP API
+    const result = await window.api.sftp.delete(state.connectionId, path)
     
     if (result.success) {
       // 删除成功后重新加载文件列表
@@ -212,4 +204,17 @@ export function handleRemoteDblClick(event: MouseEvent, state: RemoteFileState):
     loadRemoteFiles(state)
   }
   // 文件类型：双击不做额外操作（可通过右键菜单下载等）
+}
+
+/**
+ * 获取当前选中的远程文件
+ * @param state - 远程文件状态对象
+ * @param selectedRemote - 选中的远程文件路径
+ * @returns 选中的远程文件对象，未选中返回 null
+ */
+export function getSelectedRemoteFile(
+  state: RemoteFileState,
+  selectedRemote: Ref<string>
+): any | null {
+  return state.remoteFiles.value.find(f => f.path === selectedRemote.value) || null
 }

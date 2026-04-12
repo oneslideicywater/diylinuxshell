@@ -5,8 +5,8 @@
  */
 
 <template>
-  <div v-if="props.sftpWindowVisible" class="sftp-overlay" @click="handleOverlayClick">
-    <div class="sftp-window" :class="{ 'is-maximized': isMaximized }" @click.stop>
+  <div v-if="props.sftpWindowVisible" class="sftp-overlay" :class="{ 'embedded-mode': props.embedded }" @click="handleOverlayClick">
+    <div class="sftp-window" :class="{ 'is-maximized': isMaximized, 'embedded-mode': props.embedded }" @click.stop>
       <!-- 窗口头部 -->
       <div class="sftp-header">
         <div class="header-left">
@@ -21,7 +21,7 @@
           </svg>
           <div class="header-title">
             <h3>SFTP 文件传输</h3>
-            <p class="header-subtitle">{{ session?.name }} - {{ session?.host }}:{{ session?.port }}</p>
+            <p class="header-subtitle">{{ currentSession?.name }} - {{ currentSession?.host }}:{{ currentSession?.port }}</p>
           </div>
         </div>
         <div class="header-actions">
@@ -70,7 +70,7 @@
           ref="localPanelRef"
           v-model:local-path="localState.localPath.value"
           v-model:local-files="localState.localFiles.value"
-          v-model:selected-local="localState.selectedLocal.value"
+          v-model:selected-local="localState.localPath.value"
           :upload-tasks="uploadTasks"
           @local-dblclick="handleLocalDblClick"
           @upload-file="uploadFile"
@@ -84,11 +84,13 @@
           v-model:remote-path="remoteState.remotePath.value"
           v-model:remote-files="remoteState.remoteFiles.value"
           v-model:selected-remote="remoteState.selectedRemote.value"
-          :session="props.session"
+          :session="currentSession"
           :download-tasks="downloadTasks"
+          :connection-id="currentSftpConnectionId"
           @remote-dblclick="handleRemoteDblClick"
           @download-local="downloadLocal"
           @create-folder="createRemoteFolder"
+          @delete-remote="handleDeleteRemote"
           
         />
       </div>
@@ -97,23 +99,25 @@
       <SftpStatusContainer
         :local-file-count="localState.localFileCount.value"
         :remote-file-count="remoteState.remoteFileCount.value"
-       
+        :connection-id="currentSftpConnectionId"
       />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import type { Session } from '@shared/types'
 import type { TransferTask } from '@shared/types/sftp'
 import SftpStatusContainer from './status/SftpStatusContainer.vue'
 import SftpLocal from './SftpLocal.vue'
 import SftpRemote from './SftpRemote.vue'
-import { useSftpTransferStore } from '@/stores/sftpTransfer'
+import { useSessionStore } from '@/stores/session'
+
 
 import { uploadFolder as uploadFolderToServer, uploadFile as uploadSingleFileLocal } from './script/upload'
 import { downloadFile, downloadFolder } from './script/download'
+import { deleteFileOrFolder } from './script/delete'
 
 import {
   createLocalFileState,
@@ -131,18 +135,47 @@ import {
 
 
 /**
- * Props 定义
+ * Props 定义（安全改进 v2）
+ * 
+ * 改进说明：
+ * - 旧接口：session: Session | null ← 接收完整会话对象（包含敏感信息）
+ * - 新接口：sessionId: string ← 只接收会话 ID，组件自行从 SessionStore 获取非敏感信息
+ * 
+ * 安全优势：
+ * - 会话对象不再通过 props 传递，减少暴露风险
+ * - 组件按需从 Store 获取信息，遵循最小权限原则
  */
 interface Props {
   /** SFTP 窗口是否可见 */
   sftpWindowVisible: boolean
-  /** SSH 会话对象 */
-  session: Session | null
+  /** 会话 ID（用于从 SessionStore 获取会话信息） */
+  sessionId: string
+  /** 是否为嵌入式模式（true: 切换时不断开连接，false: 弹窗模式会断开） */
+  embedded?: boolean
+  /** SFTP 连接标识符（每个标签独立，用于建立独立的 SFTP 连接） */
+  sftpConnectionId?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   sftpWindowVisible: false,
-  session: null
+  sessionId: '',
+  embedded: false,
+  sftpConnectionId: ''
+})
+
+/**
+ * Session Store 实例
+ * 用于根据 sessionId 获取会话信息（非敏感部分）
+ */
+const sessionStore = useSessionStore()
+
+/**
+ * 计算属性：当前会话对象（从 SessionStore 动态获取）
+ * 只在需要时查询，不存储在组件状态中
+ */
+const currentSession = computed<Session | undefined>(() => {
+  if (!props.sessionId) return undefined
+  return sessionStore.sessions.find(s => s.id === props.sessionId)
 })
 
 /**
@@ -165,8 +198,12 @@ const localState: LocalFileState = createLocalFileState()
 
 /**
  * 远程文件浏览状态（使用 remote.ts 中的工厂函数初始化）
+ * 
+ * 安全改进（v2）：
+ * - 传递 connectionId 而不是 session 对象
+ * - 初始值为空字符串，会在 watch 连接成功后通过 API 使用正确的 connectionId
  */
-const remoteState: RemoteFileState = createRemoteFileState(props.session)
+const remoteState: RemoteFileState = createRemoteFileState(props.sftpConnectionId || '')
 
 /**
  * 子组件引用
@@ -195,6 +232,14 @@ const isMaximized = ref(false)
 /** SFTP 连接状态标志，防止重复连接导致 Channel open failure */
 const sftpConnected = ref(false)
 
+/**
+ * 当前 SFTP 连接标识符
+ * 优先使用 props.sftpConnectionId（每个标签独立），否则回退到 session.id
+ */
+const currentSftpConnectionId = computed(() => {
+  return props.sftpConnectionId || (currentSession.value?.id || currentSession.value?.host || '')
+})
+
 
 /**
  * 删除状态
@@ -212,26 +257,38 @@ const newFolderName = ref('')
 const fileContextMenuPath = ref('')
 
 /**
- * 关闭 SFTP 窗口，同时断开后端 SSH 连接
+ * 关闭 SFTP 窗口
+ * 嵌入式模式下只触发关闭事件，不断开连接（保持连接供下次切换使用）
+ * 弹窗模式下会断开 SFTP 连接，释放 SSH channel
  */
 async function close(): Promise<void> {
-  /* 断开后端 SFTP 连接，释放 SSH channel（防止下次连接 Channel open failure） */
-  const sessionId = props.session?.id || props.session?.host
-  if (sessionId && sftpConnected.value) {
-    try {
-      await window.api.sftp.disconnect(sessionId)
-    } catch (e) {
-      console.warn('[SFTP] disconnect error (non-critical):', e)
+  /* 非嵌入式模式：断开后端 SFTP 连接 */
+  if (!props.embedded) {
+    const connectionId = currentSftpConnectionId.value
+    if (connectionId && sftpConnected.value) {
+      try {
+        await window.api.sftp.disconnect(connectionId)
+      } catch (e) {
+        console.warn('[SFTP] disconnect error (non-critical):', e)
+      }
     }
+    sftpConnected.value = false
   }
-  sftpConnected.value = false
+  
+  /* 嵌入式模式：只触发关闭事件，让父组件切换回 SSH 模式 */
   emit('close')
 }
 
 /**
  * 处理遮罩层点击
+ * 嵌入式模式下禁用此功能（因为是全屏显示，不需要点击外部关闭）
  */
 function handleOverlayClick(): void {
+  /* 嵌入式模式下不处理遮罩层点击 */
+  if (props.embedded) {
+    return
+  }
+  
   close()
 }
 
@@ -252,10 +309,10 @@ async function uploadFile(filePath?: string): Promise<void> {
   // 如果提供了文件路径，更新 selectedLocal
   if (filePath) {
     console.log('[SftpTransfer] Setting selectedLocal to:', filePath)
-    localState.selectedLocal.value = filePath
+    localState.localPath.value = filePath
   }
   
-  const currentFilePath = localState.selectedLocal.value
+  const currentFilePath = localState.localPath.value
   if (!currentFilePath) {
     console.error('[SftpTransfer] 未提供文件路径')
     alert('请先选择要上传的文件')
@@ -266,7 +323,7 @@ async function uploadFile(filePath?: string): Promise<void> {
     // 调用单文件上传函数（使用 Pinia Store 管理）
     await uploadSingleFileLocal(
       currentFilePath,
-      props.session,
+      currentSession.value,
       remoteState.remotePath.value
     )
     
@@ -299,7 +356,7 @@ async function downloadLocal(path: string): Promise<void> {
     return
   }
 
-  if (!props.session) {
+  if (!currentSession.value) {
     console.error('[SftpTransfer] 会话不存在')
     alert('SSH 会话未连接')
     return
@@ -328,11 +385,11 @@ async function downloadLocal(path: string): Promise<void> {
     if (selectedItem && (selectedItem.type === 'd' || selectedItem.isDirectory)) {
       // 文件夹下载
       console.log('[SftpTransfer] 检测到文件夹，使用文件夹下载模式')
-      await downloadFolder(path, props.session, localPath)
+      await downloadFolder(path, currentSession.value, localPath)
     } else {
       // 单文件下载
       console.log('[SftpTransfer] 检测到文件，使用单文件下载模式')
-      await downloadFile(path, props.session, localPath)
+      await downloadFile(path, currentSession.value, localPath)
     }
     
     // 下载完成后刷新本地文件列表（PRD 要求）
@@ -400,9 +457,9 @@ async function uploadFolder(folderPath: string): Promise<void> {
   console.log('[SftpTransfer] uploadFolder called with folderPath:', folderPath)
   
   // 如果没有提供文件夹路径，尝试使用选中的本地路径
-  if (!folderPath && localState.selectedLocal.value) {
-    console.log('[SftpTransfer] No folderPath provided, using selectedLocal:', localState.selectedLocal.value)
-    folderPath = localState.selectedLocal.value
+  if (!folderPath && localState.localPath.value) {
+    console.log('[SftpTransfer] No folderPath provided, using localPath:', localState.localPath.value)
+    folderPath = localState.localPath.value
   }
 
   if (!folderPath) {
@@ -415,7 +472,7 @@ async function uploadFolder(folderPath: string): Promise<void> {
     // 调用新的上传函数（使用 Pinia Store 管理）
     await uploadFolderToServer(
       folderPath,
-      props.session,
+      currentSession.value,
       remoteState.remotePath
     )
     
@@ -478,6 +535,79 @@ async function handleDeleteLocal(path: string): Promise<void> {
   // TODO: 实现删除本地文件的逻辑
 }
 
+/**
+ * 处理删除远程文件/文件夹
+ * PRD 要求：
+ * - 删除前显示确认对话框（显示待删除项列表）
+ * - 使用统一树形组件显示删除进度
+ * - 删除完成后刷新远程文件列表
+ * @param path 远程文件/文件夹路径（来自右键菜单选中）
+ */
+async function handleDeleteRemote(path: string): Promise<void> {
+  console.log('[SftpTransfer] handleDeleteRemote called with path:', path)
+
+  if (!path) {
+    console.error('[SftpTransfer] 未提供删除路径')
+    alert('请先选择要删除的远程文件/文件夹')
+    return
+  }
+
+  if (!currentSession.value) {
+    console.error('[SftpTransfer] 会话不存在')
+    alert('SSH 会话未连接')
+    return
+  }
+
+  try {
+    // 获取文件名/文件夹名，用于确认对话框显示
+    const itemName = path.split('/').pop() || path
+    
+    // 显示确认对话框（PRD 要求）
+    const confirmed = window.confirm(
+      `确定要删除以下文件/文件夹吗？\n\n📄 ${itemName}\n\n此操作不可撤销。`
+    )
+    
+    if (!confirmed) {
+      console.log('[SftpTransfer] 用户取消删除操作')
+      return
+    }
+    
+    console.log(`[SftpTransfer] 开始删除: ${path}`)
+
+    // 执行删除操作（使用 delete.ts 模块）
+    await deleteFileOrFolder(path, currentSession.value)
+    
+    // 删除完成后刷新远程文件列表（PRD 要求）
+    console.log('[SftpTransfer] 刷新远程文件列表...')
+    await refreshRemoteFiles()
+    
+    console.log('[SftpTransfer] ✅ 删除完成！')
+    
+  } catch (error: any) {
+    console.error('[SftpTransfer] ❌ 删除失败:', error)
+    
+    // 显示错误信息给用户（PRD 要求）
+    const errorMessage = error.message || '删除过程中发生未知错误'
+    alert(`删除失败: ${errorMessage}`)
+  }
+}
+
+/**
+ * 刷新远程文件列表（删除完成后调用）
+ */
+async function refreshRemoteFiles(): Promise<void> {
+  console.log('[SftpTransfer] 刷新远程文件列表')
+  
+  try {
+    if (remotePanelRef.value) {
+      await remotePanelRef.value.loadFiles()
+    }
+    console.log('[SftpTransfer] ✅ 远程文件列表刷新完成')
+  } catch (error: any) {
+    console.error('[SftpTransfer] 刷新远程文件列表失败:', error)
+  }
+}
+
 
 
 
@@ -508,10 +638,10 @@ onMounted(async () => {
   document.addEventListener('contextmenu', closeContextMenu, true)
   
   // 监听删除进度
-  if (props.session) {
-    const sessionId = props.session.id || props.session.host
+  if (currentSession.value) {
+    const connectionId = currentSftpConnectionId.value
     deleteProgressCleanup.value = window.api.sftp.onDeleteProgress((data) => {
-      if (data.sessionId === sessionId) {
+      if (data.sessionId === connectionId) {
         deletingCurrentPath.value = data.currentPath
       }
     })
@@ -540,70 +670,105 @@ onUnmounted(() => {
 
 /**
  * 监听 visible 变化，加载文件列表
+ * 嵌入式模式下 sftpWindowVisible 初始即为 true，需要 immediate 触发连接
+ * 
+ * 安全改进：
+ * - 使用 nextTick 确保操作在正确的生命周期时机执行
+ * - 添加完善的空值检查和错误边界处理
+ * - 避免在组件初始化阶段触发可能导致卸载的操作
+ * - 全局 try-catch 防止未捕获异常导致 Vue 更新错误
  */
 watch(() => props.sftpWindowVisible, async (newVal) => {
-  if (newVal) {
-    /* 已连接则跳过，防止重复连接导致 Channel open failure */
-    if (sftpConnected.value) {
-      return
-    }
+  try {
+    if (newVal) {
+      /* 已连接则跳过，防止重复连接导致 Channel open failure */
+      if (sftpConnected.value) {
+        return
+      }
 
-    // 检查 session 是否存在
-    if (!props.session) {
-      console.error('Session is null')
-      alert('会话信息无效')
-      close()
-      return
-    }
-    
-    console.log('SFTP window opened, connecting to:', props.session.host)
-    
-    // 连接 SFTP
-    try {
-      const sessionId = props.session.id || props.session.host
-      // 检查 API 是否存在
-      if (!window.api?.sftp) {
-        console.error('SFTP API not available')
-        alert('SFTP 功能不可用')
-        close()
+      // 检查 session 是否存在（延迟检查以等待 SessionStore 数据加载）
+      if (!currentSession.value) {
+        console.warn('[SFTP] Session 尚未准备好，稍后重试')
+        // 延迟重试一次，避免组件初始化时 SessionStore 还未加载数据
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        // 再次检查（此时 SessionStore 应该已经加载完成）
+        if (!currentSession.value) {
+          console.error('[SFTP] Session 仍然无效')
+          // 不再调用 close()，避免在 immediate watch 中触发组件卸载
+          // 而是设置一个标记让父组件处理
+          sftpConnected.value = false
+          return
+        }
+      }
+      
+      console.log('[SFTP] 开始连接, connectionId:', currentSftpConnectionId.value, 'sessionId:', props.sessionId)
+      
+      // 连接 SFTP（安全改进：只传 ID，配置从主进程 Store 获取）
+      try {
+        const connectionId = currentSftpConnectionId.value
+        const sessionId = props.sessionId || currentSession.value?.id || currentSession.value?.host || ''
+        
+        // 检查必要参数
+        if (!connectionId || !sessionId) {
+          console.error('[SFTP] 缺少连接参数:', { connectionId, sessionId })
+          alert('会话信息无效')
+          sftpConnected.value = false
+          return
+        }
+        
+        // 检查 API 是否存在
+        if (!window.api?.sftp) {
+          console.error('SFTP API not available')
+          alert('SFTP 功能不可用')
+          sftpConnected.value = false
+          return
+        }
+        
+        // ✅ 新接口：只传两个 ID，不再传递敏感信息（密码等）
+        const result = await window.api.sftp.connect(connectionId, sessionId)
+        
+        if (!result.success) {
+          console.error('SFTP 连接失败:', result.error)
+          alert(`SFTP 连接失败：${result.error}`)
+          sftpConnected.value = false
+          return
+        }
+        
+        console.log('[SFTP] 连接成功, connectionId:', connectionId)
+        sftpConnected.value = true
+      } catch (error: any) {
+        console.error('SFTP 连接失败:', error)
+        alert(`SFTP 连接失败：${error.message}`)
+        sftpConnected.value = false
         return
       }
       
-      const result = await window.api.sftp.connect(sessionId, {
-        host: props.session.host,
-        port: props.session.port || 22,
-        username: props.session.username,
-        password: props.session.password
-      })
+      // 连接成功后，等待子组件准备好再加载文件列表
+      await new Promise(resolve => setTimeout(resolve, 100))
       
-      if (!result.success) {
-        console.error('SFTP 连接失败:', result.error)
-        alert(`SFTP 连接失败：${result.error}`)
-        close()
-        return
+      // 使用 nextTick 确保 DOM 更新完成后再操作子组件
+      await nextTick()
+      
+      // 调用子组件的 loadFiles 方法（添加安全检查）
+      try {
+        if (localPanelRef.value?.loadFiles) {
+          await localPanelRef.value.loadFiles()
+        }
+        if (remotePanelRef.value?.loadFiles) {
+          await remotePanelRef.value.loadFiles()
+        }
+      } catch (error: any) {
+        console.warn('[SFTP] 加载文件列表时发生非关键错误:', error)
+        // 文件加载失败不应该阻止连接状态
       }
-      
-      console.log('SFTP connected successfully')
-      sftpConnected.value = true
-    } catch (error: any) {
-      console.error('SFTP 连接失败:', error)
-      alert(`SFTP 连接失败：${error.message}`)
-      close()
-      return
     }
-    
-    // 连接成功后，等待子组件准备好再加载文件列表
-    await new Promise(resolve => setTimeout(resolve, 100))
-    
-    // 调用子组件的 loadFiles 方法
-    if (localPanelRef.value?.loadFiles) {
-      await localPanelRef.value.loadFiles()
-    }
-    if (remotePanelRef.value?.loadFiles) {
-      await remotePanelRef.value.loadFiles()
-    }
+  } catch (error: any) {
+    // 全局异常捕获，防止未捕获的异常导致 Vue 组件更新错误
+    console.error('[SFTP] Watch 回调中发生未预期错误:', error)
+    // 不抛出异常，避免中断 Vue 的更新周期
   }
-})
+}, { immediate: true })
 </script>
 
 <style scoped>
@@ -622,6 +787,19 @@ watch(() => props.sftpWindowVisible, async (newVal) => {
   animation: fadeIn 0.2s ease-out;
 }
 
+/* 嵌入式模式：覆盖弹窗样式，全屏显示 */
+.sftp-overlay.embedded-mode {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  background: transparent;
+  z-index: auto;
+  width: 100%;
+  height: 100%;
+}
+
 /* SFTP 主窗口 */
 .sftp-window {
   width: 1200px;
@@ -633,6 +811,17 @@ watch(() => props.sftpWindowVisible, async (newVal) => {
   flex-direction: column;
   overflow: hidden;
   animation: slideUp 0.3s ease-out;
+}
+
+/* 嵌入式模式：窗口全屏显示 */
+.sftp-window.embedded-mode {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
 }
 
 .sftp-window.is-maximized {

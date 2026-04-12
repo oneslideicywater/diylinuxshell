@@ -107,10 +107,15 @@ import type { TransferTask } from '@shared/types/sftp'
 
 import { formatSize } from '@/utils/fs-utils'
 import { requestContextMenu, clearContextMenuOwner } from './script/globalState'
-import { loadRemoteFiles, remoteUpRemote, handleRemoteDblClick, type RemoteFileState } from './script/remote'
+import { loadRemoteFiles, remoteUpRemote, handleRemoteDblClick, getSelectedRemoteFile, type RemoteFileState } from './script/remote'
 
 /**
- * Props 定义
+ * Props 定义（安全改进 v2）
+ * 
+ * 改进说明：
+ * - 新增 connectionId prop，用于标识 SFTP 连接池中的唯一连接
+ * - 保留 session prop 用于显示会话信息（非敏感部分）
+ * - 所有 SFTP API 调用都使用 connectionId，不再使用 session.id
  */
 interface Props {
   /** 当前远程路径 */
@@ -119,14 +124,24 @@ interface Props {
   remoteFiles: any[]
   /** 选中的远程文件路径 */
   selectedRemote: string
-  /** 当前会话 */
+  /**
+   * 当前会话对象（仅用于显示名称、主机等非敏感信息）
+   * 不再用于 API 调用，API 调用改用 connectionId
+   */
   session: Session | null
   /** 下载任务数组 */
   downloadTasks: TransferTask[]
+  /**
+   * SFTP 连接标识符（每个标签独立）
+   * 对应主进程 sftpPool.getConnection(connectionId) 的 key
+   * 必须与建立连接时使用的 ID 一致
+   */
+  connectionId?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  downloadTasks: () => []
+  downloadTasks: () => [],
+  connectionId: ''
 })
 
 /**
@@ -155,7 +170,7 @@ const emit = defineEmits<{
 const remotePath = ref(props.remotePath)
 const remoteFiles = ref(props.remoteFiles)
 const selectedRemote = ref(props.selectedRemote)
-const session = computed(() => props.session)
+
 const remoteFileCount = ref(0)
 
 /**
@@ -218,26 +233,40 @@ watch(selectedRemote, (newVal) => {
 
 /**
  * 创建远程文件状态对象供函数调用
+ * 
+ * 安全改进（v2）：
+ * - 返回 connectionId 而不是 session 对象
+ * - connectionId 用于在主进程连接池中查找 SFTP 连接
+ * - 符合最小权限原则，不传递不必要的会话信息
  */
 const getRemoteState = (): RemoteFileState => ({
   remotePath,
   remoteFiles,
   selectedRemote,
   remoteFileCount,
-  session: props.session
+  connectionId: props.connectionId || ''
 })
 
 /**
  * 加载远程文件列表
+ * 
+ * 安全改进（v2）：
+ * - 优先检查 connectionId（SFTP 连接标识符）
+ * - 不再强制要求 session 存在（session 仅用于显示）
  */
 async function loadFiles(): Promise<void> {
-  // 检查会话是否存在
-  if (!props.session) {
-    console.warn('[SftpRemote] 会话不存在，跳过加载远程文件')
+  // 检查 SFTP 连接标识符是否存在
+  if (!props.connectionId) {
+    console.warn('[SftpRemote] connectionId 不存在，跳过加载远程文件')
     return
   }
   
-  await loadRemoteFiles(getRemoteState())
+  try {
+    await loadRemoteFiles(getRemoteState())
+  } catch (error: any) {
+    console.error('[SftpRemote] 加载远程文件失败:', error)
+    // 不抛出异常，避免中断 Vue 更新周期
+  }
 }
 
 /**

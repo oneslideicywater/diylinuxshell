@@ -17,7 +17,7 @@
           </svg>
         </button>
       </div>
-      <SessionList @select="handleSelectSession" @edit="handleEditSession" @add-session="handleAddSession" />
+      <SessionList @select="handleSelectSession" @edit-session="handleEditSession" @add-session="handleAddSession" />
     </div>
 
     <!-- 快捷命令区域 -->
@@ -92,6 +92,7 @@ const handleSelectSession = (_session: Session) => {
  * 编辑会话
  */
 const handleEditSession = (session: Session) => {
+  console.log('[Sidebar] handleEditSession, session:', session?.name, 'id:', session?.id)
   emit('edit-session', session)
 }
 

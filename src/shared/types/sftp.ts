@@ -67,6 +67,10 @@ export interface TransferTask {
   /** 传输根节点 */
   root: TransferNode
   
+  // 连接标识（用于隔离不同 SFTP 连接的任务）
+  /** SFTP 连接标识符（每个标签页独立） */
+  connectionId: string
+  
   // 传输进度统计
   /** 待传输的总字节数 */
   totalBytes: number

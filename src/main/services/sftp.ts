@@ -17,6 +17,8 @@ export interface SFTPConfig {
   username: string
   password?: string
   privateKey?: string
+  /** 私钥密码短语（用于加密的私钥） */
+  passphrase?: string
 }
 
 /**
@@ -72,7 +74,8 @@ export class SFTPService {
           port: config.port,
           username: config.username,
           password: config.password,
-          privateKey: config.privateKey
+          privateKey: config.privateKey,
+          passphrase: config.passphrase
         })
     })
   }
@@ -134,9 +137,14 @@ export class SFTPService {
   }
 
   /**
-   * 下载文件
+   * 下载文件（带实时进度回调）
+   * 与 uploadFile 保持一致的进度报告机制
    */
-  async downloadFile(remotePath: string, localPath: string, onProgress?: (progress: number) => void): Promise<void> {
+  async downloadFile(
+    remotePath: string,
+    localPath: string,
+    onProgress?: (progress: number, size: number, transferredSize: number, speed: number) => void
+  ): Promise<void> {
     if (!this.sftpHandle) {
       throw new Error('SFTP not connected')
     }
@@ -151,6 +159,11 @@ export class SFTPService {
 
         const fileSize = stats.size
         let downloadedBytes = 0
+        
+        // 时间追踪变量（用于速度计算）
+        const startTime = Date.now()
+        let lastUpdateTime = startTime
+        let lastDownloadedBytes = 0
 
         // 创建本地目录
         const localDir = path.dirname(localPath)
@@ -178,16 +191,36 @@ export class SFTPService {
               downloadedBytes,
               (err: Error, bytesRead: number, data: Buffer) => {
                 if (err) {
-                  this.sftpHandle.close(handle)
+                  try {
+                    this.sftpHandle.close(handle)
+                  } catch (closeErr: any) {
+                    console.error('[SFTP] 下载文件时关闭句柄失败:', closeErr.message)
+                  }
                   reject(err)
                   return
                 }
 
                 if (bytesRead === 0) {
-                  // 读取完成
-                  this.sftpHandle.close(handle)
-                  writeStream.end()
-                  resolve()
+                  // 读取完成 - 关闭文件并触发最后一次进度回调
+                  try {
+                    this.sftpHandle.close(handle)
+                  } catch (closeErr: any) {
+                    console.error('[SFTP] 下载完成时关闭句柄失败:', closeErr.message)
+                  }
+                  
+                  writeStream.end(() => {
+                    // 确保在文件下载完成时触发最后一次进度回调（100%）
+                    if (onProgress && fileSize > 0) {
+                      const finalSpeed = this.calculateTransferSpeed(
+                        downloadedBytes,
+                        startTime,
+                        lastUpdateTime,
+                        lastDownloadedBytes
+                      )
+                      onProgress(100, fileSize, downloadedBytes, finalSpeed)
+                    }
+                    resolve()
+                  })
                   return
                 }
 
@@ -196,7 +229,23 @@ export class SFTPService {
                   downloadedBytes += bytesRead
                   
                   if (onProgress && fileSize > 0) {
-                    onProgress((downloadedBytes / fileSize) * 100)
+                    // 计算进度百分比
+                    const progress = (downloadedBytes / fileSize) * 100
+                    
+                    // 计算传输速度
+                    const speed = this.calculateTransferSpeed(
+                      downloadedBytes,
+                      startTime,
+                      lastUpdateTime,
+                      lastDownloadedBytes
+                    )
+                    
+                    // 更新时间和已传输字节
+                    lastUpdateTime = Date.now()
+                    lastDownloadedBytes = downloadedBytes
+                    
+                    // 调用进度回调（传递完整数据）
+                    onProgress(progress, fileSize, downloadedBytes, speed)
                   }
 
                   readChunk()
@@ -579,12 +628,19 @@ export class SFTPService {
             }
 
             // 删除空目录
+            console.log('SFTPService.deleteFile 删除空目录:', { remotePath })
+            
+            // 触发进度回调（通知渲染进程正在删除此空目录）
+            if (onProgress) {
+              onProgress(remotePath)
+            }
+            
             this.sftpHandle.rmdir(remotePath, (err: Error) => {
               if (err) {
                 console.error('SFTPService.deleteFile rmdir 失败:', { remotePath, error: err.message })
                 reject(err)
               } else {
-                console.log('SFTPService.deleteFile 删除成功:', { remotePath })
+                console.log('SFTPService.deleteFile 目录删除成功:', { remotePath })
                 resolve()
               }
             })
@@ -592,11 +648,18 @@ export class SFTPService {
         } else {
           // 删除文件
           console.log('SFTPService.deleteFile 删除文件:', { remotePath })
+          
+          // 触发进度回调（通知渲染进程正在删除此文件）
+          if (onProgress) {
+            onProgress(remotePath)
+          }
+          
           this.sftpHandle.unlink(remotePath, (err: Error) => {
             if (err) {
               console.error('SFTPService.deleteFile unlink 失败:', { remotePath, error: err.message })
               reject(err)
             } else {
+              console.log('SFTPService.deleteFile 文件删除成功:', { remotePath })
               resolve()
             }
           })

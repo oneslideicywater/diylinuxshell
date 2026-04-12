@@ -3,7 +3,7 @@
   
   <!-- 会话表单对话框 -->
   <SessionForm
-    v-if="showSessionForm"
+    :visible="showSessionForm"
     :session="editingSession"
     :default-group-id="defaultGroupId"
     @close="handleCloseSessionForm"
@@ -52,16 +52,29 @@ const handleAddSession = (groupId?: string) => {
 /**
  * 编辑会话
  */
-const handleEditSession = async (session: Session) => {
+const handleEditSession = async (session: Session | undefined) => {
+  console.log('[Home] handleEditSession 被调用, session:', session?.name, 'id:', session?.id)
+  
+  if (!session) {
+    console.error('[Home] handleEditSession 收到空 session!')
+    return
+  }
+  
   // 重新从后端获取会话，确保密码是解密后的
-  // 因为 sessionStore 中可能存储的是旧的加密密码
-  const freshSession = await window.api.session.getById(session.id)
+  let freshSession: Session | null = null
+  try {
+    freshSession = await window.api.session.getById(session.id)
+  } catch (e) {
+    console.warn('[Home] getById 失败, 使用原始 session:', e)
+  }
+  
   if (freshSession) {
     editingSession.value = freshSession
   } else {
     editingSession.value = session
   }
   showSessionForm.value = true
+  console.log('[Home] showSessionForm 设置为 true')
 }
 
 /**

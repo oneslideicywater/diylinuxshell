@@ -1,11 +1,14 @@
 /**
  * SFTP IPC 处理器
  * 处理渲染进程的 SFTP 相关 IPC 通信
+ * 安全改进：连接配置从主进程 Store 获取，不在 IPC 中传输密码
  * @module ipc/sftp
  */
 
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { sftpPool, type SFTPConfig, type FileInfo } from '../services/sftp'
+import { StoreService } from '../services/store'
+import { CryptoService } from '../services/crypto'
 import * as fs from 'fs'
 import * as path from 'path'
 
@@ -14,17 +17,47 @@ import * as path from 'path'
  */
 export function registerSFTPIpcHandlers(): void {
   /**
-   * 连接 SFTP 服务器
+   * 连接 SFTP 服务器（安全改进版）
+   * 
+   * 改进说明：
+   * - 旧接口：connect(sftpConnectionId, config) ← 渲染进程传完整配置（含密码）
+   * - 新接口：connect(sftpConnectionId, sessionId) ← 只传两个 ID，配置从 Store 获取
+   * 
+   * 优势：
+   * - 密码不离开主进程，安全性更高
+   * - 与 SSH 连接架构统一
+   * - 配置集中管理，修改一处全局生效
    */
-  ipcMain.handle('sftp:connect', async (_event, sessionId: string, config: SFTPConfig) => {
+  ipcMain.handle('sftp:connect', async (_event, sftpConnectionId: string, sessionId: string) => {
     try {
-      console.log('Connecting to:', config.host, 'with session:', sessionId)
-      const service = sftpPool.getConnection(sessionId)
+      console.log(`[SFTP] 创建连接: ${sftpConnectionId} for session: ${sessionId}`)
+      
+      // 从 StoreService 获取会话配置（包含加密的密码）
+      const session = StoreService.getSessionById(sessionId)
+      if (!session) {
+        throw new Error(`会话不存在: ${sessionId}`)
+      }
+      
+      // 解密密码和密钥短语（安全操作，只在主进程执行）
+      const config: SFTPConfig = {
+        host: session.host,
+        port: session.port || 22,
+        username: session.username,
+        password: session.password ? CryptoService.decrypt(session.password) : undefined,
+        privateKey: session.keyPath,  // Session 使用 keyPath 字段
+        passphrase: session.keyPassphrase ? CryptoService.decrypt(session.keyPassphrase) : undefined
+      }
+      
+      // 从连接池获取或创建服务实例
+      const service = sftpPool.getConnection(sftpConnectionId)
+      
+      // 使用解密后的配置建立连接
       await service.connect(config)
-      console.log('Connected successfully to:', config.host, 'session:', sessionId)
+      
+      console.log(`[SFTP] 连接成功: ${sftpConnectionId} → ${config.host}:${config.port}`)
       return { success: true }
     } catch (error: any) {
-      console.error('Connect error:', error.message)
+      console.error('[SFTP] Connect error:', error.message)
       return { success: false, error: error.message }
     }
   })
@@ -60,16 +93,16 @@ export function registerSFTPIpcHandlers(): void {
           throw new Error('BrowserWindow not found')
         }
 
-        // 进度回调函数
-        const onProgress = (progress: number) => {
+        // 进度回调函数（接收完整数据：progress, size, transferredSize, speed）
+        const onProgress = (progress: number, size: number, transferredSize: number, speed: number) => {
           window.webContents.send('sftp:downloadProgress', {
             sessionId,
             localPath,
             remotePath,
             progress,
-            size: 0,
-            transferredSize: 0,
-            speed: 0
+            size,
+            transferredSize,
+            speed
           })
         }
 
@@ -310,6 +343,18 @@ export function registerSFTPIpcHandlers(): void {
     try {
       const fullPath = path.join(parentPath, folderName)
       await fs.promises.mkdir(fullPath, { recursive: true })
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  /**
+   * 确保本地目录存在（递归创建）
+   */
+  ipcMain.handle('sftp:ensure-dir', async (_event, dirPath: string) => {
+    try {
+      await fs.promises.mkdir(dirPath, { recursive: true })
       return { success: true }
     } catch (error: any) {
       return { success: false, error: error.message }

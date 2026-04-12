@@ -43,20 +43,24 @@
 
       <!-- 连接按钮 -->
       <button class="action-btn connect" title="连接" @click.stop="$emit('connect')">
-        <svg width="14" height="14" viewBox="0 0 14 14">
+        <svg width="14" height="14" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
           <path
-            d="M12 2L7 7M12 2l-1 5-2-2M12 2l-5 1 2 2M5 9l-3 3M4 10l-1 1"
+            d="M883.3434 126.191914c-28.430589-28.430589-65.83926-43.89284-106.240623-43.89284-39.902582 0-77.810034 15.46225-106.240623 43.89284l-171.082319 171.082319c-5.985387 5.985387-5.985387 15.46225 0 20.948855 5.985387 5.985387 15.46225 5.985387 20.948855 0l171.082319-171.082319c22.445202-22.445202 52.870921-34.914759 84.792986-34.914759 31.922065 0 62.347784 12.469557 84.792986 34.914759 46.885533 46.885533 46.885533 122.700438 0 169.585972l-226.945933 226.945933c-46.885533 46.885533-122.700438 46.885533-169.585972 0-5.985387-5.985387-15.46225-5.985387-20.948855 0-5.985387 5.985387-5.985387 15.46225 0 20.948855 29.428154 29.428154 67.834389 43.89284 106.240623 43.89284s76.81247-14.464686 106.240623-43.89284l226.945933-226.945933C941.700925 279.816853 941.700925 184.54944 883.3434 126.191914z"
+            fill="currentColor"
             stroke="currentColor"
-            stroke-width="1.2"
-            fill="none"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+            stroke-width="60"
+          />
+          <path
+            d="M502.772528 676.84754l-171.082319 171.082319c-46.885533 46.885533-122.700438 46.885533-169.585972 0-46.885533-46.885533-46.885533-122.700438 0-169.585972L389.05017 450.899172c22.445202-22.445202 52.870921-34.914759 84.792986-34.914759s62.347784 12.469557 84.792986 34.914759c5.985387 5.985387 15.46225 5.985387 20.948855 0 5.985387-5.985387 5.985387-15.46225 0-20.948855-28.430589-28.430589-65.83926-43.89284-106.240623-43.89284s-77.810034 15.46225-106.240623 43.89284l-226.945933 226.945933c-58.357526 58.357526-58.357526 153.624939 0 211.982465 28.430589 28.430589 65.83926 43.89284 106.240623 43.89284 39.902582 0 77.810034-15.46225 106.240623-43.89284l171.082319-171.082319c5.985387-5.985387 5.985387-15.46225 0-20.948855C517.735996 670.862153 508.259133 670.862153 502.772528 676.84754z"
+            fill="currentColor"
+            stroke="currentColor"
+            stroke-width="60"
           />
         </svg>
       </button>
 
       <!-- 编辑按钮 -->
-      <button class="action-btn edit" title="编辑" @click.stop="$emit('edit')">
+      <button ref="editBtnRef" class="action-btn edit" title="编辑" @click.stop>
         <svg width="14" height="14" viewBox="0 0 14 14">
           <path
             d="M10.5 2l1.5 1.5-6 6H4V8l6-6zM3 12h8"
@@ -78,6 +82,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import type { Session } from '@shared/types'
 
 // 定义属性
@@ -98,20 +103,59 @@ const emit = defineEmits<{
   (e: 'sftp'): void
 }>()
 
+/* 编辑按钮 ref（用于原生事件绑定） */
+const editBtnRef = ref<HTMLButtonElement | null>(null)
+
 /**
  * 处理点击事件
  * 如果点击来自操作按钮区域，则不触发 click 事件
  */
 const handleClick = (event: MouseEvent): void => {
-  // 检查点击目标是否在操作按钮区域内
   const target = event.target as HTMLElement
   if (target.closest('.session-actions')) {
-    // 点击的是操作按钮，不触发 click 事件
     return
   }
-  // 触发 click 事件
   emit('click')
 }
+
+/* 使用 ref 存储当前 session 的快照，避免闭包问题 */
+const currentSession = ref<Session>(props.session)
+
+/* 同步 props.session 到本地 ref */
+watch(() => props.session, (newSession) => {
+  console.log('[SessionItem] props.session 变化:', newSession?.name, 'id:', newSession?.id)
+  currentSession.value = newSession
+}, { immediate: true })
+
+/**
+ * 编辑按钮点击处理函数
+ * 使用原生事件绑定确保可靠触发
+ */
+const handleEditClick = (): void => {
+  console.log('[SessionItem] 编辑按钮被点击, session:', currentSession.value?.name, 'id:', currentSession.value?.id)
+  emit('edit')
+}
+
+/* 组件挂载时确认 session 值 */
+onMounted(() => {
+  console.log('[SessionItem] onMounted, session:', currentSession.value?.name, 'id:', currentSession.value?.id)
+  
+  /* 使用原生 addEventListener 绑定编辑按钮点击事件 */
+  /* 解决 Vue 模板编译 @click 在特定条件下不触发的问题 */
+  if (editBtnRef.value) {
+    console.log('[SessionItem] editBtnRef 已绑定, 按钮存在:', !!editBtnRef.value)
+    editBtnRef.value.addEventListener('click', handleEditClick)
+  } else {
+    console.warn('[SessionItem] editBtnRef 为空!')
+  }
+})
+
+onBeforeUnmount(() => {
+  /* 组件卸载时清理事件监听器 */
+  if (editBtnRef.value) {
+    editBtnRef.value.removeEventListener('click', handleEditClick)
+  }
+})
 </script>
 
 <style scoped>

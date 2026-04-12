@@ -73,6 +73,10 @@ export interface Tab {
   status: ConnectionStatus
   /** 终端进程ID */
   terminalId?: string
+  /** 标签类型：SSH终端 或 SFTP文件传输 */
+  type?: 'ssh' | 'sftp'
+  /** SFTP 连接标识符（每个 SFTP 标签独立，避免连接冲突） */
+  sftpConnectionId?: string
 }
 
 /**

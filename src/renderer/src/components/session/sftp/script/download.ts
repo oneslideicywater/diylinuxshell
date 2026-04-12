@@ -165,10 +165,23 @@ async function downloadSingleFile(
   console.log(`[download] 远程路径: ${node.remotePath}`)
   console.log(`[download] 本地路径: ${node.localPath}`)
   
-  // 更新状态为传输中
-  sftpTransferStore.updateNodeStatus(taskId, node.id, { status: 'transferring' })
+  // 检查任务状态：如果当前是 pending，则更新为 transferring
+  // 只有当第一个文件节点真正开始传输时，才改变任务状态
+  const currentTask = sftpTransferStore.getTask(taskId)
+  if (currentTask && currentTask.status === 'pending') {
+    sftpTransferStore.updateTaskStatus(taskId, 'transferring')
+    console.log('[download] 任务状态从 pending 转换为 transferring（首个文件开始下载）')
+  }
+  
+  // 更新节点状态为传输中
+  sftpTransferStore.updateNodeStatus(taskId, node.id, {
+    status: 'transferring',
+    progress: 0,
+    startTime: Date.now()
+  })
   
   const startTime = Date.now()
+  const sessionId = session.id || session.host
   
   try {
     // 验证路径存在
@@ -181,26 +194,58 @@ async function downloadSingleFile(
                      node.localPath.substring(0, node.localPath.lastIndexOf('\\'))
     
     if (localDir) {
-      // 使用 Node.js fs 模块确保目录存在（通过 IPC 调用）
-      // 注意：如果 window.api.fs 不存在，可以尝试使用其他方式创建目录
+      // 使用 SFTP API 确保本地目录存在（递归创建）
       try {
-        if ((window.api as any).fs?.ensureDir) {
-          await (window.api as any).fs.ensureDir(localDir)
-        } else {
-          // 备用方案：使用 shell 命令创建目录（如果 API 不可用）
-          console.warn('[download] fs.ensureDir API 不可用，跳过目录创建')
+        const result = await window.api.sftp.ensureDir(localDir)
+        if (!result.success) {
+          console.warn(`[download] 创建本地目录失败（可能已存在）: ${localDir}`, result.error)
         }
       } catch (dirError: any) {
-        console.warn(`[download] 创建本地目录失败（可能已存在）: ${localDir}`, dirError)
+        console.warn(`[download] 创建本地目录异常: ${localDir}`, dirError)
       }
     }
     
+    // 监听下载进度（实时更新节点状态）
+    const cleanupProgress = window.api.sftp.onDownloadProgress((data) => {
+      // 匹配当前正在下载的文件（通过远程路径和本地路径）
+      if (data.remotePath === node.remotePath && data.localPath === node.localPath) {
+        // 计算进度信息
+        const progress = Math.round((data.transferredSize / data.size) * 100)
+        const speed = data.speed
+        
+        // 计算剩余时间
+        let remaining = ''
+        if (speed > 0) {
+          const remainingBytes = data.size - data.transferredSize
+          remaining = formatTime(Math.ceil(remainingBytes / speed))
+        }
+        
+        // 计算已用时间
+        let elapsed = ''
+        if (node.startTime) {
+          elapsed = formatTime(Math.round((Date.now() - node.startTime) / 1000))
+        }
+        
+        // 实时更新视图（通过 Store API，利用 Pinia reactive 特性）
+        sftpTransferStore.updateNodeStatus(taskId, node.id, {
+          progress,
+          size: data.size,
+          speed,
+          remaining,
+          elapsed
+        })
+      }
+    })
+    
     // 执行下载操作（带进度回调）
-    await window.api.sftp.download(
-      session.id || session.host,
-      node.remotePath,
-      node.localPath
-    )
+    const result = await window.api.sftp.download(sessionId, node.remotePath, node.localPath)
+    
+    // 清理进度监听
+    cleanupProgress()
+    
+    if (!result.success) {
+      throw new Error(result.error || '下载失败')
+    }
     
     // 下载完成 - 更新最终状态
     const endTime = Date.now()
@@ -251,21 +296,29 @@ async function downloadFolderContent(
     // 如果是文件夹，先在本地创建目录
     if (node.localPath) {
       try {
-        // 使用安全的 API 调用方式
-        if ((window.api as any).fs?.ensureDir) {
-          await (window.api as any).fs.ensureDir(node.localPath)
+        // 使用 SFTP API 确保本地目录存在（递归创建）
+        const result = await window.api.sftp.ensureDir(node.localPath)
+        if (!result.success) {
+          console.warn(`[download] 创建本地目录失败（可能已存在）: ${node.localPath}`, result.error)
         } else {
-          console.warn('[download] fs.ensureDir API 不可用，跳过目录创建')
+          console.log(`[download] 创建本地目录: ${node.localPath}`)
         }
-        console.log(`[download] 创建本地目录: ${node.localPath}`)
       } catch (error: any) {
-        console.warn(`[download] 创建本地目录失败（可能已存在）: ${node.localPath}`, error)
+        console.warn(`[download] 创建本地目录异常: ${node.localPath}`, error)
       }
+    }
+    
+    // 检查任务状态：如果当前是 pending，则更新为 transferring
+    const currentTask = sftpTransferStore.getTask(taskId)
+    if (currentTask && currentTask.status === 'pending') {
+      sftpTransferStore.updateTaskStatus(taskId, 'transferring')
+      console.log('[download] 任务状态从 pending 转换为 transferring（文件夹下载开始）')
     }
     
     // 通过 Store 更新状态为传输中（利用 Pinia reactive 特性）
     sftpTransferStore.updateNodeStatus(taskId, node.id, {
-      status: 'transferring'
+      status: 'transferring',
+      startTime: Date.now()
     })
     
     // 递归下载所有子节点
@@ -359,12 +412,13 @@ export async function downloadFile(
       elapsed: ''
     }
     
-    // 创建传输任务并添加到 Store（type 为 'download'）
+    // 创建传输任务并添加到 Store（type 为 'download'，包含必需的 connectionId）
     const task: TransferTask = {
       id: `task-${Date.now()}`,
       type: 'download', // 关键：标记为下载任务
       status: 'pending',
       root: fileNode,
+      connectionId: session?.id || session?.host || 'unknown',
       totalBytes: 0,
       transferredBytes: 0,
       remainingTime: 0,
@@ -436,12 +490,13 @@ export async function downloadFolder(
     
     console.log(`[download] 扫描完成：${scanResult.totalFiles} 个文件，总计 ${(scanResult.totalBytes / 1024 / 1024).toFixed(2)} MB`)
     
-    // 创建传输任务（type 为 'download'）
+    // 创建传输任务（type 为 'download'，包含必需的 connectionId）
     const task: TransferTask = {
       id: `task-${Date.now()}`,
       type: 'download', // 关键：标记为下载任务
       status: 'pending',
       root: scanResult.rootNode,
+      connectionId: session?.id || session?.host || 'unknown',
       totalBytes: scanResult.totalBytes,
       transferredBytes: 0,
       remainingTime: 0,

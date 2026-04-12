@@ -235,9 +235,6 @@
     <SessionForm :visible="sessionFormVisible" :session="editingSession" @close="handleCloseSessionForm"
       @submit="handleSubmitSessionForm" />
 
-    <!-- SFTP 传输窗口 -->
-    <SftpTransfer :sftp-window-visible="sftpVisible" :session="sftpSession" @close="handleCloseSftp" />
-
     <!-- 确认对话框 -->
     <ConfirmDialog :visible="confirmDialogVisible" :title="confirmDialogTitle" :message="confirmDialogMessage"
       :is-warning="confirmDialogIsWarning" @close="handleConfirmDialogClose" @confirm="handleConfirmDialogConfirm"
@@ -258,7 +255,6 @@ import { useErrorDialogStore } from '@/stores/errorDialog'
 import SessionItem from './SessionItem.vue'
 import SessionGroupForm from './SessionGroupForm.vue'
 import SessionForm from './SessionForm.vue'
-import SftpTransfer from './sftp/SftpTransfer.vue'
 import ErrorDialog from '@/components/common/ErrorDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import SessionGroupTree from './SessionGroupTree.vue'
@@ -324,10 +320,6 @@ const editingGroup = ref<SessionGroup | null>(null)
 // 会话表单相关状态
 const sessionFormVisible = ref(false)
 const editingSession = ref<Session | null>(null)
-
-// SFTP 传输相关状态
-const sftpVisible = ref(false)
-const sftpSession = ref<Session | null>(null)
 
 // 列表右键菜单状态
 const listContextMenuVisible = ref(false)
@@ -900,23 +892,20 @@ const handleCloseSessionForm = () => {
 }
 
 /**
- * 关闭 SFTP 窗口
- */
-const handleCloseSftp = () => {
-  sftpVisible.value = false
-  sftpSession.value = null
-}
-
-/**
- * 打开 SFTP 传输
+ * 打开 SFTP 文件传输（创建 SFTP 标签页）
  */
 const handleSftp = (session: Session) => {
   if (!session) {
     console.error('Session is null')
     return
   }
-  sftpSession.value = session
-  sftpVisible.value = true
+  
+  // 切换到 SFTP 模式
+  terminalStore.switchMode('sftp')
+  
+  // 调用 terminal store 创建 SFTP 标签页
+  const sftpTab = terminalStore.createSftpTab(session.name, session)
+  console.log(`[SessionList] 创建 SFTP 标签页: ${sftpTab.title} (ID: ${sftpTab.id})`)
 }
 
 /**
@@ -1014,6 +1003,9 @@ const handleSelect = (session: Session) => {
  */
 const handleConnect = async (session: Session) => {
   try {
+    // 切换到 SSH 模式
+    terminalStore.switchMode('ssh')
+
     // 创建标签页（初始状态为disconnected）
     const tab = terminalStore.createTab(session.name, session.id)
 
@@ -1044,6 +1036,7 @@ const handleConnect = async (session: Session) => {
  * 编辑会话
  */
 const handleEdit = (session: Session) => {
+  console.log('[SessionList] handleEdit 被调用, session:', session.name)
   emit('edit-session', session)
 }
 

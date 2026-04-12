@@ -57,7 +57,11 @@ export interface CustomAPI {
 
   // SFTP 文件传输
   sftp: {
-    connect: (sessionId: string, config: { host: string; port: number; username: string; password?: string }) => Promise<{ success: boolean; error?: string }>
+    /**
+     * 连接 SFTP 服务器（安全改进版）
+     * 只传两个 ID，配置从主进程 Store 获取
+     */
+    connect: (sftpConnectionId: string, sessionId: string) => Promise<{ success: boolean; error?: string }>
     listDir: (sessionId: string, remotePath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
     download: (sessionId: string, remotePath: string, localPath: string) => Promise<{ success: boolean; error?: string }>
     downloadFolder: (sessionId: string, remotePath: string, localPath: string) => Promise<{ success: boolean; error?: string }>
@@ -76,6 +80,7 @@ export interface CustomAPI {
     deleteLocalFile: (localPath: string) => Promise<{ success: boolean; error?: string }>
     onDeleteLocalProgress: (callback: (data: { currentPath: string }) => void) => () => void
     createLocalFolder: (parentPath: string, folderName: string) => Promise<{ success: boolean; error?: string }>
+    ensureDir: (dirPath: string) => Promise<{ success: boolean; error?: string }>
   }
 }
 

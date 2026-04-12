@@ -153,11 +153,14 @@ interface Props {
   localFileCount: number
   /** 远程文件数量 */
   remoteFileCount: number
+  /** SFTP 连接标识符（用于隔离不同连接的任务） */
+  connectionId?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
   localFileCount: 0,
-  remoteFileCount: 0
+  remoteFileCount: 0,
+  connectionId: ''
 })
 
 /**
@@ -167,6 +170,17 @@ const props = withDefaults(defineProps<Props>(), {
 const { 
   transferTasks       // ← 使用完整的任务列表，在组件内根据过滤器筛选
 } = storeToRefs(sftpTransferStore)
+
+/**
+ * 当前连接的传输任务（按 connectionId 过滤）
+ * 如果没有指定 connectionId，则返回所有任务（兼容旧逻辑）
+ */
+const currentConnectionTasks = computed(() => {
+  if (!props.connectionId) {
+    return transferTasks.value
+  }
+  return transferTasks.value.filter(task => task.connectionId === props.connectionId)
+})
 
 // ========== 任务过滤相关逻辑 ==========
 
@@ -208,8 +222,8 @@ const currentFilterLabel = computed(() => {
  * 排序：按创建时间降序（最新任务排在最前面）
  */
 const filteredTasks = computed(() => {
-  // 从完整任务列表中根据过滤器筛选
-  return transferTasks.value
+  // 从当前连接任务列表中根据过滤器筛选
+  return currentConnectionTasks.value
     .filter(task => task.status === taskFilter.value)
     .sort((a, b) => b.createdAt - a.createdAt)  // 按创建时间降序排列
 })
@@ -218,35 +232,35 @@ const filteredTasks = computed(() => {
  * 待开始任务的数量
  */
 const pendingCount = computed(() => {
-  return transferTasks.value.filter(task => task.status === 'pending').length
+  return currentConnectionTasks.value.filter(task => task.status === 'pending').length
 })
 
 /**
  * 传输中任务的数量
  */
 const transferringCount = computed(() => {
-  return transferTasks.value.filter(task => task.status === 'transferring').length
+  return currentConnectionTasks.value.filter(task => task.status === 'transferring').length
 })
 
 /**
  * 已完成任务的数量
  */
 const completedCount = computed(() => {
-  return transferTasks.value.filter(task => task.status === 'completed').length
+  return currentConnectionTasks.value.filter(task => task.status === 'completed').length
 })
 
 /**
  * 错误任务的数量
  */
 const errorCount = computed(() => {
-  return transferTasks.value.filter(task => task.status === 'error').length
+  return currentConnectionTasks.value.filter(task => task.status === 'error').length
 })
 
 /**
  * 已取消任务的数量
  */
 const cancelledCount = computed(() => {
-  return transferTasks.value.filter(task => task.status === 'cancelled').length
+  return currentConnectionTasks.value.filter(task => task.status === 'cancelled').length
 })
 
 /**
@@ -407,8 +421,8 @@ function stopResize(): void {
  * 通过 Store 更新指定节点的展开状态
  */
 function handleNodeExpanded(nodeId: string, expanded: boolean): void {
-  // 遍历所有任务，找到包含该节点的任务并更新其展开状态
-  for (const task of transferTasks.value) {
+  // 遍历当前连接的所有任务，找到包含该节点的任务并更新其展开状态
+  for (const task of currentConnectionTasks.value) {
     if (task.root && findNodeInTree(task.root, nodeId)) {
       // 找到任务，使用 Store API 更新节点状态
       sftpTransferStore.updateNodeStatus(task.id, nodeId, { expanded })

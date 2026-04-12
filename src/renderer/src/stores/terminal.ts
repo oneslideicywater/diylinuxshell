@@ -15,6 +15,9 @@ export const useTerminalStore = defineStore('terminal', () => {
   // 终端尺寸映射
   const terminalSizes = ref<Map<string, TerminalSize>>(new Map())
 
+  // 当前模式：SSH终端 或 SFTP文件传输
+  const currentMode = ref<'ssh' | 'sftp'>('ssh')
+
   // 计算属性：当前激活的标签页
   const activeTab = computed(() => {
     return tabs.value.find(t => t.id === activeTabId.value)
@@ -34,7 +37,36 @@ export const useTerminalStore = defineStore('terminal', () => {
       id: `tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       title,
       sessionId,
-      status: 'disconnected'
+      status: 'disconnected',
+      type: 'ssh'
+    }
+    tabs.value.push(tab)
+    activeTabId.value = tab.id
+    return tab
+  }
+
+  /**
+   * 创建 SFTP 文件传输标签页
+   * 每个标签页有独立的 SFTP 连接，避免多标签相互干扰
+   * 
+   * 安全设计（v2）：
+   * - 完全移除 session 对象存储，只保留 sessionId 标识符
+   * - 组件通过 SessionStore 自行获取会话信息（非敏感部分）
+   * - 密码等敏感信息完全由主进程管理，不进入渲染进程状态树
+   * 
+   * @param title 标签页标题（通常为会话名称）
+   * @param session 会话对象（仅用于提取 sessionId 和 title，不保存到 Tab）
+   * @returns 新创建的 SFTP 标签页
+   */
+  function createSftpTab(title: string, session: any): Tab {
+    const tabId = `sftp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    const tab: Tab = {
+      id: tabId,
+      title: `${title} - SFTP`,
+      sessionId: session.id || session.host,
+      status: 'disconnected',
+      type: 'sftp',
+      sftpConnectionId: tabId
     }
     tabs.value.push(tab)
     activeTabId.value = tab.id
@@ -133,15 +165,29 @@ export const useTerminalStore = defineStore('terminal', () => {
     terminalSizes.value.clear()
   }
 
+  /**
+   * 切换 SSH/SFTP 模式
+   * @param mode - 目标模式：'ssh' 或 'sftp'
+   */
+  function switchMode(mode: 'ssh' | 'sftp'): void {
+    if (currentMode.value !== mode) {
+      currentMode.value = mode
+      console.log(`[TerminalStore] 切换到 ${mode.toUpperCase()} 模式`)
+    }
+  }
+
   return {
     tabs,
     activeTabId,
     activeTab,
     tabCount,
     terminalSizes,
+    currentMode,
     createTab,
+    createSftpTab,
     closeTab,
     setActiveTab,
+    switchMode,
     updateTabTitle,
     updateTabTerminalId,
     updateTabStatus,
