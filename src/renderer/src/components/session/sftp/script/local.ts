@@ -20,6 +20,8 @@ export interface LocalFileState {
   localFiles: Ref<any[]>
   /** 本地文件数量 */
   localFileCount: Ref<number>
+  /** 选中的本地文件/文件夹路径 */
+  selectedLocal: Ref<string>
 }
 
 /**
@@ -30,7 +32,8 @@ export function createLocalFileState(): LocalFileState {
   return {
     localPath: ref(''),
     localFiles: ref<any[]>([]),
-    localFileCount: ref(0)
+    localFileCount: ref(0),
+    selectedLocal: ref('')
   }
 }
 

@@ -38,10 +38,12 @@ e2e/
 ├── sftp/                           # SFTP 文件传输测试
 │   ├── cancel-upload-simple.e2e.spec.ts
 │   ├── cancel-upload.e2e.spec.ts
-│   ├── sftp-tree-expand-collapse.e2e.spec.ts  # SFTP 传输树展开/折叠功能测试
-│   ├── sftp-tree-status.e2e.spec.ts           # SFTP 树形状态测试
+│   ├── sftp-local-create-folder.e2e.spec.ts      # 本地创建文件夹功能测试
+│   ├── sftp-local-refresh.e2e.spec.ts            # 本地文件浏览器刷新功能测试
+│   ├── sftp-tree-expand-collapse.e2e.spec.ts      # SFTP 传输树展开/折叠功能测试
+│   ├── sftp-tree-status.e2e.spec.ts              # SFTP 树形状态测试
 │   ├── sftp-tree-upload.e2e.spec.ts
-│   └── sftp-transfer.e2e.spec.ts   # SFTP 窗口功能测试
+│   └── sftp-transfer.e2e.spec.ts                 # SFTP 窗口功能测试
 ├── session/                        # 会话管理测试
 │   ├── debug-session-group-contextmenu.e2e.spec.ts
 │   ├── five-level-nested-groups.e2e.spec.ts
@@ -194,7 +196,20 @@ npx playwright show-report
 
 | 文件名 | 描述 |
 |--------|------|
-| [settings.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\settings\settings.e2e.spec.ts) | 设置页面功能测试 |
+| [settings.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/settings/settings.e2e.spec.ts) | 设置页面功能测试 |
+
+### SFTP - 文件传输 (8 个文件)
+
+| 文件名 | 描述 |
+|--------|------|
+| [cancel-upload-simple.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/cancel-upload-simple.e2e.spec.ts) | 简单取消上传测试 |
+| [cancel-upload.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/cancel-upload.e2e.spec.ts) | 取消上传功能测试 |
+| [sftp-local-create-folder.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-local-create-folder.e2e.spec.ts) | 本地创建文件夹功能测试 |
+| [sftp-local-refresh.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-local-refresh.e2e.spec.ts) | 本地文件浏览器刷新功能测试 |
+| [sftp-tree-expand-collapse.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-tree-expand-collapse.e2e.spec.ts) | SFTP 传输树展开/折叠功能测试 |
+| [sftp-tree-status.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-tree-status.e2e.spec.ts) | SFTP 树形状态测试 |
+| [sftp-tree-upload.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-tree-upload.e2e.spec.ts) | SFTP 树形上传功能测试 |
+| [sftp-transfer.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-transfer.e2e.spec.ts) | SFTP 窗口功能测试 |
 
 ### Terminal - 终端功能 (2 个文件)
 

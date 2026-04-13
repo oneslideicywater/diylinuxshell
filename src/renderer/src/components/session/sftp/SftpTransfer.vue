@@ -70,7 +70,7 @@
           ref="localPanelRef"
           v-model:local-path="localState.localPath.value"
           v-model:local-files="localState.localFiles.value"
-          v-model:selected-local="localState.localPath.value"
+          v-model:selected-local="localState.selectedLocal.value"
           :upload-tasks="uploadTasks"
           @local-dblclick="handleLocalDblClick"
           @upload-file="uploadFile"
@@ -89,7 +89,7 @@
           :connection-id="currentSftpConnectionId"
           @remote-dblclick="handleRemoteDblClick"
           @download-local="downloadLocal"
-          @create-folder="createRemoteFolder"
+          @create-folder="confirmNewFolder"
           @delete-remote="handleDeleteRemote"
           
         />
@@ -500,14 +500,7 @@ async function uploadFolder(folderPath: string): Promise<void> {
   }
 }
 
-/**
- * 创建远程文件夹
- */
-async function createRemoteFolder(): Promise<void> {
-  // 显示输入对话框
-  showNewFolderDialog.value = true
-  newFolderName.value = ''
-}
+
 
 /**
  * 取消新建文件夹
@@ -519,10 +512,50 @@ function cancelNewFolder(): void {
 }
 
 /**
- * 确认新建文件夹
+ * 确认新建文件夹（远程）
+ * @param folderName 文件夹名称（来自 SftpRemote 组件的 create-folder 事件）
  */
-async function confirmNewFolder(): Promise<void> {
-
+async function confirmNewFolder(folderName?: string): Promise<void> {
+  // 优先使用传入的文件夹名称，否则使用对话框中的输入值
+  const nameToUse = folderName || newFolderName.value.trim()
+  
+  if (!nameToUse) {
+    console.error('[SftpTransfer] 文件夹名称不能为空')
+    return
+  }
+  
+  // 检查 SFTP 连接是否可用
+  if (!props.sftpConnectionId) {
+    console.error('[SftpTransfer] SFTP 连接标识符不存在')
+    alert('SFTP 连接未建立，无法创建远程文件夹')
+    return
+  }
+  
+  try {
+    // ✅ 统一在当前浏览的远程目录创建新文件夹
+    const remoteFolderPath = `${remoteState.remotePath.value}/${nameToUse}`.replace(/\/+/g, '/')
+    console.log('[SftpTransfer] 创建远程文件夹:', remoteFolderPath)
+    
+    // 调用 SFTP API 创建远程目录
+    const result = await window.api.sftp.mkdir(props.sftpConnectionId, remoteFolderPath)
+    
+    if (!result.success) {
+      throw new Error(result.error || '创建远程文件夹失败')
+    }
+    
+    console.log('[SftpTransfer] ✅ 远程文件夹创建成功:', remoteFolderPath)
+    
+    // 关闭对话框
+    showNewFolderDialog.value = false
+    newFolderName.value = ''
+    
+    // 刷新远程文件列表以显示新创建的文件夹
+    await remotePanelRef.value?.loadFiles()
+    
+  } catch (error: any) {
+    console.error('[SftpTransfer] ❌ 创建远程文件夹失败:', error)
+    alert(`创建远程文件夹失败: ${error.message || '未知错误'}`)
+  }
 }
 
 

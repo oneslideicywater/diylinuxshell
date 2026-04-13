@@ -55,11 +55,15 @@
         <span class="menu-item-title">新建文件夹</span>
         <span class="menu-item-description">在当前本地目录创建新文件夹</span>
       </div>
+      <div class="context-menu-item" @click="handleMenuAction('refresh')">
+        <span class="menu-item-title">刷新</span>
+        <span class="menu-item-description">重新加载当前浏览目录</span>
+      </div>
       <div class="context-menu-item" @click="handleMenuAction('upload')" v-if="selectedFile || hasMultipleSelection">
         <span class="menu-item-title">上传</span>
         <span class="menu-item-description">将选中的本地文件/文件夹上传到远程目录</span>
       </div>
-      <div class="context-menu-item" @click="handleMenuAction('deleteLocal')">
+      <div class="context-menu-item" @click="handleMenuAction('deleteLocal')" v-if="selectedFile">
         <span class="menu-item-title">删除</span>
         <span class="menu-item-description">删除选中的本地文件或文件夹</span>
       </div>
@@ -156,7 +160,8 @@ const localFileCount = ref(0)
 const getLocalState = (): LocalFileState => ({
   localPath,
   localFiles,
-  localFileCount
+  localFileCount,
+  selectedLocal
 })
 
 /**
@@ -296,29 +301,39 @@ function handleContextMenu(event: MouseEvent): void {
   const target = event.target as HTMLElement
   const fileItem = target.closest('.file-item') as HTMLElement
   
-  if (!fileItem) return
-  
-  const path = fileItem.dataset.path
-  const file = localFiles.value.find(f => f.path === path)
-  
-  if (!file) return
-  
-  // 选中该文件
-  selectedLocal.value = file.path
-  
-  // 请求显示右键菜单
+  // 请求显示右键菜单（无论是否点击文件项都可以显示）
   const canShow = requestContextMenu('local', closeContextMenu)
   if (!canShow) return
   
-  // 设置选中的文件
-  selectedFile.value = file
-  
   // 设置菜单位置 - 使用相对于文件面板的位置
-  const rect = fileItem.getBoundingClientRect()
   const panelRect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  contextMenuPosition.value = {
-    x: rect.left - panelRect.left + 10,
-    y: rect.bottom - panelRect.top + 4
+  
+  if (fileItem) {
+    // 点击了文件/文件夹项：选中该文件并设置菜单位置
+    const path = fileItem.dataset.path
+    const file = localFiles.value.find(f => f.path === path)
+    
+    if (!file) return
+    
+    // 选中该文件
+    selectedLocal.value = file.path
+    
+    // 设置选中的文件
+    selectedFile.value = file
+    
+    const rect = fileItem.getBoundingClientRect()
+    contextMenuPosition.value = {
+      x: rect.left - panelRect.left + 10,
+      y: rect.bottom - panelRect.top + 4
+    }
+  } else {
+    // 点击了空白区域：不选中任何文件，只显示部分菜单选项
+    selectedFile.value = null
+    
+    contextMenuPosition.value = {
+      x: event.offsetX,
+      y: event.offsetY
+    }
   }
   
   // 显示菜单
@@ -340,19 +355,24 @@ function closeContextMenu(): void {
 function handleMenuAction(action: string): void {
   const file = selectedFile.value
   console.log('[SftpLocal] handleMenuAction called, action:', action, 'file:', file)
-  if (!file) {
-    console.error('[SftpLocal] No file selected')
-    return
-  }
   
   switch (action) {
     case 'createFolder':
-      // 创建文件夹
+      // 创建文件夹（不需要选中文件）
       console.log('[SftpLocal] Emitting create-folder event')
       showCreateFolderDialog()
       break
+    case 'refresh':
+      // 刷新当前目录（不需要选中文件）
+      handleRefresh()
+      break
     case 'upload':
-      // 根据文件类型决定上传文件还是文件夹
+      // 根据文件类型决定上传文件还是文件夹（需要选中文件）
+      if (!file) {
+        console.error('[SftpLocal] No file selected for upload')
+        closeContextMenu()
+        return
+      }
       // TODO: 未来实现多选后，需要遍历所有选中的文件
       if (file.isDirectory) {
         // 上传文件夹
@@ -365,6 +385,12 @@ function handleMenuAction(action: string): void {
       }
       break
     case 'deleteLocal':
+      // 删除文件（需要选中文件）
+      if (!file) {
+        console.error('[SftpLocal] No file selected for delete')
+        closeContextMenu()
+        return
+      }
       // 删除文件
       console.log('[SftpLocal] Emitting delete-local event with path:', file.path)
       emit('delete-local', file.path)
@@ -373,6 +399,21 @@ function handleMenuAction(action: string): void {
   
   // 关闭菜单
   closeContextMenu()
+}
+
+/**
+ * 处理刷新操作：重新加载当前浏览目录的文件列表
+ */
+async function handleRefresh(): Promise<void> {
+  console.log('[SftpLocal] 刷新本地目录:', localPath.value)
+  
+  try {
+    await loadFiles()
+    console.log('[SftpLocal] ✅ 本地目录刷新成功')
+  } catch (error: any) {
+    console.error('[SftpLocal] ❌ 刷新本地目录失败:', error)
+    // 不显示错误提示，静默失败即可（刷新失败不影响用户体验）
+  }
 }
 
 /**
@@ -437,7 +478,30 @@ async function confirmCreateFolder(): Promise<void> {
     return
   }
   
-
+  try {
+    // ✅ 统一在当前浏览目录创建新文件夹
+    const newFolderPath = `${localPath.value}/${folderName.value.trim()}`.replace(/\\/g, '/')
+    console.log('[SftpLocal] 创建本地文件夹:', newFolderPath)
+    
+    // 调用 API 创建本地目录（递归创建）
+    const result = await window.api.sftp.ensureDir(newFolderPath)
+    
+    if (!result.success) {
+      throw new Error(result.error || '创建文件夹失败')
+    }
+    
+    console.log('[SftpLocal] ✅ 本地文件夹创建成功:', newFolderPath)
+    
+    // 关闭对话框
+    closeCreateFolderDialog()
+    
+    // 刷新文件列表以显示新创建的文件夹
+    await loadFiles()
+    
+  } catch (error: any) {
+    console.error('[SftpLocal] ❌ 创建本地文件夹失败:', error)
+    folderNameError.value = error.message || '创建文件夹失败，请重试'
+  }
 }
 
 // 监听全局点击事件以关闭菜单

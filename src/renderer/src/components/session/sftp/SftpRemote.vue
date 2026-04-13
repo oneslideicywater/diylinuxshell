@@ -55,7 +55,7 @@
     
     <!-- 远程文件右键菜单 -->
     <div v-if="contextMenuVisible" class="context-menu file-context-menu" :style="contextMenuStyle">
-      <div class="context-menu-item" @click="handleMenuAction('download')">
+      <div class="context-menu-item" @click="handleMenuAction('download')" v-if="selectedFile">
         <span class="menu-item-title">下载</span>
         <span class="menu-item-description">将选中的远程文件/文件夹下载到本地目录</span>
       </div>
@@ -63,7 +63,11 @@
         <span class="menu-item-title">新建文件夹</span>
         <span class="menu-item-description">在当前远程目录下创建新文件夹</span>
       </div>
-      <div class="context-menu-item" @click="handleMenuAction('deleteRemote')">
+      <div class="context-menu-item" @click="handleMenuAction('refresh')">
+        <span class="menu-item-title">刷新</span>
+        <span class="menu-item-description">重新加载当前浏览目录</span>
+      </div>
+      <div class="context-menu-item" @click="handleMenuAction('deleteRemote')" v-if="selectedFile">
         <span class="menu-item-title">删除</span>
         <span class="menu-item-description">删除选中的远程文件或文件夹</span>
       </div>
@@ -176,7 +180,7 @@ const emit = defineEmits<{
   /** 下载文件事件 */
   'download-local': [path: string]
   /** 创建远程文件夹事件 */
-  'create-folder': []
+  'create-folder': [folderName: string]
   /** 删除远程文件事件 */
   'delete-remote': [path: string]
 }>()
@@ -329,29 +333,39 @@ function handleContextMenu(event: MouseEvent): void {
   const target = event.target as HTMLElement
   const fileItem = target.closest('.file-item') as HTMLElement
   
-  if (!fileItem) return
-  
-  const path = fileItem.dataset.path
-  const file = remoteFiles.value.find(f => f.path === path)
-  
-  if (!file) return
-  
-  // 选中该文件
-  selectedRemote.value = file.path
-  
-  // 请求显示右键菜单
+  // 请求显示右键菜单（无论是否点击文件项都可以显示）
   const canShow = requestContextMenu('remote', closeContextMenu)
   if (!canShow) return
   
-  // 设置选中的文件
-  selectedFile.value = file
-  
   // 设置菜单位置 - 使用相对于文件面板的位置
-  const rect = fileItem.getBoundingClientRect()
   const panelRect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  contextMenuPosition.value = {
-    x: rect.left - panelRect.left + 10,
-    y: rect.bottom - panelRect.top + 4
+  
+  if (fileItem) {
+    // 点击了文件/文件夹项：选中该文件并设置菜单位置
+    const path = fileItem.dataset.path
+    const file = remoteFiles.value.find(f => f.path === path)
+    
+    if (!file) return
+    
+    // 选中该文件
+    selectedRemote.value = file.path
+    
+    // 设置选中的文件
+    selectedFile.value = file
+    
+    const rect = fileItem.getBoundingClientRect()
+    contextMenuPosition.value = {
+      x: rect.left - panelRect.left + 10,
+      y: rect.bottom - panelRect.top + 4
+    }
+  } else {
+    // 点击了空白区域：不选中任何文件，只显示部分菜单选项
+    selectedFile.value = null
+    
+    contextMenuPosition.value = {
+      x: event.offsetX,
+      y: event.offsetY
+    }
   }
   
   // 显示菜单
@@ -419,19 +433,35 @@ async function handleDrop(event: DragEvent): Promise<void> {
  */
 function handleMenuAction(action: string): void {
   const file = selectedFile.value
-  if (!file) return
+  console.log('[SftpRemote] handleMenuAction called, action:', action, 'file:', file)
   
   switch (action) {
     case 'download':
+      // 下载文件/文件夹（需要选中文件）
+      if (!file) {
+        console.error('[SftpRemote] No file selected for download')
+        closeContextMenu()
+        return
+      }
       // 下载文件/文件夹 - 传递路径
       emit('download-local', file.path)
       break
     case 'createFolder':
-      // 创建文件夹
+      // 创建文件夹（不需要选中文件）
       console.log('[SftpRemote] Emitting create-folder event')
       showCreateFolderDialog()
       break
+    case 'refresh':
+      // 刷新当前目录（不需要选中文件）
+      handleRefresh()
+      break
     case 'deleteRemote':
+      // 删除文件（需要选中文件）
+      if (!file) {
+        console.error('[SftpRemote] No file selected for delete')
+        closeContextMenu()
+        return
+      }
       // 删除文件
       emit('delete-remote', file.path)
       break
@@ -439,6 +469,21 @@ function handleMenuAction(action: string): void {
   
   // 关闭菜单
   closeContextMenu()
+}
+
+/**
+ * 处理刷新操作：重新加载当前浏览目录的远程文件列表
+ */
+async function handleRefresh(): Promise<void> {
+  console.log('[SftpRemote] 刷新远程目录:', remotePath.value)
+  
+  try {
+    await loadFiles()
+    console.log('[SftpRemote] ✅ 远程目录刷新成功')
+  } catch (error: any) {
+    console.error('[SftpRemote] ❌ 刷新远程目录失败:', error)
+    // 不显示错误提示，静默失败即可（刷新失败不影响用户体验）
+  }
 }
 
 /**
@@ -503,6 +548,13 @@ async function confirmCreateFolder(): Promise<void> {
     return
   }
  
+  // 触发事件到父组件，由父组件执行实际的远程文件夹创建
+  // （因为需要 sftpConnectionId 来调用 SFTP API）
+  console.log('[SftpRemote] 触发 create-folder 事件，文件夹名称:', folderName.value.trim())
+  emit('create-folder', folderName.value.trim())
+  
+  // 关闭对话框
+  closeCreateFolderDialog()
 }
 
 // 监听全局点击事件以关闭菜单
