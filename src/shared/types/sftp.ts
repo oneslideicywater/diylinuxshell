@@ -56,6 +56,12 @@ export interface TransferNode {
 
 /**
  * 传输任务
+ * 
+ * 设计原则（安全架构 v3）：
+ * - 任务按 SFTP 连接隔离：每个连接有独立的任务列表
+ * - 通过 sftpConnectionId 关联到具体的 SFTP 连接
+ * - 通过 sessionId 可选关联会话信息（用于显示）
+ * - 不存储任何敏感信息（密码等完全由主进程管理）
  */
 export interface TransferTask {
   /** 任务 ID */
@@ -68,8 +74,19 @@ export interface TransferTask {
   root: TransferNode
   
   // 连接标识（用于隔离不同 SFTP 连接的任务）
-  /** SFTP 连接标识符（每个标签页独立） */
-  connectionId: string
+  /**
+   * SFTP 连接标识符（每个标签页独立）
+   * 对应 Tab.sftpConnectionId 和主进程 sftpPool 的 key
+   * 用于将任务归属到正确的 SFTP 连接
+   */
+  sftpConnectionId: string
+  
+  /**
+   * 会话 ID（可选，用于关联会话信息）
+   * 可通过 SessionStore 获取会话名称、主机地址等非敏感信息
+   * 主要用于 UI 显示和日志记录
+   */
+  sessionId?: string
   
   // 传输进度统计
   /** 待传输的总字节数 */

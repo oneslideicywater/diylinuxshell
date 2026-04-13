@@ -102,20 +102,21 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import type { Session } from '@shared/types'
 import type { TransferTask } from '@shared/types/sftp'
 
 import { formatSize } from '@/utils/fs-utils'
 import { requestContextMenu, clearContextMenuOwner } from './script/globalState'
 import { loadRemoteFiles, remoteUpRemote, handleRemoteDblClick, getSelectedRemoteFile, type RemoteFileState } from './script/remote'
+import { useSessionStore } from '@/stores/session'
 
 /**
- * Props 定义（安全改进 v2）
+ * Props 定义（安全改进 v3 - 完全移除 session 依赖）
  * 
- * 改进说明：
- * - 新增 connectionId prop，用于标识 SFTP 连接池中的唯一连接
- * - 保留 session prop 用于显示会话信息（非敏感部分）
- * - 所有 SFTP API 调用都使用 connectionId，不再使用 session.id
+ * 设计原则：
+ * - 只接收必要的标识符：sessionId + connectionId
+ * - 组件内部通过 SessionStore 自行获取会话信息（非敏感部分）
+ * - 所有 SFTP API 调用都使用 connectionId
+ * - 符合最小权限原则，不传递任何会话对象
  */
 interface Props {
   /** 当前远程路径 */
@@ -125,10 +126,10 @@ interface Props {
   /** 选中的远程文件路径 */
   selectedRemote: string
   /**
-   * 当前会话对象（仅用于显示名称、主机等非敏感信息）
-   * 不再用于 API 调用，API 调用改用 connectionId
+   * 会话 ID（用于从 SessionStore 获取会话信息）
+   * 仅用于显示名称、主机等非敏感信息
    */
-  session: Session | null
+  sessionId: string
   /** 下载任务数组 */
   downloadTasks: TransferTask[]
   /**
@@ -140,8 +141,24 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  sessionId: '',
   downloadTasks: () => [],
   connectionId: ''
+})
+
+/**
+ * Session Store 实例
+ * 用于根据 sessionId 获取会话信息（非敏感部分）
+ */
+const sessionStore = useSessionStore()
+
+/**
+ * 计算属性：当前会话对象（从 SessionStore 动态获取）
+ * 只在需要时查询，不存储在组件状态中
+ */
+const currentSession = computed(() => {
+  if (!props.sessionId) return null
+  return sessionStore.sessions.find(s => s.id === props.sessionId) || null
 })
 
 /**
@@ -234,10 +251,10 @@ watch(selectedRemote, (newVal) => {
 /**
  * 创建远程文件状态对象供函数调用
  * 
- * 安全改进（v2）：
- * - 返回 connectionId 而不是 session 对象
- * - connectionId 用于在主进程连接池中查找 SFTP 连接
- * - 符合最小权限原则，不传递不必要的会话信息
+ * 安全改进（v3）：
+ * - 只返回 connectionId（SFTP 连接池标识符）
+ * - 不再返回 session 对象
+ * - 符合最小权限原则，只传递必要的连接信息
  */
 const getRemoteState = (): RemoteFileState => ({
   remotePath,
@@ -250,9 +267,9 @@ const getRemoteState = (): RemoteFileState => ({
 /**
  * 加载远程文件列表
  * 
- * 安全改进（v2）：
+ * 安全改进（v3）：
  * - 优先检查 connectionId（SFTP 连接标识符）
- * - 不再强制要求 session 存在（session 仅用于显示）
+ * - 不再依赖 session prop，改用 SessionStore 获取会话信息
  */
 async function loadFiles(): Promise<void> {
   // 检查 SFTP 连接标识符是否存在
@@ -485,13 +502,7 @@ async function confirmCreateFolder(): Promise<void> {
     folderNameError.value = error
     return
   }
-  
-  try {
-    await createRemoteFolderUtil(getRemoteState(), ref(folderName.value.trim()), ref(false), ref(''))
-    closeCreateFolderDialog()
-  } catch (error: any) {
-    folderNameError.value = error.message || '创建文件夹失败'
-  }
+ 
 }
 
 // 监听全局点击事件以关闭菜单

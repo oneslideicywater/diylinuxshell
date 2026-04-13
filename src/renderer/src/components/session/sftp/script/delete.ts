@@ -1,7 +1,12 @@
 /**
- * SFTP 删除功能模块
+ * SFTP 删除功能模块（安全架构 v4）
  * 支持单文件、文件夹、批量删除
  * 使用统一的树形组件显示删除进度
+ * 
+ * 设计原则：
+ * - 不再依赖 session 对象
+ * - 直接使用 sftpConnectionId（SFTP 连接已在 TerminalTab 初始化时建立）
+ * - 可选接收 sessionId（用于通过 SessionStore 获取会话名称等非敏感信息显示）
  * 
  * PRD 要求：
  * - 删除前显示确认对话框（显示待删除项列表）
@@ -12,19 +17,23 @@
  * @module sftp/delete
  */
 
-import type { Session } from '@shared/types'
 import type { TransferTask, TransferNode } from '@shared/types/sftp'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
 
 /**
  * 递归扫描远程文件夹并构建传输节点树（用于删除）
+ * 
+ * 安全架构 v4：
+ * - 不再依赖 session 对象
+ * - 直接使用 sftpConnectionId 调用 SFTP API
+ * 
  * @param remotePath 远程文件夹路径
- * @param session SSH 会话
+ * @param sftpConnectionId SFTP 连接标识符（已在 TerminalTab 初始化时建立）
  * @returns 根节点和文件统计信息
  */
 async function scanRemoteFolderForDelete(
   remotePath: string,
-  session: Session
+  sftpConnectionId: string
 ): Promise<{ rootNode: TransferNode; totalFiles: number; totalBytes: number }> {
   // 获取文件夹名称
   const folderName = remotePath.split('/').pop() || 'folder'
@@ -53,8 +62,8 @@ async function scanRemoteFolderForDelete(
   let totalBytes = 0
   
   try {
-    // 通过 Electron API 列出远程目录内容
-    const result = await window.api.sftp.listDir(session.id || session.host, remotePath)
+    // 通过 Electron API 列出远程目录内容（使用已建立的 sftpConnectionId）
+    const result = await window.api.sftp.listDir(sftpConnectionId, remotePath)
     
     if (!result.success || !result.data) {
       throw new Error(result.error || '无法读取远程目录')
@@ -75,7 +84,7 @@ async function scanRemoteFolderForDelete(
       if (entry.type === 'd' || entry.isDirectory) {
         // 递归扫描子文件夹（添加异常处理，跳过无权限访问的目录）
         try {
-          const subResult = await scanRemoteFolderForDelete(fullRemotePath, session)
+          const subResult = await scanRemoteFolderForDelete(fullRemotePath, sftpConnectionId)
 
           if (currentNode.children) {
             currentNode.children.push(subResult.rootNode)
@@ -149,19 +158,28 @@ async function scanRemoteFolderForDelete(
 
 /**
  * 删除单个文件/文件夹（原子操作）
+ * 
+ * 安全架构 v4：
+ * - 不再依赖 session 对象
+ * - 直接使用 sftpConnectionId 调用 SFTP API
+ * 
  * @param node 当前节点
- * @param session SSH 会话
+ * @param sftpConnectionId SFTP 连接标识符（已在 TerminalTab 初始化时建立）
  * @param taskId 任务 ID（用于 Store 更新）
  */
 async function deleteSingleItem(
   node: TransferNode, 
-  session: Session,
+  sftpConnectionId: string,
   taskId: string
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
   console.log(`[delete] 开始删除: ${node.name}`)
   console.log(`[delete] 远程路径: ${node.remotePath}`)
+  
+  if (!sftpConnectionId) {
+    throw new Error('SFTP 连接标识符不能为空（连接未建立）')
+  }
   
   // 更新节点状态为删除中
   sftpTransferStore.updateNodeStatus(taskId, node.id, {
@@ -198,9 +216,8 @@ async function deleteSingleItem(
       throw new Error('远程路径为空')
     }
     
-    // 执行删除操作（通过 Electron API）
-    const sessionId = session.id || session.host
-    const result = await window.api.sftp.delete(sessionId, node.remotePath)
+    // 执行删除操作（使用已建立的 sftpConnectionId，通过 Electron API）
+    const result = await window.api.sftp.delete(sftpConnectionId, node.remotePath)
     
     if (!result.success) {
       throw new Error(result.error || '删除失败')
@@ -237,21 +254,25 @@ async function deleteSingleItem(
 }
 
 /**
- * 递归删除文件夹内容（利用 Pinia reactive 特性）
- * 通过 Store API 更新节点状态，自动触发视图响应式更新
+ * 递归删除文件夹内容（安全架构 v4）
+ * 
+ * 设计原则：
+ * - 不再依赖 session 对象
+ * - 直接使用 sftpConnectionId 调用 SFTP API
+ * - 递归处理文件夹结构，更新节点进度
  * 
  * @param node 当前节点（文件夹或文件）
- * @param session SSH 会话
+ * @param sftpConnectionId SFTP 连接标识符（已在 TerminalTab 初始化时建立）
  * @param taskId 任务 ID（用于 Store 更新）
  */
 async function deleteFolderContent(
   node: TransferNode, 
-  session: Session,
+  sftpConnectionId: string,
   taskId: string
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
-  if (!session) return
+  if (!sftpConnectionId) return
   
   if (node.isDirectory && node.children && node.children.length > 0) {
     // 检查任务状态：如果当前是 pending，则更新为 transferring
@@ -267,9 +288,9 @@ async function deleteFolderContent(
       startTime: Date.now()
     })
     
-    // 先删除所有子文件/子文件夹（从叶子节点开始）
+    // 先删除所有子文件/子文件夹（从叶子节点开始，传递 sftpConnectionId）
     for (const child of node.children) {
-      await deleteFolderContent(child, session, taskId)
+      await deleteFolderContent(child, sftpConnectionId, taskId)
       
       // 计算父节点的完成统计
       let completedItems = 0
@@ -287,17 +308,17 @@ async function deleteFolderContent(
       })
     }
     
-    // 所有子项删除完成 - 最后删除父文件夹本身
-    await deleteSingleItem(node, session, taskId)
+    // 所有子项删除完成 - 最后删除父文件夹本身（传递 sftpConnectionId）
+    await deleteSingleItem(node, sftpConnectionId, taskId)
     
   } else if (node.isDirectory) {
-    // 空目录或无子节点信息的目录 - 直接删除目录本身
+    // 空目录或无子节点信息的目录 - 直接删除目录本身（传递 sftpConnectionId）
     console.log(`[delete] 检测到空目录/叶子目录，直接删除: ${node.name}`)
-    await deleteSingleItem(node, session, taskId)
+    await deleteSingleItem(node, sftpConnectionId, taskId)
     
   } else if (!node.isDirectory) {
-    // 如果是文件，执行删除
-    await deleteSingleItem(node, session, taskId)
+    // 如果是文件，执行删除（传递 sftpConnectionId）
+    await deleteSingleItem(node, sftpConnectionId, taskId)
   }
 }
 
@@ -317,20 +338,28 @@ function formatTime(seconds: number): string {
 }
 
 /**
- * 删除单个文件/文件夹（独立函数）
- * @param remotePath 远程文件/文件夹路径
- * @param session SSH 会话
+ * 删除单个文件/文件夹（导出函数，安全架构 v4）
+ * 
+ * 设计原则：
+ * - 不再接收 session 对象（避免在渲染进程传递敏感信息）
+ * - 直接使用 sftpConnectionId（SFTP 连接已在 TerminalTab 初始化时建立）
+ * - 可选接收 sessionId（用于通过 SessionStore 获取会话名称等非敏感信息显示）
+ * 
+ * @param remotePath - 远程文件/文件夹路径
+ * @param sftpConnectionId - SFTP 连接标识符（必填，对应已建立的连接）
+ * @param sessionId - 会话 ID（可选，用于 UI 显示会话信息）
  */
 export async function deleteFileOrFolder(
   remotePath: string,
-  session: Session | null
+  sftpConnectionId: string,
+  sessionId?: string
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
-  console.log('[delete] 开始删除:', remotePath)
+  console.log('[delete] 开始删除:', remotePath, '连接ID:', sftpConnectionId)
   
-  if (!session) {
-    throw new Error('会话不存在')
+  if (!sftpConnectionId) {
+    throw new Error('SFTP 连接标识符不能为空（连接未建立）')
   }
   
   if (!remotePath) {
@@ -341,9 +370,9 @@ export async function deleteFileOrFolder(
     // 获取文件名/文件夹名
     const itemName = remotePath.split('/').pop() || 'item'
     
-    // 判断是文件还是文件夹（通过查询远程路径类型）
+    // 判断是文件还是文件夹（通过查询远程路径类型，使用已建立的 sftpConnectionId）
     const listResult = await window.api.sftp.listDir(
-      session.id || session.host, 
+      sftpConnectionId, 
       remotePath.includes('/') ? remotePath.substring(0, remotePath.lastIndexOf('/')) : '/'
     )
     
@@ -354,9 +383,9 @@ export async function deleteFileOrFolder(
     let rootNode: TransferNode
     
     if (selectedItem && (selectedItem.type === 'd' || selectedItem.isDirectory)) {
-      // 文件夹：扫描子项构建树形结构
+      // 文件夹：扫描子项构建树形结构（使用 sftpConnectionId）
       console.log('[delete] 检测到文件夹，使用文件夹删除模式')
-      const scanResult = await scanRemoteFolderForDelete(remotePath, session)
+      const scanResult = await scanRemoteFolderForDelete(remotePath, sftpConnectionId)
       rootNode = scanResult.rootNode
       
       console.log(`[delete] 文件夹扫描完成: ${scanResult.totalFiles} 个文件`)
@@ -380,13 +409,14 @@ export async function deleteFileOrFolder(
       }
     }
     
-    // 创建删除任务（包含必需的 connectionId 字段）
+    // 创建删除任务（安全架构 v4：直接使用 sftpConnectionId）
     const task: TransferTask = {
       id: `task-delete-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: 'delete',
       status: 'pending',
       root: rootNode,
-      connectionId: session?.id || session?.host || 'unknown',
+      sftpConnectionId: sftpConnectionId,  // ✅ 直接使用传入的连接标识符
+      sessionId: sessionId,                // ✅ 可选：用于显示会话信息
       totalBytes: rootNode.size || 0,
       transferredBytes: 0,
       createdAt: Date.now(),
@@ -398,8 +428,8 @@ export async function deleteFileOrFolder(
     sftpTransferStore.addTask(task)
     console.log(`[delete] ✅ 删除任务已创建: ${task.id}`)
     
-    // 开始执行删除
-    await deleteFolderContent(rootNode, session, task.id)
+    // 开始执行删除（传递 sftpConnectionId）
+    await deleteFolderContent(rootNode, sftpConnectionId, task.id)
     
     // 标记任务完成
     const completedAt = Date.now()

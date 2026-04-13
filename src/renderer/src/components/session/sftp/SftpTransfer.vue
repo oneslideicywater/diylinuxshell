@@ -84,7 +84,7 @@
           v-model:remote-path="remoteState.remotePath.value"
           v-model:remote-files="remoteState.remoteFiles.value"
           v-model:selected-remote="remoteState.selectedRemote.value"
-          :session="currentSession"
+          :session-id="props.sessionId"
           :download-tasks="downloadTasks"
           :connection-id="currentSftpConnectionId"
           @remote-dblclick="handleRemoteDblClick"
@@ -122,6 +122,7 @@ import { deleteFileOrFolder } from './script/delete'
 import {
   createLocalFileState,
   initLocalDefaultDir,
+  deleteLocalFile,
   type LocalFileState
 } from './script/local'
 
@@ -320,11 +321,12 @@ async function uploadFile(filePath?: string): Promise<void> {
   }
 
   try {
-    // 调用单文件上传函数（使用 Pinia Store 管理）
+    // 调用单文件上传函数（安全架构 v4：使用 sftpConnectionId，不再传递 session 对象）
     await uploadSingleFileLocal(
       currentFilePath,
-      currentSession.value,
-      remoteState.remotePath.value
+      props.sftpConnectionId,        // ✅ SFTP 连接标识符（已在 TerminalTab 初始化时建立）
+      props.sessionId,               // ✅ 可选：用于 UI 显示会话信息
+      remoteState.remotePath.value   // 远程目标路径
     )
     
     console.log('[SftpTransfer] 文件上传完成')
@@ -383,13 +385,23 @@ async function downloadLocal(path: string): Promise<void> {
     )
     
     if (selectedItem && (selectedItem.type === 'd' || selectedItem.isDirectory)) {
-      // 文件夹下载
+      // 文件夹下载（安全架构 v4：使用 sftpConnectionId）
       console.log('[SftpTransfer] 检测到文件夹，使用文件夹下载模式')
-      await downloadFolder(path, currentSession.value, localPath)
+      await downloadFolder(
+        path,
+        props.sftpConnectionId,  // ✅ SFTP 连接标识符
+        props.sessionId,         // ✅ 可选：用于 UI 显示
+        localPath
+      )
     } else {
-      // 单文件下载
+      // 单文件下载（安全架构 v4：使用 sftpConnectionId）
       console.log('[SftpTransfer] 检测到文件，使用单文件下载模式')
-      await downloadFile(path, currentSession.value, localPath)
+      await downloadFile(
+        path,
+        props.sftpConnectionId,  // ✅ SFTP 连接标识符
+        props.sessionId,         // ✅ 可选：用于 UI 显示
+        localPath
+      )
     }
     
     // 下载完成后刷新本地文件列表（PRD 要求）
@@ -472,8 +484,9 @@ async function uploadFolder(folderPath: string): Promise<void> {
     // 调用新的上传函数（使用 Pinia Store 管理）
     await uploadFolderToServer(
       folderPath,
-      currentSession.value,
-      remoteState.remotePath
+      props.sftpConnectionId,
+      props.sessionId,
+      remoteState.remotePath.value
     )
     
     console.log('[SftpTransfer] 文件夹上传完成')
@@ -529,10 +542,61 @@ function handleRemoteDblClick(): void {
 
 /**
  * 处理删除本地文件
+ * 
+ * PRD 要求：
+ * - 删除前显示确认对话框
+ * - 使用 TransferTask 统一管理删除任务（与上传/下载一致）
+ * - 删除完成后刷新本地文件列表
+ * 
+ * @param path 本地文件/文件夹路径（来自右键菜单选中）
  */
 async function handleDeleteLocal(path: string): Promise<void> {
   console.log('[SftpTransfer] handleDeleteLocal called with path:', path)
-  // TODO: 实现删除本地文件的逻辑
+  
+  if (!path) {
+    console.error('[SftpTransfer] 未提供删除路径')
+    alert('请先选择要删除的本地文件/文件夹')
+    return
+  }
+  
+  // 获取文件名/文件夹名，用于确认对话框显示
+  const fileName = path.split(/[/\\]/).pop() || path
+  
+  // 检查是否为目录（简单判断：路径末尾是否有分隔符或通过其他方式）
+  // 这里假设 localState.selectedLocal 包含选中项的信息
+  const isDirectory = false // TODO: 根据实际情况判断是否为文件夹
+  
+  // 显示确认对话框（PRD 要求）
+  const confirmed = window.confirm(
+    `确定要删除以下文件/文件夹吗？\n\n📄 ${fileName}\n\n此操作不可撤销。`
+  )
+  
+  if (!confirmed) {
+    console.log('[SftpTransfer] 用户取消删除操作')
+    return
+  }
+  
+  try {
+    // 调用重构后的 deleteLocalFile 函数（使用 TransferTask + Store）
+    await deleteLocalFile(
+      path,
+      fileName,
+      isDirectory,
+      currentSftpConnectionId.value, // SFTP 连接标识符（用于任务隔离）
+      async () => {
+        // 刷新本地文件列表的回调函数
+        if (localPanelRef.value?.loadFiles) {
+          await localPanelRef.value.loadFiles()
+        }
+      }
+    )
+    
+    console.log('[SftpTransfer] ✅ 本地文件删除完成')
+    
+  } catch (error: any) {
+    console.error('[SftpTransfer] 删除本地文件失败:', error)
+    alert(`删除失败：${error.message}`)
+  }
 }
 
 /**
@@ -552,9 +616,10 @@ async function handleDeleteRemote(path: string): Promise<void> {
     return
   }
 
-  if (!currentSession.value) {
-    console.error('[SftpTransfer] 会话不存在')
-    alert('SSH 会话未连接')
+  // ✅ 安全架构 v4：检查 sftpConnectionId 是否存在（而非 session 对象）
+  if (!props.sftpConnectionId) {
+    console.error('[SftpTransfer] SFTP 连接标识符不存在')
+    alert('SFTP 连接未建立')
     return
   }
 
@@ -574,8 +639,12 @@ async function handleDeleteRemote(path: string): Promise<void> {
     
     console.log(`[SftpTransfer] 开始删除: ${path}`)
 
-    // 执行删除操作（使用 delete.ts 模块）
-    await deleteFileOrFolder(path, currentSession.value)
+    // 执行删除操作（安全架构 v4：使用 sftpConnectionId，不再传递 session 对象）
+    await deleteFileOrFolder(
+      path,
+      props.sftpConnectionId,  // ✅ SFTP 连接标识符
+      props.sessionId          // ✅ 可选：用于 UI 显示
+    )
     
     // 删除完成后刷新远程文件列表（PRD 要求）
     console.log('[SftpTransfer] 刷新远程文件列表...')

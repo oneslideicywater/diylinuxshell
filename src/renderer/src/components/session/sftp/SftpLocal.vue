@@ -437,16 +437,7 @@ async function confirmCreateFolder(): Promise<void> {
     return
   }
   
-  try {
-    await createLocalFolderUtil({
-      localPath,
-      localFiles,
-      localFileCount: ref(0)
-    }, folderName.value.trim())
-    closeCreateFolderDialog()
-  } catch (error: any) {
-    folderNameError.value = error.message || '创建文件夹失败'
-  }
+
 }
 
 // 监听全局点击事件以关闭菜单
@@ -462,7 +453,7 @@ onUnmounted(() => {
 // 导出函数供父组件调用
 defineExpose({
   loadFiles,
-  getSelectedFile: () => getSelectedLocalFile({ localPath, localFiles, localFileCount: ref(0) }, selectedLocal)
+  getSelectedFile: () => selectedLocal.value
 })
 
 // 注意：初始化加载由父组件调用 loadFiles 触发

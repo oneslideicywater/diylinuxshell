@@ -1,4 +1,3 @@
-import type { Session } from '@shared/types'
 import type { TransferTask, TransferNode } from '@shared/types/sftp'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
 
@@ -156,15 +155,27 @@ async function scanFolderRecursive(
  * @param session SSH 会话
  * @param taskId 任务 ID（用于 Store 更新）
  */
+/**
+ * 上传单个文件（内部函数，使用 sftpConnectionId）
+ * 
+ * 安全架构 v4：
+ * - 不再依赖 session 对象
+ * - 直接使用已建立的 SFTP 连接标识符（sftpConnectionId）
+ * - 连接在 TerminalTab 点击时建立，此处直接复用
+ * 
+ * @param node - 文件传输节点
+ * @param sftpConnectionId - SFTP 连接标识符（已在组件初始化时建立）
+ * @param taskId - 任务 ID（用于 Store 状态更新）
+ */
 async function uploadSingleFile(
   node: TransferNode, 
-  session: Session | null,
+  sftpConnectionId: string,
   taskId: string
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
-  if (!session || !node.localPath || !node.remotePath) {
-    throw new Error('缺少必要参数')
+  if (!sftpConnectionId || !node.localPath || !node.remotePath) {
+    throw new Error('缺少必要参数：sftpConnectionId 或文件路径')
   }
   
   // 检查任务状态：如果当前是 pending，则更新为 transferring
@@ -182,7 +193,8 @@ async function uploadSingleFile(
     startTime: Date.now()
   })
   
-  const sessionId = session.id || session.host
+  // ✅ 直接使用传入的 sftpConnectionId（连接已在 TerminalTab 初始化时建立）
+  const connectionId = sftpConnectionId
   
   try {
     // 监听上传进度
@@ -215,8 +227,8 @@ async function uploadSingleFile(
       }
     })
     
-    // 调用 Electron API 上传文件
-    const result = await window.api.sftp.upload(sessionId, node.localPath, node.remotePath)
+    // 调用 Electron API 上传文件（使用已建立的 sftpConnectionId）
+    const result = await window.api.sftp.upload(connectionId, node.localPath, node.remotePath)
     
     // 清理进度监听
     cleanupProgress()
@@ -250,20 +262,32 @@ async function uploadSingleFile(
  * @param session SSH 会话
  * @param taskId 任务 ID（用于 Store 更新）
  */
+/**
+ * 递归上传文件夹内容（安全架构 v4）
+ * 
+ * 设计原则：
+ * - 不再依赖 session 对象
+ * - 直接使用 sftpConnectionId 调用 SFTP API
+ * - 递归处理文件夹结构，更新节点进度
+ * 
+ * @param node - 当前传输节点（文件或文件夹）
+ * @param sftpConnectionId - SFTP 连接标识符（已在 TerminalTab 初始化时建立）
+ * @param taskId - 任务 ID（用于 Store 状态更新）
+ */
 async function uploadFolderContent(
   node: TransferNode, 
-  session: Session | null,
+  sftpConnectionId: string,
   taskId: string
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
-  if (!session) return
+  if (!sftpConnectionId) return
   
   if (node.isDirectory && node.children && node.children.length > 0) {
-    // 如果是文件夹，先在远程创建目录
+    // 如果是文件夹，先在远程创建目录（使用已建立的连接）
     if (node.remotePath) {
       try {
-        await window.api.sftp.mkdir(session.id || session.host, node.remotePath)
+        await window.api.sftp.mkdir(sftpConnectionId, node.remotePath)
       } catch (error: any) {
         console.warn(`[upload] 创建远程目录失败（可能已存在）: ${node.remotePath}`, error)
       }
@@ -274,9 +298,9 @@ async function uploadFolderContent(
       status: 'transferring'
     })
     
-    // 递归上传所有子节点
+    // 递归上传所有子节点（传递 sftpConnectionId）
     for (const child of node.children) {
-      await uploadFolderContent(child, session, taskId)
+      await uploadFolderContent(child, sftpConnectionId, taskId)
       
       // 计算父节点的完成统计
       let completedFiles = 0
@@ -300,9 +324,51 @@ async function uploadFolderContent(
       progress: 100
     })
     
+  } else if (node.isDirectory) {
+    // ✅ 空文件夹处理：直接创建远程目录并标记完成
+    console.log(`[upload] 检测到空文件夹，创建远程目录: ${node.name}`)
+    
+    // 更新节点状态为传输中
+    sftpTransferStore.updateNodeStatus(taskId, node.id, {
+      status: 'transferring',
+      startTime: Date.now()
+    })
+    
+    try {
+      // 在远程创建空目录（使用已建立的 sftpConnectionId）
+      if (node.remotePath) {
+        const result = await window.api.sftp.mkdir(sftpConnectionId, node.remotePath)
+        if (!result.success) {
+          throw new Error(result.error || '创建远程目录失败')
+        }
+        console.log(`[upload] ✅ 空文件夹已创建: ${node.remotePath}`)
+      }
+      
+      // 更新节点状态为已完成
+      const endTime = Date.now()
+      const elapsedSeconds = Math.round((endTime - (node.startTime || endTime)) / 1000)
+      
+      sftpTransferStore.updateNodeStatus(taskId, node.id, {
+        status: 'completed',
+        progress: 100,
+        elapsed: formatTime(elapsedSeconds)
+      })
+      
+    } catch (error: any) {
+      console.error(`[upload] ❌ 空文件夹创建失败: ${node.name}`, error)
+      
+      // 更新错误状态
+      sftpTransferStore.updateNodeStatus(taskId, node.id, {
+        status: 'error',
+        error: error.message || '空文件夹创建失败'
+      })
+      
+      throw error
+    }
+    
   } else if (!node.isDirectory) {
-    // 如果是文件，执行上传
-    await uploadSingleFile(node, session, taskId)
+    // 如果是文件，执行上传（传递 sftpConnectionId）
+    await uploadSingleFile(node, sftpConnectionId, taskId)
   }
 }
 
@@ -322,22 +388,30 @@ function formatTime(seconds: number): string {
 }
 
 /**
- * 上传单个文件（独立函数）
- * @param filePath 本地文件路径
- * @param session SSH 会话
- * @param remotePath 远程目标路径（可以是字符串或 Ref<string>）
+ * 上传单个文件（导出函数，安全架构 v4）
+ * 
+ * 设计原则：
+ * - 不再接收 session 对象（避免在渲染进程传递敏感信息）
+ * - 直接使用 sftpConnectionId（SFTP 连接已在 TerminalTab 初始化时建立）
+ * - 可选接收 sessionId（用于通过 SessionStore 获取会话名称等非敏感信息显示）
+ * 
+ * @param filePath - 本地文件路径
+ * @param sftpConnectionId - SFTP 连接标识符（必填，对应已建立的连接）
+ * @param sessionId - 会话 ID（可选，用于 UI 显示会话信息）
+ * @param remotePath - 远程目标路径（可以是字符串或 Ref<string>）
  */
 export async function uploadFile(
   filePath: string,
-  session: Session | null,
-  remotePath: string | { value: string }
+  sftpConnectionId: string,
+  sessionId?: string,
+  remotePath?: string | { value: string }
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
-  console.log('[upload] 开始上传文件:', filePath)
+  console.log('[upload] 开始上传文件:', filePath, '连接ID:', sftpConnectionId)
   
-  if (!session) {
-    throw new Error('会话不存在')
+  if (!sftpConnectionId) {
+    throw new Error('SFTP 连接标识符不能为空（连接未建立）')
   }
   
   if (!filePath) {
@@ -345,9 +419,11 @@ export async function uploadFile(
   }
   
   try {
-    // 获取文件名和远程基础路径
+    // 获取文件名和远程基础路径（remotePath 现在是可选参数）
     const fileName = filePath.split(/[\\/]/).pop() || 'file'
-    const remoteBasePath = typeof remotePath === 'string' ? remotePath : remotePath.value
+    const remoteBasePath = typeof remotePath === 'string' 
+      ? remotePath 
+      : (remotePath?.value || '/')
     
     // 创建文件节点
     const fileNode: TransferNode = {
@@ -365,13 +441,14 @@ export async function uploadFile(
       elapsed: ''
     }
     
-    // 创建传输任务并添加到 Store（包含必需的 connectionId 字段）
+    // 创建传输任务并添加到 Store（安全架构 v4：直接使用 sftpConnectionId）
     const task: TransferTask = {
       id: `task-${Date.now()}`,
       type: 'upload',
       status: 'pending',  // 初始状态为待开始，符合 TransferStatus 标准
       root: fileNode,
-      connectionId: session?.id || session?.host || 'unknown',
+      sftpConnectionId: sftpConnectionId,  // ✅ 直接使用传入的连接标识符
+      sessionId: sessionId,                // ✅ 可选：用于显示会话信息
       totalBytes: 0, // 稍后更新
       transferredBytes: 0,
       remainingTime: 0,
@@ -382,12 +459,12 @@ export async function uploadFile(
     // 添加到 Store（返回 reactive 对象）
     sftpTransferStore.addTask(task)
     
-    // 开始上传（传递 taskId 以确保响应式更新）
+    // 开始上传（传递 taskId 和 sftpConnectionId 以确保响应式更新）
     console.log('[upload] 正在上传文件...')
     
     // 注意：任务状态会在 uploadSingleFile 中当首个文件节点开始传输时自动从 pending 转换为 transferring
     
-    await uploadSingleFile(fileNode, session, task.id)
+    await uploadSingleFile(fileNode, sftpConnectionId, task.id)
     
     // 更新任务状态和统计
     task.status = 'completed'
@@ -407,22 +484,30 @@ export async function uploadFile(
 }
 
 /**
- * 上传文件夹主函数
- * @param folderPath 本地文件夹路径
- * @param session SSH 会话
- * @param remotePath 远程目标路径（可以是字符串或 Ref<string>）
+ * 上传文件夹主函数（安全架构 v4）
+ * 
+ * 设计原则：
+ * - 不再接收 session 对象
+ * - 直接使用 sftpConnectionId（SFTP 连接已在 TerminalTab 初始化时建立）
+ * - 可选接收 sessionId（用于 UI 显示会话信息）
+ * 
+ * @param folderPath - 本地文件夹路径
+ * @param sftpConnectionId - SFTP 连接标识符（必填，对应已建立的连接）
+ * @param sessionId - 会话 ID（可选，用于 UI 显示会话信息）
+ * @param remotePath - 远程目标路径（可以是字符串或 Ref<string>）
  */
 export async function uploadFolder(
   folderPath: string,
-  session: Session | null,
-  remotePath: string | { value: string }
+  sftpConnectionId: string,
+  sessionId?: string,
+  remotePath?: string | { value: string }
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
-  console.log('[upload] 开始上传文件夹:', folderPath)
+  console.log('[upload] 开始上传文件夹:', folderPath, '连接ID:', sftpConnectionId)
   
-  if (!session) {
-    throw new Error('会话不存在')
+  if (!sftpConnectionId) {
+    throw new Error('SFTP 连接标识符不能为空（连接未建立）')
   }
   
   if (!folderPath) {
@@ -430,8 +515,10 @@ export async function uploadFolder(
   }
   
   try {
-    // 获取远程基础路径（处理 string 或 Ref<string> 类型）
-    const remoteBasePath = typeof remotePath === 'string' ? remotePath : remotePath.value
+    // 获取远程基础路径（remotePath 现在是可选参数，需要提供默认值）
+    const remoteBasePath = typeof remotePath === 'string' 
+      ? remotePath 
+      : (remotePath?.value || '/')
     
     // 第一步：递归扫描文件夹并构建树形结构
     console.log('[upload] 正在扫描文件夹...')
@@ -441,13 +528,14 @@ export async function uploadFolder(
     
     console.log(`[upload] 扫描完成：${scanResult.totalFiles} 个文件，总大小 ${formatSize(scanResult.totalBytes)}`)
     
-    // 第二步：创建传输任务并添加到 Store（返回 reactive 对象，包含必需的 connectionId）
+    // 第二步：创建传输任务并添加到 Store（安全架构 v4：直接使用 sftpConnectionId）
     const task: TransferTask = {
       id: `task-${Date.now()}`,
       type: 'upload',
       status: 'pending',  // 初始状态为待开始，符合 TransferStatus 标准
       root: rootNode,
-      connectionId: session?.id || session?.host || 'unknown',
+      sftpConnectionId: sftpConnectionId,  // ✅ 直接使用传入的连接标识符
+      sessionId: sessionId,                // ✅ 可选：用于显示会话信息
       totalBytes: scanResult.totalBytes,
       transferredBytes: 0,
       remainingTime: 0,
@@ -467,7 +555,7 @@ export async function uploadFolder(
       startTime: Date.now()
     })
     
-    await uploadFolderContent(rootNode, session, task.id)
+    await uploadFolderContent(rootNode, sftpConnectionId, task.id)
     
     // 第四步：更新任务状态
     task.status = 'completed'

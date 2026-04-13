@@ -182,29 +182,6 @@ export interface TerminalSize {
   height: number
 }
 
-/**
- * 文件传输项类型定义
- */
-export interface FileTransferItem {
-  /** 传输ID */
-  id: string
-  /** 本地路径 */
-  localPath: string
-  /** 远程路径 */
-  remotePath: string
-  /** 传输方向 */
-  direction: 'upload' | 'download'
-  /** 文件大小 */
-  size: number
-  /** 已传输大小 */
-  transferred: number
-  /** 传输状态 */
-  status: 'pending' | 'transferring' | 'completed' | 'failed' | 'cancelled'
-  /** 传输速度 */
-  speed?: number
-  /** 错误信息 */
-  error?: string
-}
 
 /**
  * 历史记录类型定义

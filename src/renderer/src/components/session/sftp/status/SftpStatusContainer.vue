@@ -172,14 +172,14 @@ const {
 } = storeToRefs(sftpTransferStore)
 
 /**
- * 当前连接的传输任务（按 connectionId 过滤）
- * 如果没有指定 connectionId，则返回所有任务（兼容旧逻辑）
+ * 当前连接的传输任务（按 sftpConnectionId 过滤）
+ * 如果没有指定 sftpConnectionId，则返回所有任务（兼容旧逻辑）
  */
 const currentConnectionTasks = computed(() => {
   if (!props.connectionId) {
     return transferTasks.value
   }
-  return transferTasks.value.filter(task => task.connectionId === props.connectionId)
+  return transferTasks.value.filter(task => task.sftpConnectionId === props.connectionId)
 })
 
 // ========== 任务过滤相关逻辑 ==========

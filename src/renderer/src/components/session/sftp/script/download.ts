@@ -1,11 +1,14 @@
 /**
- * SFTP 下载功能模块
+ * SFTP 下载功能模块（安全架构 v4）
  * 支持单文件、文件夹、批量下载
  * 使用统一的树形组件显示下载进度
+ * 
+ * 设计原则：
+ * - 不再依赖 session 对象
+ * - 直接使用 sftpConnectionId（SFTP 连接已在 TerminalTab 初始化时建立）
  * @module sftp/download
  */
 
-import type { Session } from '@shared/types'
 import type { TransferTask, TransferNode } from '@shared/types/sftp'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
 
@@ -13,13 +16,13 @@ import { useSftpTransferStore } from '@/stores/sftpTransfer'
  * 递归扫描远程文件夹并构建传输节点树
  * @param remotePath 远程文件夹路径
  * @param localBasePath 本地基础路径（当前本地目录）
- * @param session SSH 会话
+ * @param sftpConnectionId SFTP 连接标识符（已在 TerminalTab 初始化时建立）
  * @returns 根节点和文件统计信息
  */
 async function scanRemoteFolderRecursive(
   remotePath: string,
   localBasePath: string,
-  session: Session
+  sftpConnectionId: string
 ): Promise<{ rootNode: TransferNode; totalFiles: number; totalBytes: number }> {
   // 获取文件夹名称
   const folderName = remotePath.split('/').pop() || 'folder'
@@ -48,8 +51,8 @@ async function scanRemoteFolderRecursive(
   let totalBytes = 0
   
   try {
-    // 通过 Electron API 列出远程目录内容
-    const result = await window.api.sftp.listDir(session.id || session.host, remotePath)
+    // 通过 Electron API 列出远程目录内容（使用已建立的 sftpConnectionId）
+    const result = await window.api.sftp.listDir(sftpConnectionId, remotePath)
     
     if (!result.success || !result.data) {
       throw new Error(result.error || '无法读取远程目录')
@@ -74,7 +77,7 @@ async function scanRemoteFolderRecursive(
           const subResult = await scanRemoteFolderRecursive(
             fullRemotePath, 
             `${localBasePath}/${folderName}`, 
-            session
+            sftpConnectionId
           )
 
           if (currentNode.children) {
@@ -150,13 +153,13 @@ async function scanRemoteFolderRecursive(
  * 下载单个文件（核心函数）
  * 通过 Store API 更新状态，支持进度回调
  * 
- * @param node 文件传输节点
- * @param session SSH 会话
- * @param taskId 任务 ID（用于 Store 更新）
+ * @param node - 文件传输节点
+ * @param sftpConnectionId - SFTP 连接标识符（已在 TerminalTab 初始化时建立）
+ * @param taskId - 任务 ID（用于 Store 更新）
  */
 async function downloadSingleFile(
   node: TransferNode, 
-  session: Session,
+  sftpConnectionId: string,
   taskId: string
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
@@ -164,6 +167,10 @@ async function downloadSingleFile(
   console.log(`[download] 开始下载文件: ${node.name}`)
   console.log(`[download] 远程路径: ${node.remotePath}`)
   console.log(`[download] 本地路径: ${node.localPath}`)
+  
+  if (!sftpConnectionId) {
+    throw new Error('SFTP 连接标识符不能为空（连接未建立）')
+  }
   
   // 检查任务状态：如果当前是 pending，则更新为 transferring
   // 只有当第一个文件节点真正开始传输时，才改变任务状态
@@ -181,7 +188,9 @@ async function downloadSingleFile(
   })
   
   const startTime = Date.now()
-  const sessionId = session.id || session.host
+  
+  // ✅ 直接使用传入的 sftpConnectionId（连接已在 TerminalTab 初始化时建立）
+  const connectionId = sftpConnectionId
   
   try {
     // 验证路径存在
@@ -237,8 +246,8 @@ async function downloadSingleFile(
       }
     })
     
-    // 执行下载操作（带进度回调）
-    const result = await window.api.sftp.download(sessionId, node.remotePath, node.localPath)
+    // 执行下载操作（使用已建立的 sftpConnectionId，带进度回调）
+    const result = await window.api.sftp.download(connectionId, node.remotePath, node.localPath)
     
     // 清理进度监听
     cleanupProgress()
@@ -283,14 +292,26 @@ async function downloadSingleFile(
  * @param session SSH 会话
  * @param taskId 任务 ID（用于 Store 更新）
  */
+/**
+ * 递归下载文件夹内容（安全架构 v4）
+ * 
+ * 设计原则：
+ * - 不再依赖 session 对象
+ * - 直接使用 sftpConnectionId 调用 SFTP API
+ * - 递归处理文件夹结构，更新节点进度
+ * 
+ * @param node - 当前传输节点（文件或文件夹）
+ * @param sftpConnectionId - SFTP 连接标识符（已在 TerminalTab 初始化时建立）
+ * @param taskId - 任务 ID（用于 Store 状态更新）
+ */
 async function downloadFolderContent(
   node: TransferNode, 
-  session: Session,
+  sftpConnectionId: string,
   taskId: string
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
-  if (!session) return
+  if (!sftpConnectionId) return
   
   if (node.isDirectory && node.children && node.children.length > 0) {
     // 如果是文件夹，先在本地创建目录
@@ -321,9 +342,9 @@ async function downloadFolderContent(
       startTime: Date.now()
     })
     
-    // 递归下载所有子节点
+    // 递归下载所有子节点（传递 sftpConnectionId）
     for (const child of node.children) {
-      await downloadFolderContent(child, session, taskId)
+      await downloadFolderContent(child, sftpConnectionId, taskId)
       
       // 计算父节点的完成统计
       let completedFiles = 0
@@ -347,9 +368,51 @@ async function downloadFolderContent(
       progress: 100
     })
     
+  } else if (node.isDirectory) {
+    // ✅ 空文件夹处理：直接创建本地目录并标记完成
+    console.log(`[download] 检测到空文件夹，创建本地目录: ${node.name}`)
+    
+    // 更新节点状态为传输中
+    sftpTransferStore.updateNodeStatus(taskId, node.id, {
+      status: 'transferring',
+      startTime: Date.now()
+    })
+    
+    try {
+      // 在本地创建空目录（使用已建立的 sftpConnectionId）
+      if (node.localPath) {
+        const result = await window.api.sftp.ensureDir(node.localPath)
+        if (!result.success) {
+          throw new Error(result.error || '创建本地目录失败')
+        }
+        console.log(`[download] ✅ 空文件夹已创建: ${node.localPath}`)
+      }
+      
+      // 更新节点状态为已完成
+      const endTime = Date.now()
+      const elapsedSeconds = Math.round((endTime - (node.startTime || endTime)) / 1000)
+      
+      sftpTransferStore.updateNodeStatus(taskId, node.id, {
+        status: 'completed',
+        progress: 100,
+        elapsed: formatTime(elapsedSeconds)
+      })
+      
+    } catch (error: any) {
+      console.error(`[download] ❌ 空文件夹创建失败: ${node.name}`, error)
+      
+      // 更新错误状态
+      sftpTransferStore.updateNodeStatus(taskId, node.id, {
+        status: 'error',
+        error: error.message || '空文件夹创建失败'
+      })
+      
+      throw error
+    }
+    
   } else if (!node.isDirectory) {
-    // 如果是文件，执行下载
-    await downloadSingleFile(node, session, taskId)
+    // 如果是文件，执行下载（传递 sftpConnectionId）
+    await downloadSingleFile(node, sftpConnectionId, taskId)
   }
 }
 
@@ -369,22 +432,30 @@ function formatTime(seconds: number): string {
 }
 
 /**
- * 下载单个文件（独立函数）
- * @param remotePath 远程文件路径
- * @param session SSH 会话
- * @param localPath 本地目标路径（可以是字符串或 Ref<string>）
+ * 下载单个文件（导出函数，安全架构 v4）
+ * 
+ * 设计原则：
+ * - 不再接收 session 对象（避免在渲染进程传递敏感信息）
+ * - 直接使用 sftpConnectionId（SFTP 连接已在 TerminalTab 初始化时建立）
+ * - 可选接收 sessionId（用于通过 SessionStore 获取会话名称等非敏感信息显示）
+ * 
+ * @param remotePath - 远程文件路径
+ * @param sftpConnectionId - SFTP 连接标识符（必填，对应已建立的连接）
+ * @param sessionId - 会话 ID（可选，用于 UI 显示会话信息）
+ * @param localPath - 本地目标路径（可以是字符串或 Ref<string>）
  */
 export async function downloadFile(
   remotePath: string,
-  session: Session | null,
-  localPath: string | { value: string }
+  sftpConnectionId: string,
+  sessionId?: string,
+  localPath?: string | { value: string }
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
-  console.log('[download] 开始下载文件:', remotePath)
+  console.log('[download] 开始下载文件:', remotePath, '连接ID:', sftpConnectionId)
   
-  if (!session) {
-    throw new Error('会话不存在')
+  if (!sftpConnectionId) {
+    throw new Error('SFTP 连接标识符不能为空（连接未建立）')
   }
   
   if (!remotePath) {
@@ -392,9 +463,11 @@ export async function downloadFile(
   }
   
   try {
-    // 获取文件名和本地基础路径
+    // 获取文件名和本地基础路径（localPath 现在是可选参数，需要提供默认值）
     const fileName = remotePath.split('/').pop() || 'file'
-    const localBasePath = typeof localPath === 'string' ? localPath : localPath.value
+    const localBasePath = typeof localPath === 'string' 
+      ? localPath 
+      : (localPath?.value || '')
     
     // 创建文件节点（type 为 'download'）
     const fileNode: TransferNode = {
@@ -412,13 +485,14 @@ export async function downloadFile(
       elapsed: ''
     }
     
-    // 创建传输任务并添加到 Store（type 为 'download'，包含必需的 connectionId）
+    // 创建传输任务并添加到 Store（安全架构 v4：直接使用 sftpConnectionId）
     const task: TransferTask = {
       id: `task-${Date.now()}`,
       type: 'download', // 关键：标记为下载任务
       status: 'pending',
       root: fileNode,
-      connectionId: session?.id || session?.host || 'unknown',
+      sftpConnectionId: sftpConnectionId,  // ✅ 直接使用传入的连接标识符
+      sessionId: sessionId,                // ✅ 可选：用于显示会话信息
       totalBytes: 0,
       transferredBytes: 0,
       remainingTime: 0,
@@ -429,12 +503,12 @@ export async function downloadFile(
     // 添加到 Store（返回 reactive 对象）
     sftpTransferStore.addTask(task)
     
-    // 开始下载（传递 taskId 以确保响应式更新）
+    // 开始下载（传递 taskId 和 sftpConnectionId 以确保响应式更新）
     console.log('[download] 正在下载文件...')
     
     // 注意：任务状态会在 downloadSingleFile 中当首个文件节点开始传输时自动从 pending 转换为 transferring
     
-    await downloadSingleFile(fileNode, session, task.id)
+    await downloadSingleFile(fileNode, sftpConnectionId, task.id)
     
     // 更新任务状态和统计
     task.status = 'completed'
@@ -454,22 +528,30 @@ export async function downloadFile(
 }
 
 /**
- * 下载文件夹主函数
- * @param remotePath 远程文件夹路径
- * @param session SSH 会话
- * @param localPath 本地目标路径（可以是字符串或 Ref<string>）
+ * 下载文件夹主函数（安全架构 v4）
+ * 
+ * 设计原则：
+ * - 不再接收 session 对象
+ * - 直接使用 sftpConnectionId（SFTP 连接已在 TerminalTab 初始化时建立）
+ * - 可选接收 sessionId（用于 UI 显示会话信息）
+ * 
+ * @param remotePath - 远程文件夹路径
+ * @param sftpConnectionId - SFTP 连接标识符（必填，对应已建立的连接）
+ * @param sessionId - 会话 ID（可选，用于 UI 显示会话信息）
+ * @param localPath - 本地目标路径（可以是字符串或 Ref<string>）
  */
 export async function downloadFolder(
   remotePath: string,
-  session: Session | null,
-  localPath: string | { value: string }
+  sftpConnectionId: string,
+  sessionId?: string,
+  localPath?: string | { value: string }
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
-  console.log('[download] 开始下载文件夹:', remotePath)
+  console.log('[download] 开始下载文件夹:', remotePath, '连接ID:', sftpConnectionId)
   
-  if (!session) {
-    throw new Error('会话不存在')
+  if (!sftpConnectionId) {
+    throw new Error('SFTP 连接标识符不能为空（连接未建立）')
   }
   
   if (!remotePath) {
@@ -477,26 +559,29 @@ export async function downloadFolder(
   }
   
   try {
-    // 获取文件夹名和本地基础路径
+    // 获取文件夹名和本地基础路径（localPath 现在是可选参数）
     const folderName = remotePath.split('/').pop() || 'folder'
-    const localBasePath = typeof localPath === 'string' ? localPath : localPath.value
+    const localBasePath = typeof localPath === 'string' 
+      ? localPath 
+      : (localPath?.value || '')
     
     console.log(`[download] 文件夹名: ${folderName}`)
     console.log(`[download] 本地目标路径: ${localBasePath}`)
     
-    // 递归扫描远程文件夹结构
+    // 递归扫描远程文件夹结构（使用已建立的 sftpConnectionId）
     console.log('[download] 正在扫描远程文件夹结构...')
-    const scanResult = await scanRemoteFolderRecursive(remotePath, localBasePath, session)
+    const scanResult = await scanRemoteFolderRecursive(remotePath, localBasePath, sftpConnectionId)
     
     console.log(`[download] 扫描完成：${scanResult.totalFiles} 个文件，总计 ${(scanResult.totalBytes / 1024 / 1024).toFixed(2)} MB`)
     
-    // 创建传输任务（type 为 'download'，包含必需的 connectionId）
+    // 创建传输任务（安全架构 v4：直接使用 sftpConnectionId）
     const task: TransferTask = {
       id: `task-${Date.now()}`,
       type: 'download', // 关键：标记为下载任务
       status: 'pending',
       root: scanResult.rootNode,
-      connectionId: session?.id || session?.host || 'unknown',
+      sftpConnectionId: sftpConnectionId,  // ✅ 直接使用传入的连接标识符
+      sessionId: sessionId,                // ✅ 可选：用于显示会话信息
       totalBytes: scanResult.totalBytes,
       transferredBytes: 0,
       remainingTime: 0,
@@ -507,10 +592,10 @@ export async function downloadFolder(
     // 添加到 Store
     sftpTransferStore.addTask(task)
     
-    // 开始递归下载文件夹内容
+    // 开始递归下载文件夹内容（传递 sftpConnectionId）
     console.log('[download] 开始下载文件夹内容...')
     
-    await downloadFolderContent(scanResult.rootNode, session, task.id)
+    await downloadFolderContent(scanResult.rootNode, sftpConnectionId, task.id)
     
     // 更新任务状态和统计
     task.status = 'completed'

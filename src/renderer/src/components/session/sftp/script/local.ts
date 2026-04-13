@@ -5,8 +5,9 @@
  */
 
 import type { Ref } from 'vue'
-import type { TransferTask, TransferNode, TransferType } from '@shared/types/sftp'
+import type { TransferTask, TransferNode } from '@shared/types/sftp'
 import { ref } from 'vue'
+import { useSftpTransferStore } from '@/stores/sftpTransfer'
 
 
 /**
@@ -166,25 +167,30 @@ export async function uploadFile(
   const taskId = `upload-${Date.now()}`
   const startTime = Date.now()
   
-  // 使用 transfer-tree.ts 的 createTransferNode 创建节点
-  const node = createTransferNode(
-    fileName,
-    false,
-    'upload',
-    selectedLocal.value,
-    remoteFilePath,
-    0
-  )
-  node.status = 'pending'
-  node.startTime = startTime
+  // 手动创建 TransferNode（替代不存在的 createTransferNode 函数）
+  const node: TransferNode = {
+    id: `node-${taskId}`,
+    name: fileName,
+    isDirectory: false,
+    type: 'upload',
+    status: 'pending',
+    progress: 0,
+    size: 0, // 稍后通过进度回调更新
+    localPath: selectedLocal.value,
+    remotePath: remoteFilePath,
+    speed: 0,
+    remaining: '',
+    elapsed: '',
+    startTime
+  }
   
-  // 创建 TransferTask（包含必需的 connectionId 和 root 字段）
+  // 创建 TransferTask（安全架构 v3：使用 sftpConnectionId）
   const task: TransferTask = {
     id: taskId,
     type: 'upload',
     status: 'pending',
     root: node,
-    connectionId: connectionId,
+    sftpConnectionId: connectionId,  // SFTP 连接标识符
     totalBytes: 0,
     transferredBytes: 0,
     remainingTime: 0,
@@ -203,8 +209,10 @@ export async function uploadFile(
     
     console.log('[uploadFile] Progress event:', data)
     
-    // 使用 transfer-tree.ts 的 updateNodeProgress 更新节点进度
-    updateNodeProgress(node, data.progress, data.speed, [node])
+    // 手动更新节点进度（替代不存在的 updateNodeProgress 函数）
+    node.progress = data.progress
+    node.speed = data.speed
+    node.size = data.size
     
     // 计算已用时间
     const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000)
@@ -223,9 +231,9 @@ export async function uploadFile(
     task.elapsedTime = elapsedSeconds
     task.remainingTime = data.speed > 0 ? Math.floor((data.size - data.transferredSize) / data.speed) : 0
     
-    // 更新状态为 active
+    // 更新状态为 transferring（符合 TransferStatus 标准）
     if (node.status === 'pending') {
-      task.status = 'active'
+      task.status = 'transferring'
     }
   }
   
@@ -273,79 +281,116 @@ export async function uploadFile(
 }
 
 /**
- * 删除本地文件（带进度追踪）
+ * 删除本地文件（使用 TransferTask 统一管理）
+ * 
+ * 安全架构 v3：
+ * - 使用 TransferTask 接口统一管理所有任务类型（上传、下载、删除）
+ * - 通过 sftpTransferStore 集中管理任务状态
+ * - 支持进度追踪和 UI 响应式更新
+ * 
  * @param filePath - 要删除的文件路径
  * @param fileName - 文件名称
  * @param isDirectory - 是否为文件夹
- * @param deleteTasks - 删除任务列表
+ * @param connectionId - SFTP 连接标识符（用于任务隔离）
  * @param loadLocalFiles - 加载本地文件列表的函数
  */
 export async function deleteLocalFile(
   filePath: string,
   fileName: string,
   isDirectory: boolean,
-  deleteTasks: Ref<DeleteTask[]>,
+  connectionId: string,
   loadLocalFiles: () => Promise<void>
 ): Promise<void> {
+  const sftpTransferStore = useSftpTransferStore()
+  
   const taskId = `delete-local-${Date.now()}`
   const startTime = Date.now()
   
-  // 创建 DeleteTask
-  const task: DeleteTask = {
-    id: taskId,
+  // 创建文件节点（TransferNode）
+  const node: TransferNode = {
+    id: `node-${taskId}`,
     name: fileName,
-    type: isDirectory ? 'folder' : 'file',
-    source: 'local',
+    isDirectory: isDirectory,
+    type: 'delete',
     status: 'pending',
-    path: filePath,
+    progress: 0,
     size: 0,
+    localPath: filePath,
+    remotePath: '', // 本地删除不需要远程路径
+    speed: 0,
+    remaining: '',
+    elapsed: '',
     startTime
   }
   
-  // 添加到删除任务列表
-  deleteTasks.value = [...deleteTasks.value, task]
+  // 创建 TransferTask（安全架构 v3：统一接口）
+  const task: TransferTask = {
+    id: taskId,
+    type: 'delete', // 任务类型：删除
+    status: 'pending',
+    root: node,
+    sftpConnectionId: connectionId, // SFTP 连接标识符（用于任务隔离）
+    totalBytes: 0,
+    transferredBytes: 0,
+    remainingTime: 0,
+    elapsedTime: 0,
+    createdAt: startTime
+  }
+  
+  // 添加到 Store（自动触发 UI 更新）
+  sftpTransferStore.addTask(task)
+  console.log(`[local] ✅ 删除任务已创建: ${taskId}`)
   
   try {
-    // 如果是文件夹，需要先扫描文件夹结构
+    // 更新任务状态为传输中
+    sftpTransferStore.updateTaskStatus(taskId, 'transferring')
+    sftpTransferStore.updateNodeStatus(taskId, node.id, {
+      status: 'transferring',
+      startTime: Date.now()
+    })
+    
+    // 如果是文件夹，需要先扫描文件夹结构（可选，用于显示子项进度）
     if (isDirectory) {
-      task.status = 'deleting'
-      // 递归扫描文件夹结构，创建子任务
-      const children = await scanFolderStructure(filePath, '')
-      task.children = children.map(child => ({
-        id: child.id,
-        name: child.name,
-        type: child.isDirectory ? 'folder' : 'file',
-        source: 'local' as const,
-        status: 'pending',
-        path: child.localPath || '',
-        size: child.size,
-        startTime: Date.now()
-      }))
-    } else {
-      task.status = 'deleting'
+      console.log('[local] 正在扫描文件夹结构...')
+      // 可以在这里添加扫描逻辑，如果需要显示每个文件的删除进度
     }
     
+    // 调用 Electron API 删除本地文件
     const result = await window.api.sftp.deleteLocalFile(filePath)
+    
     if (!result.success) {
       throw new Error(result.error || '删除失败')
     }
     
     // 更新任务状态为完成
-    task.status = 'completed'
-    task.endTime = Date.now()
+    sftpTransferStore.updateNodeStatus(taskId, node.id, {
+      status: 'completed',
+      progress: 100
+    })
+    
+    sftpTransferStore.updateTaskStatus(taskId, 'completed')
+    
+    console.log(`[local] ✅ 文件删除完成: ${fileName}`)
     
     // 刷新本地文件列表
     await loadLocalFiles()
     
-    // 延迟清理删除任务
+    // 延迟清理已完成任务（3秒后自动移除）
     setTimeout(() => {
-      deleteTasks.value = deleteTasks.value.filter(t => t.id !== taskId)
+      sftpTransferStore.removeTask(taskId)
+      console.log(`[local] 🗑️ 删除任务已清理: ${taskId}`)
     }, 3000)
+    
   } catch (error: any) {
-    console.error('删除本地文件失败:', { filePath, error: error.message })
-    task.status = 'failed'
-    task.error = error.message
-    task.endTime = Date.now()
+    console.error('[local] 删除本地文件失败:', { filePath, error: error.message })
+    
+    // 更新任务状态为错误（符合 TransferStatus 标准）
+    sftpTransferStore.updateNodeStatus(taskId, node.id, {
+      status: 'error'
+    })
+    
+    sftpTransferStore.updateTaskStatus(taskId, 'error')
+    
     throw error
   }
 }
@@ -363,84 +408,6 @@ export function localUp(
   if (parentPath !== state.localPath.value) {
     state.localPath.value = parentPath
     loadLocalFiles(state)
-  }
-}
-
-/**
- * 上传文件夹（带进度追踪）
- * @param session - 当前会话
- * @param remotePath - 远程目标路径
- * @param task - 传输任务
- * @param localFolderPath - 本地文件夹路径
- */
-export async function uploadFolder(
-  session: any,
-  remotePath: Ref<string>,
-  task: TransferTask,
-  localFolderPath: string
-): Promise<void> {
-  try {
-    if (!session) return
-    const sessionId = session.id || session.host
-    
-    const transferNodes = task.nodes
-    
-    const folderName = localFolderPath.split(/[\\/]/).pop() || ''
-    const remoteFolderPath = remotePath.value === '/' ? `/${folderName}` : `${remotePath.value}/${folderName}`
-    
-    // 扫描文件夹结构，创建完整的节点树
-    const childNodes = await scanFolderStructure(localFolderPath, remoteFolderPath)
-    
-    // 计算总文件数（用于显示总体进度）
-    const totalFiles = childNodes.length
-    let completedFiles = 0
-    
-    // 创建根节点
-    const rootNode: TransferNode = {
-      id: `node-${Date.now()}`,
-      name: folderName,
-      isDirectory: true,
-      type: 'upload',
-      status: 'pending',
-      progress: 0,
-      size: 0,
-      localPath: localFolderPath,
-      remotePath: remoteFolderPath,
-      speed: 0,
-      remaining: '-',
-      elapsed: '0s',
-      children: childNodes,
-      startTime: Date.now(),
-      error: undefined,
-      totalFiles,
-      completedFiles
-    }
-    
-    // 添加到任务节点列表
-    transferNodes.push(rootNode)
-    
-    try {
-      // 执行上传
-      const uploadResult = await window.api.sftp.uploadFolder(sessionId, localFolderPath, remoteFolderPath)
-      
-      if (uploadResult.success) {
-        // 上传成功，更新节点状态
-        rootNode.status = 'completed'
-        rootNode.progress = 100
-      } else {
-        // 上传失败，更新节点状态
-        rootNode.status = 'error'
-        rootNode.error = uploadResult.error
-        alert(`上传失败：${uploadResult.error}`)
-      }
-    } catch (error: any) {
-      // 上传异常，更新节点状态
-      rootNode.status = 'error'
-      rootNode.error = error.message
-      alert(`上传失败：${error.message}`)
-    }
-  } catch (error: any) {
-    alert(`上传失败：${error.message}`)
   }
 }
 
