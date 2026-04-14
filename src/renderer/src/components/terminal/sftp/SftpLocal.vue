@@ -38,11 +38,12 @@
         :class="{ selected: selectedLocal === item.path }"
         @click="handleClick(item.path, $event)"
       >
-        <svg v-if="item.isDirectory" width="16" height="16" viewBox="0 0 16 16" fill="none" class="file-icon">
-          <path d="M14 12a2 2 0 002-2V6a2 2 0 00-2-2h-4l-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h10z" stroke="currentColor" stroke-width="1.5"/>
+        <svg v-if="item.isDirectory" width="16" height="16" viewBox="0 0 16 16" fill="none" class="file-icon is-folder">
+          <path d="M14 13.5C14 14.3284 13.3284 15 12.5 15H3.5C2.67157 15 2 14.3284 2 13.5V5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V13.5Z" stroke="currentColor" stroke-width="1.5"/>
         </svg>
         <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none" class="file-icon">
-          <path d="M13 12a2 2 0 002-2V6l-4-4H5a2 2 0 00-2 2v12a2 2 0 002 2h8z" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M9 1H4C2.89543 1 2 1.89543 2 3V13C2 14.1046 2.89543 15 4 15H12C13.1046 15 14 14.1046 14 13V6L9 1Z" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M9 1V6H14" stroke="currentColor" stroke-width="1.5"/>
         </svg>
         <span class="file-name">{{ item.name }}</span>
         <span class="file-size">{{ formatSize(item.size) }}</span>
@@ -613,11 +614,11 @@ defineExpose({
 
 .file-icon {
   flex-shrink: 0;
-  color: var(--warning-color, #e6a23c);
+  color: var(--primary-color, #409eff);
 }
 
-.file-icon:not([color]) {
-  color: var(--text-color-secondary, #999999);
+.file-icon.is-folder {
+  color: var(--warning-color, #e6a23c);
 }
 
 .file-name {
