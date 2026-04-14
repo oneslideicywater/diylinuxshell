@@ -93,7 +93,7 @@
           <!-- ✅ 修复 BUG: 使用 v-show 替代 v-if/v-else，避免组件销毁导致终端内容丢失 -->
           <div class="terminal-area">
             <!-- SSH 模式：显示 SSH 终端标签页 -->
-            <div v-show="currentMode === 'ssh'">
+            <div v-show="currentMode === 'ssh'" class="mode-container">
               <template v-for="tab in sshTabs" :key="tab.id">
                 <XTerminal
                   v-show="tab.id === activeTabId"
@@ -107,7 +107,7 @@
             </div>
 
             <!-- SFTP 模式：显示 SFTP 文件传输标签页 -->
-            <div v-show="currentMode === 'sftp'">
+            <div v-show="currentMode === 'sftp'" class="mode-container">
               <template v-for="tab in sftpTabs" :key="tab.id">
                 <SftpTransfer
                   v-show="tab.id === activeTabId"
@@ -539,6 +539,15 @@ onUnmounted(() => {
 
 /* 每个终端实例占满整个区域，通过 v-show 控制显示 */
 .terminal-area :deep(.x-terminal) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+/* 模式容器（SSH/SFTP）：占满整个终端区域 */
+.mode-container {
   position: absolute;
   top: 0;
   left: 0;

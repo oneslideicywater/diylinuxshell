@@ -5,7 +5,7 @@
  */
 
 <template>
-  <div class="sftp-footer-container">
+  <div class="sftp-footer-container" ref="containerRef">
     <!-- 简化状态栏 -->
     <div class="sftp-footer">
       <div class="footer-item">
@@ -357,6 +357,11 @@ watch(filteredTasks, (newVal) => {
 }, { immediate: true })
 
 /**
+ * 组件容器 DOM 引用（用于拖拽计算）
+ */
+const containerRef = ref<HTMLDivElement | null>(null)
+
+/**
  * 树形面板高度
  */
 const treePanelHeight = ref(500) // 默认 500px
@@ -393,7 +398,8 @@ function startResize(): void {
 function handleResize(event: MouseEvent): void {
   if (!isResizing) return
   
-  const container = document.querySelector('.sftp-footer-container')
+  // ✅ 使用组件内部的 ref 引用，而不是全局 querySelector
+  const container = containerRef.value
   if (!container) return
   
   const rect = container.getBoundingClientRect()
