@@ -18,6 +18,12 @@ export const useTerminalStore = defineStore('terminal', () => {
   // 当前模式：SSH终端 或 SFTP文件传输
   const currentMode = ref<'ssh' | 'sftp'>('ssh')
 
+  // 记录每个模式的最后活跃标签页ID（用户体验优化）
+  const lastActiveTabIdPerMode = ref<Record<'ssh' | 'sftp', string>>({
+    ssh: '',
+    sftp: ''
+  })
+
   // 计算属性：当前激活的标签页
   const activeTab = computed(() => {
     return tabs.value.find(t => t.id === activeTabId.value)
@@ -167,12 +173,76 @@ export const useTerminalStore = defineStore('terminal', () => {
 
   /**
    * 切换 SSH/SFTP 模式
+   * 智能管理 activeTabId，记住每个模式的最后活跃标签页
+   * 
+   * 用户体验优化：
+   * - 切换离开当前模式时，保存当前活跃标签页ID
+   * - 切换到目标模式时，优先恢复之前在该模式下活跃的标签页
+   * - 如果之前的标签页已不存在，则自动选择第一个可用标签页
+   * 
    * @param mode - 目标模式：'ssh' 或 'sftp'
    */
   function switchMode(mode: 'ssh' | 'sftp'): void {
     if (currentMode.value !== mode) {
+      const previousMode = currentMode.value
+      
+      console.log(`[TerminalStore] 从 ${previousMode.toUpperCase()} 切换到 ${mode.toUpperCase()} 模式`)
+      
+      // 步骤 1: 保存当前模式的活跃标签页（如果有效）
+      if (activeTabId.value) {
+        const currentActiveTab = tabs.value.find(t => t.id === activeTabId.value)
+        if (currentActiveTab) {
+          lastActiveTabIdPerMode.value[previousMode] = activeTabId.value
+          console.log(`[TerminalStore] 保存 ${previousMode.toUpperCase()} 模式的活跃标签页: ${activeTabId.value}`)
+        }
+      }
+      
+      // 步骤 2: 更新当前模式
       currentMode.value = mode
-      console.log(`[TerminalStore] 切换到 ${mode.toUpperCase()} 模式`)
+      
+      // 步骤 3: 获取目标模式下的所有标签页
+      const targetTabs = tabs.value.filter(tab => 
+        mode === 'ssh' ? (tab.type === 'ssh' || !tab.type) : tab.type === 'sftp'
+      )
+      
+      if (targetTabs.length > 0) {
+        // 尝试恢复目标模式的之前活跃标签页
+        const savedActiveId = lastActiveTabIdPerMode.value[mode]
+        
+        if (savedActiveId) {
+          // 检查保存的标签页是否仍然存在且属于目标模式
+          const savedTabExists = targetTabs.some(t => t.id === savedActiveId)
+          
+          if (savedTabExists) {
+            // ✅ 恢复之前的活跃标签页（用户体验最佳！）
+            activeTabId.value = savedActiveId
+            console.log(`[TerminalStore] 恢复 ${mode.toUpperCase()} 模式的活跃标签页: ${savedActiveId}（用户之前的选择）`)
+            return
+          } else {
+            console.log(`[TerminalStore] ${mode.toUpperCase()} 模式的之前活跃标签页 (${savedActiveId}) 已不存在`)
+          }
+        }
+        
+        // 如果无法恢复之前的活跃标签页，使用当前 activeTabId（如果属于目标模式）
+        const currentActiveInTargetMode = tabs.value.find(t => 
+          t.id === activeTabId.value && (
+            mode === 'ssh' ? (t.type === 'ssh' || !t.type) : t.type === 'sftp'
+          )
+        )
+        
+        if (currentActiveInTargetMode) {
+          console.log(`[TerminalStore] 保持当前活跃标签页: ${activeTabId.value}（已在目标模式中）`)
+          return
+        }
+        
+        // 最后兜底：选择第一个标签页
+        activeTabId.value = targetTabs[0].id
+        console.log(`[TerminalStore] 自动设置 ${mode.toUpperCase()} 模式的活跃标签页: ${targetTabs[0].id}（第一个可用）`)
+      } else {
+        // 目标模式下没有标签页
+        activeTabId.value = ''
+        console.log(`[TerminalStore] ${mode.toUpperCase()} 模式下无标签页，清空活跃标签页`)
+      }
     }
   }
 

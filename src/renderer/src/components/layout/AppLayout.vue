@@ -90,23 +90,24 @@
         <slot>
           <!-- 默认内容：终端/SFTP 区域 -->
           <!-- 根据当前模式显示不同内容 -->
+          <!-- ✅ 修复 BUG: 使用 v-show 替代 v-if/v-else，避免组件销毁导致终端内容丢失 -->
           <div class="terminal-area">
             <!-- SSH 模式：显示 SSH 终端标签页 -->
-            <template v-if="currentMode === 'ssh'">
+            <div v-show="currentMode === 'ssh'">
               <template v-for="tab in sshTabs" :key="tab.id">
-                <XTerminal 
-                  v-show="tab.id === activeTabId" 
-                  :tab="tab" 
+                <XTerminal
+                  v-show="tab.id === activeTabId"
+                  :tab="tab"
                 />
               </template>
               <!-- SSH 空状态提示 -->
               <div v-if="sshTabs.length === 0" class="empty-state">
                 <p>请选择或创建一个 SSH 会话</p>
               </div>
-            </template>
+            </div>
 
             <!-- SFTP 模式：显示 SFTP 文件传输标签页 -->
-            <template v-else>
+            <div v-show="currentMode === 'sftp'">
               <template v-for="tab in sftpTabs" :key="tab.id">
                 <SftpTransfer
                   v-show="tab.id === activeTabId"
@@ -121,7 +122,7 @@
               <div v-if="sftpTabs.length === 0" class="empty-state">
                 <p>请选择或创建一个 SFTP 会话</p>
               </div>
-            </template>
+            </div>
           </div>
         </slot>
       </main>
@@ -135,7 +136,7 @@ import { useTerminalStore } from '@/stores/terminal'
 import Sidebar from './Sidebar.vue'
 import TerminalTabs from '@/components/terminal/TerminalTabs.vue'
 import XTerminal from '@/components/terminal/XTerminal.vue'
-import SftpTransfer from '@/components/session/sftp/SftpTransfer.vue'
+import SftpTransfer from '@/components/terminal/sftp/SftpTransfer.vue'
 import type { Session } from '@shared/types'
 
 // 终端状态管理

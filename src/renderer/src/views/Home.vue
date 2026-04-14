@@ -61,7 +61,7 @@ const handleEditSession = async (session: Session | undefined) => {
   }
   
   // 重新从后端获取会话，确保密码是解密后的
-  let freshSession: Session | null = null
+  let freshSession: Session | undefined
   try {
     freshSession = await window.api.session.getById(session.id)
   } catch (e) {

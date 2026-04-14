@@ -223,13 +223,38 @@ const setupDataListeners = () => {
   })
 }
 
+// IntersectionObserver 用于监听元素可见性变化
+let resizeObserver: ResizeObserver | null = null
+let intersectionObserver: IntersectionObserver | null = null
+
+// 标记是否需要延迟 fit（用于 v-show 切换场景）
+let pendingFit = false
+
 /**
  * 处理窗口大小变化
  */
 const handleResize = () => {
   if (fitAddon && terminal) {
+    // 如果当前不可见，标记为需要延迟 fit
+    if (terminalContainer.value && terminalContainer.value.offsetParent === null) {
+      pendingFit = true
+      return
+    }
+    
     fitAddon.fit()
+    pendingFit = false
   }
+}
+
+/**
+ * 延迟执行 fit（当元素从不可见变为可见时调用）
+ */
+const delayedFit = () => {
+  if (!pendingFit || !fitAddon || !terminal) return
+  
+  nextTick(() => {
+    handleResize()
+  })
 }
 
 /**
@@ -396,6 +421,36 @@ onMounted(() => {
   
   // 监听点击事件，用于关闭右键菜单
   document.addEventListener('click', handleClickOutside)
+
+  // 使用 ResizeObserver 监听容器尺寸变化（处理 v-show 切换后的 resize）
+  if (terminalContainer.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+          // 容器有尺寸时，执行 fit
+          nextTick(() => {
+            handleResize()
+          })
+        }
+      }
+    })
+    
+    resizeObserver.observe(terminalContainer.value)
+  }
+
+  // 使用 IntersectionObserver 监听可见性变化
+  if (terminalContainer.value && typeof IntersectionObserver !== 'undefined') {
+    intersectionObserver = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && entry.intersectionRatio > 0) {
+          // 元素从不可见变为可见，延迟执行 fit
+          delayedFit()
+        }
+      }
+    }, { threshold: 0 })
+    
+    intersectionObserver.observe(terminalContainer.value)
+  }
 })
 
 onUnmounted(() => {
@@ -405,6 +460,18 @@ onUnmounted(() => {
   cleanupErrorListener?.()
   window.removeEventListener('resize', handleResize)
   document.removeEventListener('click', handleClickOutside)
+
+  // 清理 ResizeObserver
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+
+  // 清理 IntersectionObserver
+  if (intersectionObserver) {
+    intersectionObserver.disconnect()
+    intersectionObserver = null
+  }
 
   // 销毁终端实例
   terminal?.dispose()
