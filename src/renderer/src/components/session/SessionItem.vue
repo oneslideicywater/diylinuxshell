@@ -12,11 +12,11 @@
     @click="handleClick"
     @dblclick="$emit('dblclick')"
   >
-    <!-- 会话图标 -->
+    <!-- 会话图标 - 云命令行 -->
     <div class="session-icon">
-      <svg width="16" height="16" viewBox="0 0 16 16">
-        <rect x="1" y="3" width="14" height="10" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
-        <path d="M4 7h8M4 10h5" stroke="currentColor" stroke-width="1" />
+      <svg width="16" height="16" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+        <path d="M917.333333 835.413333H106.666667V188.586667h810.666666zM186.666667 755.413333h650.666666V268.586667H186.666667z" fill="currentColor" />
+        <path d="M343.04 648.746667l-56.533333-56.533334 88.32-88.32-88.32-88.32 56.533333-56.746666 144.853333 145.066666-144.853333 144.853334zM507.093333 585.173333h230.4v80h-230.4z" fill="currentColor" />
       </svg>
     </div>
 
@@ -30,14 +30,11 @@
     <div class="session-actions" @click.stop>
       <!-- SFTP 传输按钮 -->
       <button class="action-btn sftp" title="SFTP 传输" @click.stop="$emit('sftp')">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path
-            d="M10 1H4a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V5l-2-2zM10 1v4h4"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
+        <svg width="14" height="14" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+          <path d="M933.8 348.4h-64v-96.7c0-29.4-23.9-53.3-53.3-53.3H373.9v-64h442.6c64.7 0 117.3 52.6 117.3 117.3v96.7z" fill="currentColor" />
+          <path d="M330.6 162.7l63.9 159.7c6.4 15.9 17.2 29.4 31.4 39C440 371 456.5 376 473.7 376h406.6c11.8 0 21.3 9.6 21.3 21.3V840c0 11.8-9.6 21.3-21.3 21.3H142.6c-11.8 0-21.3-9.6-21.3-21.3V184c0-11.8 9.6-21.3 21.3-21.3h188m28.9-64H142.6c-47.1 0-85.3 38.2-85.3 85.3v656c0 47.1 38.2 85.3 85.3 85.3h737.7c47.1 0 85.3-38.2 85.3-85.3V397.4c0-47.1-38.2-85.3-85.3-85.3H473.7c-8.7 0-16.6-5.3-19.8-13.4l-74.6-186.5c-3.3-8.2-11.1-13.5-19.8-13.5z" fill="currentColor" />
+          <path d="M630.9 649.5H346.5c-17.7 0-32-14.3-32-32s14.3-32 32-32h284.4c17.7 0 32 14.3 32 32s-14.3 32-32 32z" fill="currentColor" />
+          <path d="M548 751.6c-8.2 0-16.4-3.1-22.6-9.4-12.5-12.5-12.5-32.8 0-45.3l82.4-82.4-82.4-82.4c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l105 105c12.5 12.5 12.5 32.8 0 45.3l-105 105c-6.3 6.4-14.5 9.5-22.7 9.5z" fill="currentColor" />
         </svg>
       </button>
 
