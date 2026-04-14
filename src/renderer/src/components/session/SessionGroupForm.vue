@@ -106,7 +106,7 @@ const props = withDefaults(defineProps<Props>(), {
  */
 const emit = defineEmits<{
   close: []
-  submit: [data: { name: string }]
+  submit: [data: { name: string; parentId?: string; depth?: number }]
 }>()
 
 /**
@@ -255,9 +255,13 @@ function handleSubmit(): void {
     return
   }
 
-  emit('submit', {
-    name: formData.name.trim()
-  })
+  // 提交表单数据，包含 parentId 和 depth（用于创建子分组）
+  const submitData = {
+    name: formData.name.trim(),
+    parentId: props.group?.parentId,
+    depth: props.group?.depth
+  }
+  emit('submit', submitData)
 }
 </script>
 

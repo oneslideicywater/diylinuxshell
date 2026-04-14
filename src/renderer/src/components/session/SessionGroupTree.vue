@@ -16,37 +16,18 @@
       @contextmenu.prevent="handleGroupContextMenu($event, subGroup)"
     >
       <!-- 子分组头部 -->
-      <div
-        class="group-header"
-        :class="{ 'depth-limit-reached': !canCreateSubGroupIn(subGroup.id) }"
-        @click="handleToggleGroup(subGroup.id)"
+      <GroupHeader
+        :group="subGroup"
+        :is-expanded="expandedGroups.has(subGroup.id)"
+        :session-count="getGroupSessionCount(subGroup.id)"
+        :can-create-sub-group="canCreateSubGroupIn(subGroup.id)"
+        @toggle="handleToggleGroup(subGroup.id)"
         @contextmenu.prevent.stop="handleGroupContextMenu($event, subGroup)"
-        :title="getGroupHeaderTooltip(subGroup)"
-      >
-        <svg
-          class="expand-icon"
-          :class="{ expanded: expandedGroups.has(subGroup.id) }"
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-        >
-          <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" />
-        </svg>
-        <!-- 分组图标 -->
-          <GroupIcon :size="16" />
-        <span class="group-name">{{ subGroup.name }}</span>
-        <span class="group-count">{{ getGroupSessionCount(subGroup.id) }}</span>
-        <!-- 添加会话按钮 -->
-        <button
-          class="add-session-btn"
-          @click.stop="handleAddSessionToGroup(subGroup)"
-          title="添加会话到分组"
-        >
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M6 1V11M1 6H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </div>
+        @add-session-to-group="handleAddSessionToGroup"
+        @create-subgroup="handleCreateSubGroupFromGroupHeader"
+        @edit-group="handleEditGroupFromGroupHeader"
+        @delete-group="handleDeleteGroupFromGroupHeader"
+      />
       
       <!-- 子分组内容 -->
       <div v-show="expandedGroups.has(subGroup.id)" class="group-content">
@@ -68,6 +49,7 @@
           @group-contextmenu="handleGroupContextMenu"
           @session-contextmenu="handleSessionContextMenu"
           @create-subgroup="handleCreateSubGroup"
+          @add-session-to-group="handleAddSessionToGroup"
         />
         
         <!-- 当前子分组的会话 -->
@@ -97,6 +79,8 @@ import { computed } from 'vue'
 import type { Session, SessionGroup } from '@shared/types'
 import SessionItem from './SessionItem.vue'
 import GroupIcon from './GroupIcon.vue'
+import GroupHeader from './GroupHeader.vue'
+import { useSessionGroup } from './script/useSessionGroup'
 import { MAX_GROUP_DEPTH } from '@shared/types'
 
 /**
@@ -138,60 +122,16 @@ const subGroups = computed(() => {
   return props.allGroups.filter(g => g.parentId === props.parentGroupId)
 })
 
-/**
- * 检查是否有子分组
- */
-const hasSubGroups = (groupId: string): boolean => {
-  return props.allGroups.some(g => g.parentId === groupId)
-}
-
-/**
- * 获取分组会话数量（包括子分组）
- */
-const getGroupSessionCount = (groupId: string): number => {
-  // 获取所有子分组 ID
-  const getAllSubGroupIds = (gid: string): string[] => {
-    const children = props.allGroups.filter(g => g.parentId === gid)
-    const ids = children.map(c => c.id)
-    return [...ids, ...children.flatMap(c => getAllSubGroupIds(c.id))]
-  }
-  
-  const subGroupIds = getAllSubGroupIds(groupId)
-  return props.sessions.filter(s => s.groupId && [groupId, ...subGroupIds].includes(s.groupId)).length
-}
-
-/**
- * 获取直接子分组的会话
- */
-const getDirectGroupSessions = (groupId: string): Session[] => {
-  return props.sessions.filter(s => s.groupId === groupId)
-}
-
-/**
- * 检查是否可以在目标分组下创建子分组
- */
-const canCreateSubGroupIn = (groupId: string): boolean => {
-  const group = props.allGroups.find(g => g.id === groupId)
-  if (!group) return false
-  
-  return group.depth < MAX_GROUP_DEPTH
-}
-
-/**
- * 获取分组头部 tooltip
- */
-const getGroupHeaderTooltip = (group: SessionGroup): string => {
-  const depthInfo = `层级：${group.depth}/${MAX_GROUP_DEPTH}`
-  const expandInfo = props.expandedGroups.has(group.id) 
-    ? '点击折叠分组，精简会话列表' 
-    : '点击展开分组，查看会话列表'
-  
-  if (!canCreateSubGroupIn(group.id)) {
-    return `${expandInfo} | ${depthInfo}（已达层级上限）`
-  }
-  
-  return `${expandInfo} | ${depthInfo}`
-}
+// 使用分组工具函数 composable（提取公共逻辑，避免与 SessionList 重复）
+const {
+  getDirectGroupSessions,
+  getGroupSessionCount,
+  hasSubGroups,
+  canCreateSubGroupIn
+} = useSessionGroup({
+  allGroups: () => props.allGroups,
+  sessions: () => props.sessions
+})
 
 /**
  * 切换分组展开状态
@@ -268,6 +208,32 @@ const handleCreateSubGroup = (group: SessionGroup) => {
  */
 const handleAddSessionToGroup = (group: SessionGroup) => {
   emit('addSessionToGroup', group)
+}
+
+/**
+ * 从 GroupHeader 创建子分组（修复 Bug 1）
+ * 直接传递给父组件处理
+ */
+const handleCreateSubGroupFromGroupHeader = (group: SessionGroup) => {
+  emit('createSubgroup', group)
+}
+
+/**
+ * 从 GroupHeader 编辑分组
+ * 直接传递给父组件处理
+ */
+const handleEditGroupFromGroupHeader = (group: SessionGroup) => {
+  // 编辑分组功能暂时未实现，可以后续扩展
+  console.log('[SessionGroupTree] 编辑分组:', group.name)
+}
+
+/**
+ * 从 GroupHeader 删除分组
+ * 直接传递给父组件处理
+ */
+const handleDeleteGroupFromGroupHeader = (group: SessionGroup) => {
+  // 删除分组功能暂时未实现，可以后续扩展
+  console.log('[SessionGroupTree] 删除分组:', group.name)
 }
 </script>
 

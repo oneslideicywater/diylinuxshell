@@ -35,7 +35,7 @@ export function registerSessionGroupHandlers(): void {
       const group: SessionGroup = {
         ...groupData,
         id: CryptoService.generateGroupId(),
-        depth: 1, // 初始值，会在 StoreService 中计算
+        depth: 1, // 初始值，会在 StoreService 中根据 parentId 重新计算
         createdAt: Date.now(),
         updatedAt: Date.now()
       }

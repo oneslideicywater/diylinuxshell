@@ -34,25 +34,18 @@
           <div v-if="!group.parentId" class="session-group" :data-group-id="group.id" :data-group-depth="group.depth"
             @contextmenu.prevent="handleGroupContextMenu($event, group)">
             <!-- 分组头部 -->
-            <div class="group-header" :class="{ 'depth-limit-reached': !canCreateSubGroupIn(group.id) }"
-              @click="toggleGroup(group.id)" @contextmenu.prevent.stop="handleGroupContextMenu($event, group)"
-              :title="getGroupHeaderTooltip(group)">
-              <svg class="expand-icon" :class="{ expanded: expandedGroups.has(group.id) }" width="12" height="12"
-                viewBox="0 0 12 12">
-                <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" />
-              </svg>
-              <!-- 分组图标 -->
-              <GroupIcon :size="16" />
-              <span class="group-name">{{ group.name }}</span>
-              <span class="group-count">{{ getGroupSessionCount(group.id) }}</span>
-              <!-- 添加会话按钮 -->
-              <button class="add-session-btn"
-                @click.stop="handleAddSessionToGroup(group)" title="添加会话到分组">
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                  <path d="M6 1V11M1 6H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                </svg>
-              </button>
-            </div>
+            <GroupHeader
+              :group="group"
+              :is-expanded="expandedGroups.has(group.id)"
+              :session-count="getGroupSessionCount(group.id)"
+              :can-create-sub-group="canCreateSubGroupIn(group.id)"
+              @toggle="toggleGroup(group.id)"
+              @contextmenu.prevent.stop="handleGroupContextMenu($event, group)"
+              @add-session-to-group="handleAddSessionToGroup"
+              @create-subgroup="handleCreateSubGroupFromGroupHeader"
+              @edit-group="handleEditGroupFromGroupHeader"
+              @delete-group="handleDeleteGroupFromGroupHeader"
+            />
 
             <!-- 分组内容（包含子分组和会话） -->
             <div v-show="expandedGroups.has(group.id)" class="group-content">
@@ -89,46 +82,6 @@
             <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
           </svg>
           <span>新建分组</span>
-        </div>
-      </div>
-
-      <!-- 分组管理右键菜单 -->
-      <div v-if="groupContextMenuVisible" class="context-menu" :style="groupContextMenuStyle" @click.stop>
-        <div class="menu-item" @click="handleNewSessionFromMenu" title="添加会话到当前分组">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          </svg>
-          <span>添加会话</span>
-        </div>
-        <div v-if="selectedGroup && canCreateSubGroupIn(selectedGroup.id)" class="menu-item"
-          @click="handleCreateSubGroupFromMenu" title="在当前分组内创建子分组">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          </svg>
-          <span>新建子分组</span>
-        </div>
-        <div class="menu-divider"></div>
-        <div class="menu-item" @click="handleEditGroup" title="双击分组名称，可修改分组名">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M10 2L12 4L4.5 11.5H2.5V9.5L10 2Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"
-              stroke-linejoin="round" />
-          </svg>
-          <span>编辑分组</span>
-        </div>
-        <div class="menu-item danger" @click="handleDeleteGroup" title="删除分组将会话全部删除，操作不可逆">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path
-              d="M2 4H12M5 4V3C5 2.44772 5.44772 2 6 2H8C8.55228 2 9 2.44772 9 3V4M11 4V11C11 11.5523 10.5523 12 10 12H4C3.44772 12 3 11.5523 3 11V4H11Z"
-              stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          <span>删除分组</span>
-        </div>
-        <div class="menu-divider"></div>
-        <div class="menu-item" @click="handleInspectElement" title="打开开发者工具并审查当前元素">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M1 13L5 9M3 3H5L12 10V12H10L3 3Z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-          <span>审查元素</span>
         </div>
       </div>
 
@@ -259,6 +212,8 @@ import ErrorDialog from '@/components/common/ErrorDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import SessionGroupTree from './SessionGroupTree.vue'
 import GroupIcon from './GroupIcon.vue'
+import GroupHeader from './GroupHeader.vue'
+import { useSessionGroup } from './script/useSessionGroup'
 import type { Session, SessionGroup } from '@shared/types'
 import { MAX_GROUP_DEPTH } from '@shared/types'
 
@@ -310,9 +265,6 @@ const saveExpandedGroups = () => {
 }
 
 // 分组管理相关状态
-const groupContextMenuVisible = ref(false)
-const groupContextMenuStyle = ref({})
-const selectedGroup = ref<SessionGroup | null>(null)
 const contextMenuPosition = ref<{ x: number; y: number }>({ x: 0, y: 0 })
 const groupFormVisible = ref(false)
 const editingGroup = ref<SessionGroup | null>(null)
@@ -367,6 +319,18 @@ const sessionGroups = computed(() => {
 // 未分组的会话
 const ungroupedSessions = computed(() => {
   return sessions.value.filter(s => !s.groupId)
+})
+
+// 使用分组工具函数 composable（提取公共逻辑，避免与 SessionGroupTree 重复）
+const {
+  getDirectGroupSessions,
+  getGroupSessionCount,
+  getGroupSessions,
+  hasSubGroups,
+  canCreateSubGroupIn
+} = useSessionGroup({
+  allGroups: computed(() => sessionStore.sessionGroups),
+  sessions: computed(() => sessions.value)
 })
 
 // 定义事件
@@ -443,73 +407,6 @@ const toggleGroup = (groupId: string) => {
 }
 
 /**
- * 获取分组会话列表（仅直接子会话，不包括子分组）
- */
-const getDirectGroupSessions = (groupId: string): Session[] => {
-  return sessions.value.filter(s => s.groupId === groupId)
-}
-
-/**
- * 获取分组会话数量（包括子分组）
- */
-const getGroupSessionCount = (groupId: string): number => {
-  const subGroupIds = getAllSubGroupIds(groupId)
-  return sessions.value.filter(s => s.groupId && [groupId, ...subGroupIds].includes(s.groupId)).length
-}
-
-/**
- * 获取分组会话列表（包括子分组）
- */
-const getGroupSessions = (groupId: string): Session[] => {
-  const subGroupIds = getAllSubGroupIds(groupId)
-  return sessions.value.filter(s => s.groupId && [groupId, ...subGroupIds].includes(s.groupId))
-}
-
-/**
- * 递归获取所有子分组 ID
- * @param gid - 分组 ID
- * @returns 所有子分组 ID 数组
- */
-const getAllSubGroupIds = (gid: string): string[] => {
-  const children = sessionStore.sessionGroups.filter(g => g.parentId === gid)
-  const ids = children.map(c => c.id)
-  return [...ids, ...children.flatMap(c => getAllSubGroupIds(c.id))]
-}
-
-/**
- * 检查是否有子分组
- */
-const hasSubGroups = (groupId: string): boolean => {
-  return sessionStore.sessionGroups.some(g => g.parentId === groupId)
-}
-
-/**
- * 检查是否可以在目标分组下创建子分组
- */
-const canCreateSubGroupIn = (groupId: string): boolean => {
-  const group = sessionStore.sessionGroups.find(g => g.id === groupId)
-  if (!group) return false
-
-  return group.depth < MAX_GROUP_DEPTH
-}
-
-/**
- * 获取分组头部 tooltip
- */
-const getGroupHeaderTooltip = (group: SessionGroup): string => {
-  const depthInfo = `层级：${group.depth}/${MAX_GROUP_DEPTH}`
-  const expandInfo = expandedGroups.value.has(group.id)
-    ? '点击折叠分组，精简会话列表'
-    : '点击展开分组，查看会话列表'
-
-  if (!canCreateSubGroupIn(group.id)) {
-    return `${expandInfo} | ${depthInfo}（已达层级上限）`
-  }
-
-  return `${expandInfo} | ${depthInfo}`
-}
-
-/**
  * 创建子分组
  */
 const handleCreateSubGroup = async (parentGroup: SessionGroup) => {
@@ -532,7 +429,6 @@ const handleCreateSubGroup = async (parentGroup: SessionGroup) => {
     updatedAt: Date.now()
   }
   groupFormVisible.value = true
-  groupContextMenuVisible.value = false
 }
 
 /**
@@ -565,49 +461,14 @@ const handleGroupContextMenu = (event: MouseEvent, group: SessionGroup) => {
   event.preventDefault()
   event.stopPropagation()
 
-  // 关闭其他菜单
+  // 关闭其他菜单（会话右键菜单、列表右键菜单等）
   closeAllContextMenus()
-
-  selectedGroup.value = group
+  
+  // 保存当前右键点击的分组ID（用于其他逻辑）
   currentRightClickGroupId.value = group.id
-  groupContextMenuVisible.value = true
-
-  // 保存右键点击坐标
+  
+  // 保存右键点击坐标（用于审查元素等功能）
   contextMenuPosition.value = { x: event.clientX, y: event.clientY }
-
-  // 计算菜单位置
-  const x = event.clientX
-  const y = event.clientY
-
-  groupContextMenuStyle.value = {
-    position: 'fixed',
-    left: `${x}px`,
-    top: `${y}px`,
-    zIndex: 1000
-  }
-}
-
-/**
- * 处理审查元素
- */
-const handleInspectElement = () => {
-  console.log('[Renderer] handleInspectElement called')
-  console.log('[Renderer] contextMenuPosition:', contextMenuPosition.value)
-  console.log('[Renderer] window.api exists:', typeof window.api !== 'undefined')
-  if (window.api) {
-    console.log('[Renderer] window.api.openDevTools exists:', typeof window.api.openDevTools !== 'undefined')
-  }
-  
-  groupContextMenuVisible.value = false
-  
-  if (window.api && window.api.openDevTools) {
-    console.log('[Renderer] Calling window.api.openDevTools with:', contextMenuPosition.value)
-    // 将响应式 Proxy 对象转换为普通对象，避免 IPC 克隆错误
-    const plainPosition = { ...contextMenuPosition.value }
-    window.api.openDevTools(plainPosition)
-  } else {
-    console.error('[Renderer] window.api.openDevTools is not available')
-  }
 }
 
 /**
@@ -766,7 +627,6 @@ const handleSessionContextMenu = (event: MouseEvent, session: Session) => {
  * 关闭所有上下文菜单
  */
 const closeAllContextMenus = () => {
-  groupContextMenuVisible.value = false
   listContextMenuVisible.value = false
   sessionContextMenuVisible.value = false
   showGroupSubmenu.value = false
@@ -782,97 +642,84 @@ const handleCreateGroup = () => {
 }
 
 /**
- * 创建子分组（从右键菜单）
+ * 从 GroupHeader 创建子分组（修复 Bug 1：确保在正确的父分组下创建）
+ * @param group - 当前右键点击的分组（作为父分组）
  */
-const handleCreateSubGroupFromMenu = async () => {
-  if (!selectedGroup.value) return
-
+const handleCreateSubGroupFromGroupHeader = async (group: SessionGroup) => {
   // 检查层级限制
-  const checkResult = await window.api.sessionGroup.checkCanCreateSubGroup(selectedGroup.value.id)
+  const checkResult = await window.api.sessionGroup.checkCanCreateSubGroup(group.id)
   if (!checkResult.canCreate) {
     // 显示错误提示
     showLevelLimitAlert(checkResult.error || '无法创建子分组')
     return
   }
 
-  // 打开分组表单，设置父分组
+  // 打开分组表单，设置父分组为当前右键的分组（修复 Bug 1 的关键）
   editingGroup.value = {
     id: '',
     name: '',
-    parentId: selectedGroup.value.id,
-    depth: selectedGroup.value.depth + 1,
+    parentId: group.id,  // ✅ 使用传入的 group.id 而不是 selectedGroup
+    depth: group.depth + 1,
     order: Date.now(),
     createdAt: Date.now(),
     updatedAt: Date.now()
   }
   groupFormVisible.value = true
-  groupContextMenuVisible.value = false
+}
+
+/**
+ * 从 GroupHeader 编辑分组
+ * @param group - 当前右键点击的分组
+ */
+const handleEditGroupFromGroupHeader = (group: SessionGroup) => {
+  editingGroup.value = group
+  groupFormVisible.value = true
+}
+
+/**
+ * 从 GroupHeader 删除分组
+ * @param group - 当前右键点击的分组
+ */
+const handleDeleteGroupFromGroupHeader = async (group: SessionGroup) => {
+  const sessionCount = getGroupSessionCount(group.id)
+
+  // 根据分组内是否有会话显示不同的确认对话框
+  if (sessionCount > 0) {
+    // 有会话时需要二次确认
+    const confirmed = await showConfirmDialog(
+      '删除分组确认',
+      `该分组包含 ${sessionCount} 个会话，删除分组将会话全部删除，确定继续？`,
+      true // 显示警告样式
+    )
+
+    if (!confirmed) return
+  } else {
+    // 没有会话时简单确认
+    const confirmed = await showConfirmDialog(
+      '删除分组确认',
+      `确定要删除分组 "${group.name}" 吗？`
+    )
+
+    if (!confirmed) return
+  }
+
+  try {
+    await window.api.sessionGroup.delete(group.id)
+    sessionStore.removeSessionGroup(group.id)
+  } catch (error) {
+    console.error('Failed to delete group:', error)
+    alert('删除分组失败')
+  }
 }
 
 /**
  * 显示层级限制提示
  */
 const showLevelLimitAlert = (message: string) => {
-  // 使用确认对话框显示错误信息
   confirmDialogTitle.value = '层级限制提示'
   confirmDialogMessage.value = message
   confirmDialogIsWarning.value = true
   confirmDialogVisible.value = true
-}
-
-/**
- * 编辑分组
- */
-const handleEditGroup = () => {
-  if (selectedGroup.value) {
-    editingGroup.value = selectedGroup.value
-    groupFormVisible.value = true
-    groupContextMenuVisible.value = false
-  }
-}
-
-/**
- * 删除分组
- */
-const handleDeleteGroup = async () => {
-  if (selectedGroup.value) {
-    const sessionCount = getGroupSessionCount(selectedGroup.value.id)
-
-    // 根据分组内是否有会话显示不同的确认对话框
-    if (sessionCount > 0) {
-      // 有会话时需要二次确认
-      const confirmed = await showConfirmDialog(
-        '删除分组确认',
-        `该分组包含 ${sessionCount} 个会话，删除分组将会话全部删除，确定继续？`,
-        true // 显示警告样式
-      )
-
-      if (!confirmed) {
-        groupContextMenuVisible.value = false
-        return
-      }
-    } else {
-      // 没有会话时简单确认
-      const confirmed = await showConfirmDialog(
-        '删除分组确认',
-        `确定要删除分组 "${selectedGroup.value.name}" 吗？`
-      )
-
-      if (!confirmed) {
-        groupContextMenuVisible.value = false
-        return
-      }
-    }
-
-    try {
-      await window.api.sessionGroup.delete(selectedGroup.value.id)
-      sessionStore.removeSessionGroup(selectedGroup.value.id)
-    } catch (error) {
-      console.error('Failed to delete group:', error)
-      alert('删除分组失败')
-    }
-    groupContextMenuVisible.value = false
-  }
 }
 
 /**
@@ -911,19 +758,20 @@ const handleSftp = (session: Session) => {
 /**
  * 提交分组表单
  */
-const handleSubmitGroupForm = async (data: { name: string; icon?: string }) => {
+const handleSubmitGroupForm = async (data: { name: string; parentId?: string; depth?: number }) => {
   try {
     if (editingGroup.value && editingGroup.value.id) {
       // 更新分组
       await window.api.sessionGroup.update(editingGroup.value.id, data)
       sessionStore.updateSessionGroup(editingGroup.value.id, data)
     } else {
-      // 创建分组（支持子分组）
-      const createData = {
-        ...data,
-        parentId: editingGroup.value?.parentId
-      }
-      const group = await window.api.sessionGroup.create(createData)
+      // 创建分组（修复：正确传递 parentId 作为第二个参数）
+      const parentId = data.parentId || editingGroup.value?.parentId
+      
+      const group = await window.api.sessionGroup.create(
+        { name: data.name },  // 第一个参数：基本数据
+        parentId              // 第二个参数：父分组 ID（关键修复！）
+      )
       sessionStore.addSessionGroup(group)
     }
     handleCloseGroupForm()

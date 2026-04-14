@@ -102,7 +102,7 @@ const api: CustomAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.GET_ALL),
     
     // 创建分组
-    create: (data: { name: string; icon?: string }, parentId?: string): Promise<SessionGroup> => 
+    create: (data: { name: string }, parentId?: string): Promise<SessionGroup> => 
       ipcRenderer.invoke(IPC_CHANNELS.SESSION_GROUP.CREATE, {
         ...data,
         parentId,
