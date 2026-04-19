@@ -115,27 +115,35 @@ onUnmounted(() => {
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  padding: 3px 0;
+  padding: 4px 8px;
   min-width: 140px;
   z-index: 99999;
 }
 
 .context-menu-item {
-  padding: 5px 12px;
+  padding: 8px 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   transition: background-color 0.12s;
 }
 
 .context-menu-item:hover {
-  background: var(--hover-bg, #f0f0f0);
+  background: var(--hover-bg, rgba(255, 255, 255, 0.08));
+}
+
+.context-menu-item:hover .menu-item-title {
+  color: var(--text-color-hover, var(--text-color, #ffffff));
+}
+
+.context-menu-item:hover .menu-item-icon {
+  opacity: 1;
 }
 
 .menu-item-icon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
 
@@ -144,7 +152,7 @@ onUnmounted(() => {
 }
 
 .menu-item-title {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-color, #333333);
   white-space: nowrap;
 }
