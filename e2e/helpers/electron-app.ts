@@ -2,18 +2,28 @@ import { _electron as electron, ElectronApplication, Page } from '@playwright/te
 import path from 'path'
 
 /**
- * 启动Electron应用
+ * Electron应用启动模式
  */
-export async function startApp(): Promise<{ app: ElectronApplication; page: Page }> {
-  const electronApp = await electron.launch({
+export type AppMode = 'test' | 'dev'
+
+/**
+ * 启动Electron应用
+ * @param mode 启动模式: 'test' 生产模式(默认) | 'dev' 开发模式(连接Vite dev server)
+ */
+export async function startApp(mode: AppMode = 'test'): Promise<{ app: ElectronApplication; page: Page }> {
+  const isDevMode = mode === 'dev'
+
+  const launchOptions: Parameters<typeof electron.launch>[0] = {
     args: [path.join(__dirname, '../../out/main/index.js')],
     env: {
       ...process.env,
-      NODE_ENV: 'test'
+      NODE_ENV: isDevMode ? 'development' : 'test',
+      ...(isDevMode ? { ELECTRON_RENDERER_URL: 'http://localhost:5173' } : {})
     },
-    // 捕获主进程的标准输出和错误输出
     stdio: 'pipe'
-  })
+  }
+
+  const electronApp = await electron.launch(launchOptions)
 
   // 监听主进程标准输出
   if (electronApp.process().stdout) {

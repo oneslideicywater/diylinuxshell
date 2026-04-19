@@ -177,11 +177,12 @@ npx playwright show-report
 | [tab-persistence.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\layout\tab-persistence.e2e.spec.ts) | 标签页持久化测试 |
 | [tabs.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\layout\tabs.e2e.spec.ts) | 多标签页功能测试 |
 
-### Session - 会话管理 (7 个文件)
+### Session - 会话管理 (8 个文件)
 
 | 文件名 | 描述 |
 |--------|------|
 | [bug-034-unified-global-menu.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\bug-034-unified-global-menu.e2e.spec.ts) | BUG-034: GroupHeader/SessionItem 统一全局右键菜单 |
+| [bug-035-sidebar-unified-menu.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\bug-035-sidebar-unified-menu.e2e.spec.ts) | BUG-035: Sidebar 统一全局菜单 + 样式优化 |
 | [session-group.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\session-group.e2e.spec.ts) | 会话分组功能测试 |
 | [subgroup-indent.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\subgroup-indent.e2e.spec.ts) | 子分组缩进测试 |
 | [debug-session-group-contextmenu.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\debug-session-group-contextmenu.e2e.spec.ts) | 会话分组右键菜单调试 |
@@ -260,7 +261,11 @@ let page: Page
 
 test.describe('测试套件名称', () => {
   test.beforeAll(async () => {
+    // 生产模式（功能测试，默认）
     const result = await startApp()
+    // 或开发模式（Bug调试，需先启动 npm run dev）
+    // const result = await startApp('dev')
+
     electronApp = result.app
     page = result.page
     await waitForAppReady(page)
@@ -279,10 +284,31 @@ test.describe('测试套件名称', () => {
 
 ### 辅助工具
 
-- **electron-app.ts**: 启动/关闭 Electron 应用
+- **electron-app.ts**: 启动/关闭 Electron 应用，支持 `test`(生产模式) 和 `dev`(开发模式) 两种启动模式
+  - `startApp(mode?)`: 启动应用，`mode` 默认 `'test'`，传入 `'dev'` 连接 Vite dev server
+  - `closeApp(app)`: 关闭应用
+  - `waitForAppReady(page)`: 等待应用就绪
+  - `getMainWindow(app)`: 获取主窗口
 - **assertions.ts**: 自定义断言工具
 - **mock-server.ts**: 模拟服务器响应
 - **test-config.ts**: 测试配置（SSH 连接信息等）
+
+#### startApp 启动模式说明
+
+| 模式 | NODE_ENV | 特点 | 适用场景 |
+|------|----------|------|---------|
+| `'test'` (默认) | `test` | 使用编译后的代码 | 功能测试、回归测试 |
+| `'dev'` | `development` + `ELECTRON_RENDERER_URL: 'http://localhost:5173'` | 连接 Vite dev server，可捕获完整 Vue 控制台报错 | Bug 调试、捕获运行时错误 |
+
+```typescript
+// 生产模式（功能测试，默认）
+const { app, page } = await startApp()
+// 或显式指定
+const { app, page } = await startApp('test')
+
+// 开发模式（Bug调试，需先启动 npm run dev）
+const { app, page } = await startApp('dev')
+```
 
 ## 最佳实践
 
