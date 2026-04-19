@@ -202,13 +202,14 @@ const handleThemeChange = (val: string | number | boolean | undefined): void => 
 /**
  * 字体大小变化处理
  */
-const handleFontSizeChange = (val: string | number | boolean): void => {
-  // 类型检查，确保值是 number
-  if (typeof val !== 'number') {
+const handleFontSizeChange = (val: number | number[]): void => {
+  // Element Plus Slider 可能返回数组（范围模式）或单个值
+  const fontSize = Array.isArray(val) ? val[0] : val
+  if (typeof fontSize !== 'number') {
     console.error('Invalid font size value:', val)
     return
   }
-  settingsStore.setFontSize(val)
+  settingsStore.setFontSize(fontSize)
   ElMessage.success(`字体大小已设置为 ${val}px`)
 }
 
@@ -303,8 +304,8 @@ const handleKeepaliveIntervalChange = (cur: number | undefined, _prev?: number |
 /**
  * 自动重连变化处理
  */
-const handleAutoReconnectChange = (val: boolean): void => {
-  settingsStore.setAutoReconnect(val)
+const handleAutoReconnectChange = (val: string | number | boolean): void => {
+  settingsStore.setAutoReconnect(!!val)
 }
 
 /**

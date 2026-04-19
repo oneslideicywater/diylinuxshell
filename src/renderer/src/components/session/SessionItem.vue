@@ -11,6 +11,7 @@
     :class="{ active }"
     @click="handleClick"
     @dblclick="$emit('dblclick')"
+    @contextmenu.prevent.stop="handleContextMenu"
   >
     <!-- 会话图标 - 云命令行 -->
     <div class="session-icon">
@@ -33,7 +34,7 @@
         <svg width="14" height="14" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
           <path d="M933.8 348.4h-64v-96.7c0-29.4-23.9-53.3-53.3-53.3H373.9v-64h442.6c64.7 0 117.3 52.6 117.3 117.3v96.7z" fill="currentColor" />
           <path d="M330.6 162.7l63.9 159.7c6.4 15.9 17.2 29.4 31.4 39C440 371 456.5 376 473.7 376h406.6c11.8 0 21.3 9.6 21.3 21.3V840c0 11.8-9.6 21.3-21.3 21.3H142.6c-11.8 0-21.3-9.6-21.3-21.3V184c0-11.8 9.6-21.3 21.3-21.3h188m28.9-64H142.6c-47.1 0-85.3 38.2-85.3 85.3v656c0 47.1 38.2 85.3 85.3 85.3h737.7c47.1 0 85.3-38.2 85.3-85.3V397.4c0-47.1-38.2-85.3-85.3-85.3H473.7c-8.7 0-16.6-5.3-19.8-13.4l-74.6-186.5c-3.3-8.2-11.1-13.5-19.8-13.5z" fill="currentColor" />
-          <path d="M630.9 649.5H346.5c-17.7 0-32-14.3-32-32s14.3-32 32-32h284.4c17.7 0 32 14.3 32 32s-14.3 32-32 32z" fill="currentColor" />
+          <path d="M630.9 649.5H346.5c-17.7 0-32-14.3-32-32s14.3-32 32-32h284.4c17.7 0 32 14.3 32 32s-14.3-32 32-32z" fill="currentColor" />
           <path d="M548 751.6c-8.2 0-16.4-3.1-22.6-9.4-12.5-12.5-12.5-32.8 0-45.3l82.4-82.4-82.4-82.4c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l105 105c12.5 12.5 12.5 32.8 0 45.3l-105 105c-6.3 6.4-14.5 9.5-22.7 9.5z" fill="currentColor" />
         </svg>
       </button>
@@ -79,8 +80,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import type { Session } from '@shared/types'
+import { useContextMenuStore, type ContextMenuItem } from '@/stores/contextMenu'
 
 // 定义属性
 const props = defineProps<{
@@ -98,10 +100,17 @@ const emit = defineEmits<{
   (e: 'duplicate'): void
   (e: 'properties'): void
   (e: 'sftp'): void
+  (e: 'add-session', groupId?: string): void
 }>()
 
 /* 编辑按钮 ref（用于原生事件绑定） */
 const editBtnRef = ref<HTMLButtonElement | null>(null)
+
+/* 右键菜单 Store（全局唯一管理） */
+const contextMenuStore = useContextMenuStore()
+
+/* 当前组件的唯一标识（用于 Store 区分拥有者） */
+const menuOwnerId = computed(() => `session-${props.session.id}`)
 
 /**
  * 处理点击事件
@@ -133,12 +142,73 @@ const handleEditClick = (): void => {
   emit('edit')
 }
 
-/* 组件挂载时确认 session 值 */
+/* ==================== 右键菜单相关逻辑 ==================== */
+
+/**
+ * 处理会话右键菜单
+ * 通过全局 Store 管理菜单状态，传入动态 menuItems 和 actionCallback
+ */
+const handleContextMenu = (event: MouseEvent): void => {
+  event.preventDefault()
+  event.stopPropagation()
+
+  let x = event.clientX
+  let y = event.clientY
+
+  /* 边界检测：防止菜单超出窗口 */
+  const menuWidth = 180
+  const menuHeight = 220
+  if (x + menuWidth > window.innerWidth) {
+    x = window.innerWidth - menuWidth - 10
+  }
+  if (y + menuHeight > window.innerHeight) {
+    y = window.innerHeight - menuHeight - 10
+  }
+
+  /* 构建菜单项列表 */
+  const menuItems: ContextMenuItem[] = [
+    { action: 'add-session', title: '添加会话', description: '添加会话到当前分组' },
+    { action: 'connect', title: '连接', description: '连接到当前会话' },
+    { action: 'edit', title: '编辑', description: '编辑当前会话配置' },
+    { action: 'duplicate', title: '复制会话', description: '复制当前会话' },
+    { action: 'delete', title: '删除', description: '删除当前会话' },
+    { action: 'inspect', title: '审查元素', description: '打开开发者工具并审查当前元素' }
+  ]
+
+  /* 通过 Store 显示右键菜单（注册所有权 + 菜单项 + 回调） */
+  contextMenuStore.showContextMenu(menuOwnerId.value, { x, y }, menuItems, (action: string) => {
+    switch (action) {
+      case 'add-session':
+        emit('add-session', props.session.groupId)
+        break
+      case 'connect':
+        emit('connect')
+        break
+      case 'edit':
+        emit('edit')
+        break
+      case 'duplicate':
+        emit('duplicate')
+        break
+      case 'delete':
+        emit('delete')
+        break
+      case 'inspect':
+        if (window.api?.openDevTools) {
+          const pos = contextMenuStore.position
+          window.api.openDevTools({ ...pos })
+        } else {
+          console.error('[SessionItem] window.api.openDevTools is not available')
+        }
+        break
+    }
+  })
+}
+
+/* 组件挂载时确认 session 值并绑定编辑按钮事件 */
 onMounted(() => {
   console.log('[SessionItem] onMounted, session:', currentSession.value?.name, 'id:', currentSession.value?.id)
-  
-  /* 使用原生 addEventListener 绑定编辑按钮点击事件 */
-  /* 解决 Vue 模板编译 @click 在特定条件下不触发的问题 */
+
   if (editBtnRef.value) {
     console.log('[SessionItem] editBtnRef 已绑定, 按钮存在:', !!editBtnRef.value)
     editBtnRef.value.addEventListener('click', handleEditClick)
@@ -148,7 +218,6 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  /* 组件卸载时清理事件监听器 */
   if (editBtnRef.value) {
     editBtnRef.value.removeEventListener('click', handleEditClick)
   }

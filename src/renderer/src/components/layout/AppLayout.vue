@@ -5,7 +5,7 @@
  */
 
 <template>
-  <div class="app-layout">
+  <div class="app-layout" @click="handleGlobalClick" @keydown.esc="handleEscKey">
     <!-- 顶部标题栏 -->
     <header class="app-header">
       <div class="header-left" :style="{ width: `${sidebarWidth}px` }">
@@ -127,20 +127,48 @@
         </slot>
       </main>
     </div>
+    <!-- 全局右键菜单（单一实例，Teleport 到 body） -->
+    <GlobalContextMenu />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useTerminalStore } from '@/stores/terminal'
+import { useContextMenuStore } from '@/stores/contextMenu'
 import Sidebar from './Sidebar.vue'
 import TerminalTabs from '@/components/terminal/TerminalTabs.vue'
 import XTerminal from '@/components/terminal/XTerminal.vue'
 import SftpTransfer from '@/components/terminal/sftp/SftpTransfer.vue'
+import GlobalContextMenu from '@/components/common/GlobalContextMenu.vue'
 import type { Session } from '@shared/types'
 
 // 终端状态管理
 const terminalStore = useTerminalStore()
+const contextMenuStore = useContextMenuStore()
+
+/**
+ * 全局点击/右键处理器：关闭所有右键菜单
+ * PRD 场景3: 任意位置点击鼠标左键或右键, 右键菜单应该关闭
+ * 覆盖范围: 整个应用（AppLayout 是根布局组件）
+ */
+function handleGlobalClick(event: MouseEvent): void {
+  if (!contextMenuStore.visible) return
+  const target = event.target as HTMLElement
+  const isMenuItem = target.closest('.global-context-menu, .context-menu-item')
+  if (!isMenuItem) {
+    contextMenuStore.hideContextMenu()
+  }
+}
+
+/**
+ * ESC 键关闭右键菜单
+ */
+function handleEscKey(): void {
+  if (contextMenuStore.visible) {
+    contextMenuStore.hideContextMenu()
+  }
+}
 
 // 定义事件
 const emit = defineEmits<{
@@ -154,9 +182,6 @@ const tabs = computed(() => terminalStore.tabs)
 
 // 当前激活的标签页ID
 const activeTabId = computed(() => terminalStore.activeTabId)
-
-// 当前激活的标签页
-const activeTab = computed(() => terminalStore.activeTab)
 
 // SSH 终端标签页（过滤出 type 为 ssh 或未定义的）
 const sshTabs = computed(() => {
@@ -393,7 +418,7 @@ onUnmounted(() => {
   color: var(--text-color, #cccccc);
 }
 
-/* SSH/SFTP 模式切换开关 */
+/* SSH/SFTP 模式切换开关 - 支持深浅主题 */
 .mode-switch {
   display: flex;
   align-items: center;
@@ -401,7 +426,14 @@ onUnmounted(() => {
   background-color: var(--bg-secondary, #2d2d30);
   border-radius: 4px;
   padding: 2px;
-  -webkit-app-region: no-drag; /* 允许点击 */
+  border: 1px solid transparent;
+  -webkit-app-region: no-drag;
+}
+
+/* 浅色主题模式开关 */
+[data-theme="light"] .mode-switch {
+  background-color: #e8e8e8;
+  border-color: #d0d0d0;
 }
 
 .mode-btn {
@@ -410,11 +442,16 @@ onUnmounted(() => {
   font-weight: 500;
   border: none;
   background-color: transparent;
-  color: var(--text-color-secondary, #858585);
+  color: var(--text-secondary, #858585);
   cursor: pointer;
   border-radius: 3px;
   transition: all 0.2s ease;
   outline: none;
+}
+
+/* 浅色主题按钮文字 */
+[data-theme="light"] .mode-btn {
+  color: #666666;
 }
 
 .mode-btn:hover {
@@ -422,9 +459,21 @@ onUnmounted(() => {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
+/* 浅色主题按钮 hover */
+[data-theme="light"] .mode-btn:hover {
+  color: #333333;
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
 .mode-btn.active {
   background-color: var(--primary-color, #0e7490);
   color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* 浅色主题激活按钮 */
+[data-theme="light"] .mode-btn.active {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
 }
 
 .header-center {

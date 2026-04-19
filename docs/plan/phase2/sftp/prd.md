@@ -212,114 +212,38 @@ interface Props {
 
 ---
 
-## 5. 数据结构
+### 4.6 右键菜单管理
 
-### 5.1 TransferNode (传输节点)
 
-```typescript
-interface TransferNode {
-  id: string              // 唯一标识
-  name: string            // 文件/文件夹名称
-  type: 'file' | 'folder' // 类型
-  status: 'transferring' | 'completed' | 'failed' | 'cancelled' // 状态
-  progress: number        // 进度 0-100
-  localPath: string       // 本地路径
-  remotePath: string      // 远程路径
-  size: number            // 文件大小
-  transferred: number     // 已传输大小
-  children?: TransferNode[] // 子节点（文件夹）
-  expanded?: boolean      // 是否展开
-  taskId?: string         // 传输任务 ID
-  error?: string          // 错误信息
-}
-```
+1. 整个项目全局使用一个右键菜单组件, 所有页面和子组件共用一个. 不重复创建.
+2. 全局统一控制右键菜单的显示和隐藏状态, 确保同一时间只有一个菜单显示. 
+3. 统一处理, 点击页面空白关闭,按ESC键关闭,鼠标左击关闭.
+4. 不同组件可以触发不同的右键菜单栏,菜单内容动态传入.
+5. 右键菜单定位跟随鼠标位置.
+6. 使用pinia store 管理右键菜单的状态.
 
-### 5.2 TransferTask (传输任务)
 
-批量任务场景用多个TransferNode表示
+右键菜单应该全局唯一，
 
-```typescript
-interface TransferTask {
-  id: string              // 任务 ID
-  type: 'upload' | 'download' // 传输类型
-  status: 'pending' | 'active' | 'completed' | 'cancelled' // 任务状态
-  root: TransferNode      // 根节点（单文件/文件夹为根
-  
-  // 传输进度统计
-  totalBytes: number      // 待传输的总字节数
-  transferredBytes: number // 已传输的字节数
-  
-  // 时间统计
-  remainingTime: number // 还需多长时间完成传输（秒）
-  elapsedTime: number   // 已消耗时间（秒）
-  
-  createdAt: number       // 创建时间
-  completedAt?: number    // 完成时间
-}
-```
+场景1：
 
-**字段说明**：
-- `root`: 传输任务的根节点，单文件/文件夹传输时直接使用该节点，批量传输时使用虚拟根节点
-- `totalBytes`: 当前任务待传输的总字节数，用于计算当前任务的进度百分比
-- `transferredBytes`: 当前任务已传输的字节数，实时更新
+比如我点击了SftpLocal组件的文件，右键菜单显示在该文件上；
+我点击了SftpRemote组件的文件夹，右键菜单只显示在该文件夹上;
+当前组件点击右键菜单时，应该关闭其他组件的右键菜单。
 
----
+场景2：
 
-## 6. 交互流程
+我点击了SftpLocal组件的文件1，右键菜单应该在右键鼠标点击位置显示。我再点击文件2，右键菜单应该在文件2右键鼠标点击位置显示。
 
-### 6.1 上传文件流程
+场景3:
+
+任意位置点击鼠标左键, 右键菜单应该关闭。
+
+
+
 
 ```
-用户操作（拖拽/右键）
-    ↓
-SftpLocal 组件触发 upload 事件
-    ↓
-SftpTransfer 处理 upload 事件
-    ↓
-创建 TransferTask（状态：active）和 TransferNode（状态：transferring）
-    ↓
-调用 SftpService.upload()
-    ↓
-进度回调 → 更新 TransferNode.progress 和 TransferTask.transferredBytes
-    ↓
-传输完成 → 更新 TransferNode.status = 'completed' 和 TransferTask.status = 'completed'
-    ↓
-刷新远程文件列表
-```
 
-### 6.2 取消上传流程
-
-```
-用户点击取消按钮
-    ↓
-触发 cancelTransfer(taskId)
-    ↓
-调用 SftpService.cancelUpload(taskId)
-    ↓
-更新 TransferTask.status = 'cancelled'
-    ↓
-更新所有关联的 TransferNode.status = 'cancelled'
-    ↓
-清理传输任务
-```
-
-### 6.3 右键菜单显示流程
-
-```
-用户右键点击文件
-    ↓
-SftpLocal/SftpRemote 触发 contextmenu 事件
-    ↓
-调用 requestContextMenu(owner, closeCallback)
-    ↓
-检查 globalContextMenuOwner
-    ↓
-如果有其他组件在显示，通知关闭
-    ↓
-设置自己为当前所有者
-    ↓
-显示右键菜单
-```
 
 ---
 

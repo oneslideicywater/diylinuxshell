@@ -263,31 +263,31 @@ const delayedFit = () => {
  */
 const handleContextMenu = (event: MouseEvent): void => {
   event.preventDefault()
-  
-  // 打开终端菜单（会自动关闭其他菜单）
-  contextMenuStore.openMenu('terminal')
-  
+
   // 保存右键点击的全局坐标（相对于窗口，用于审查元素）
   contextMenuGlobalPosition.value = { x: event.clientX, y: event.clientY }
-  
+
   // 计算菜单位置，确保不超出容器边界
   const containerRect = terminalContainer.value?.getBoundingClientRect()
   if (!containerRect) return
-  
+
   let x = event.clientX - containerRect.left
   let y = event.clientY - containerRect.top
-  
-  // 确保菜单不超出右边界
+
+  // 确保菜单不超出容器右边界
   const menuWidth = 160
   if (x + menuWidth > containerRect.width) {
     x = containerRect.width - menuWidth - 10
   }
-  
-  // 确保菜单不超出下边界（更新高度：4个菜单项 + 1个分隔线）
-  const menuHeight = 180
+
+  // 确保菜单不超出容器下边界
+  const menuHeight = 120
   if (y + menuHeight > containerRect.height) {
     y = containerRect.height - menuHeight - 10
   }
+
+  // 通过 Store 注册终端菜单所有权（自动关闭其他组件的菜单）
+  contextMenuStore.showContextMenu('terminal', { x: event.clientX, y: event.clientY }, [])
   
   contextMenuPosition.value = { x, y }
   contextMenuVisible.value = true
@@ -403,10 +403,9 @@ watch(
 
 // 监听菜单状态变化，确保菜单互斥
 watch(
-  () => contextMenuStore.currentMenu,
-  (newMenu) => {
-    // 如果当前菜单不是终端菜单，关闭终端菜单
-    if (newMenu !== 'terminal') {
+  () => contextMenuStore.visible,
+  (isVisible) => {
+    if (isVisible && contextMenuStore.ownerId !== 'terminal') {
       contextMenuVisible.value = false
     }
   }

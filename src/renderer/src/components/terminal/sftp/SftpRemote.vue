@@ -5,7 +5,7 @@
  */
 
 <template>
-  <div class="file-panel remote">
+  <div class="file-panel remote" ref="panelRef">
     <div class="panel-header">
       <div class="panel-path">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -54,26 +54,7 @@
       </div>
     </div>
     
-    <!-- 远程文件右键菜单 -->
-    <div v-if="contextMenuVisible" class="context-menu file-context-menu" :style="contextMenuStyle">
-      <div class="context-menu-item" @click="handleMenuAction('download')" v-if="selectedFile">
-        <span class="menu-item-title">下载</span>
-        <span class="menu-item-description">将选中的远程文件/文件夹下载到本地目录</span>
-      </div>
-      <div class="context-menu-item" @click="handleMenuAction('createFolder')">
-        <span class="menu-item-title">新建文件夹</span>
-        <span class="menu-item-description">在当前远程目录下创建新文件夹</span>
-      </div>
-      <div class="context-menu-item" @click="handleMenuAction('refresh')">
-        <span class="menu-item-title">刷新</span>
-        <span class="menu-item-description">重新加载当前浏览目录</span>
-      </div>
-      <div class="context-menu-item" @click="handleMenuAction('deleteRemote')" v-if="selectedFile">
-        <span class="menu-item-title">删除</span>
-        <span class="menu-item-description">删除选中的远程文件或文件夹</span>
-      </div>
-    </div>
-    
+    <!-- 远程文件右键菜单（通过 Store 管理全局唯一性） -->
     <!-- 新建文件夹对话框 -->
     <div v-if="createFolderDialogVisible" class="dialog-overlay" @click.self="closeCreateFolderDialog">
       <div class="dialog">
@@ -106,13 +87,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import type { TransferTask } from '@shared/types/sftp'
 
 import { formatSize } from '@/utils/fs-utils'
-import { requestContextMenu, clearContextMenuOwner } from './script/globalState'
+import { useContextMenuStore } from '@/stores/contextMenu'
 import { loadRemoteFiles, remoteUpRemote, handleRemoteDblClick, getSelectedRemoteFile, type RemoteFileState } from './script/remote'
-import { useSessionStore } from '@/stores/session'
 
 /**
  * Props 定义（安全改进 v3 - 完全移除 session 依赖）
@@ -152,22 +132,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 /**
- * Session Store 实例
- * 用于根据 sessionId 获取会话信息（非敏感部分）
- */
-const sessionStore = useSessionStore()
-
-/**
  * 计算属性：当前会话对象（从 SessionStore 动态获取）
- * 只在需要时查询，不存储在组件状态中
- */
-const currentSession = computed(() => {
-  if (!props.sessionId) return null
-  return sessionStore.sessions.find(s => s.id === props.sessionId) || null
-})
-
-/**
- * Emits 定义
  */
 const emit = defineEmits<{
   /** 路径变化事件 */
@@ -199,9 +164,9 @@ const remoteFileCount = ref(0)
  * 拖拽状态
  */
 const isDraggingOver = ref(false)
-const contextMenuVisible = ref(false)
-const contextMenuPosition = ref({ x: 0, y: 0 })
-const selectedFile = ref<any | null>(null)
+/* 右键菜单 Store（全局唯一管理） */
+const contextMenuStore = useContextMenuStore()
+const menuOwnerId = 'sftp-remote'
 
 /**
  * 创建文件夹对话框状态
@@ -210,16 +175,6 @@ const createFolderDialogVisible = ref(false)
 const folderName = ref('')
 const folderNameError = ref('')
 const folderNameInput = ref<HTMLInputElement | null>(null)
-
-/**
- * 右键菜单样式
- */
-const contextMenuStyle = computed(() => ({
-  position: 'absolute' as const,
-  left: `${contextMenuPosition.value.x}px`,
-  top: `${contextMenuPosition.value.y}px`,
-  zIndex: 10000
-}))
 
 /**
  * 监听 props 变化
@@ -329,63 +284,65 @@ function handleDblClick(event: MouseEvent): void {
 
 /**
  * 处理右键菜单
+ * 通过全局 Store 管理菜单状态，确保全局唯一性
+ * 菜单位置跟随鼠标右击的实际位置
  */
 function handleContextMenu(event: MouseEvent): void {
   const target = event.target as HTMLElement
   const fileItem = target.closest('.file-item') as HTMLElement
-  
-  // 请求显示右键菜单（无论是否点击文件项都可以显示）
-  const canShow = requestContextMenu('remote', closeContextMenu)
-  if (!canShow) return
-  
-  // 设置菜单位置 - 使用相对于文件面板的位置
-  const panelRect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  
+
+  let clickedFile: any = null
+
   if (fileItem) {
-    // 点击了文件/文件夹项：选中该文件并设置菜单位置
     const path = fileItem.dataset.path
     const file = remoteFiles.value.find(f => f.path === path)
-    
     if (!file) return
-    
-    // 选中该文件
     selectedRemote.value = file.path
-    
-    // 设置选中的文件
-    selectedFile.value = file
-    
-    const rect = fileItem.getBoundingClientRect()
-    contextMenuPosition.value = {
-      x: rect.left - panelRect.left + 10,
-      y: rect.bottom - panelRect.top + 4
-    }
-  } else {
-    // 点击了空白区域：不选中任何文件，只显示部分菜单选项
-    selectedFile.value = null
-    
-    contextMenuPosition.value = {
-      x: event.offsetX,
-      y: event.offsetY
-    }
+    clickedFile = file
   }
-  
-  // 显示菜单
-  contextMenuVisible.value = true
-}
 
-/**
- * 关闭右键菜单
- */
-function closeContextMenu(): void {
-  contextMenuVisible.value = false
-  selectedFile.value = null
-  clearContextMenuOwner('remote')
+  const x = event.clientX
+  const y = event.clientY
+
+  const menuItems = [
+    {
+      action: 'download',
+      title: '下载',
+      description: '将选中的远程文件/文件夹下载到本地目录',
+      visible: !!clickedFile
+    },
+    { action: 'createFolder', title: '新建文件夹', description: '在当前远程目录下创建新文件夹' },
+    { action: 'refresh', title: '刷新', description: '重新加载当前浏览目录' },
+    {
+      action: 'deleteRemote',
+      title: '删除',
+      description: '删除选中的远程文件或文件夹',
+      visible: !!clickedFile
+    }
+  ]
+
+  contextMenuStore.showContextMenu(menuOwnerId, { x, y }, menuItems, (action: string) => {
+    switch (action) {
+      case 'download':
+        emit('download-local', clickedFile.path)
+        break
+      case 'createFolder':
+        showCreateFolderDialog()
+        break
+      case 'refresh':
+        handleRefresh()
+        break
+      case 'deleteRemote':
+        emit('delete-remote', clickedFile.path)
+        break
+    }
+  })
 }
 
 /**
  * 处理拖拽进入
  */
-function handleDragOver(event: DragEvent): void {
+function handleDragOver(_event: DragEvent): void {
   isDraggingOver.value = true
 }
 
@@ -427,49 +384,6 @@ async function handleDrop(event: DragEvent): Promise<void> {
   }
   
 
-}
-
-/**
- * 处理右键菜单动作
- */
-function handleMenuAction(action: string): void {
-  const file = selectedFile.value
-  console.log('[SftpRemote] handleMenuAction called, action:', action, 'file:', file)
-  
-  switch (action) {
-    case 'download':
-      // 下载文件/文件夹（需要选中文件）
-      if (!file) {
-        console.error('[SftpRemote] No file selected for download')
-        closeContextMenu()
-        return
-      }
-      // 下载文件/文件夹 - 传递路径
-      emit('download-local', file.path)
-      break
-    case 'createFolder':
-      // 创建文件夹（不需要选中文件）
-      console.log('[SftpRemote] Emitting create-folder event')
-      showCreateFolderDialog()
-      break
-    case 'refresh':
-      // 刷新当前目录（不需要选中文件）
-      handleRefresh()
-      break
-    case 'deleteRemote':
-      // 删除文件（需要选中文件）
-      if (!file) {
-        console.error('[SftpRemote] No file selected for delete')
-        closeContextMenu()
-        return
-      }
-      // 删除文件
-      emit('delete-remote', file.path)
-      break
-  }
-  
-  // 关闭菜单
-  closeContextMenu()
 }
 
 /**
@@ -557,16 +471,6 @@ async function confirmCreateFolder(): Promise<void> {
   // 关闭对话框
   closeCreateFolderDialog()
 }
-
-// 监听全局点击事件以关闭菜单
-onMounted(() => {
-  document.addEventListener('click', closeContextMenu)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', closeContextMenu)
-  clearContextMenuOwner('remote')
-})
 
 // 导出函数供父组件调用
 defineExpose({
@@ -694,42 +598,6 @@ defineExpose({
   font-size: 12px;
   color: var(--text-color-secondary, #999999);
   margin-left: 8px;
-}
-
-/* 右键菜单样式 */
-.context-menu {
-  position: absolute;
-  background: var(--card-bg, var(--bg-color, #ffffff));
-  border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  padding: 4px 0;
-  min-width: 200px;
-  z-index: 10000;
-}
-
-.context-menu-item {
-  padding: 8px 16px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  transition: background-color 0.2s;
-}
-
-.context-menu-item:hover {
-  background: var(--hover-bg, #f0f0f0);
-}
-
-.menu-item-title {
-  font-size: 13px;
-  color: var(--text-color, #333333);
-  font-weight: 500;
-}
-
-.menu-item-description {
-  font-size: 11px;
-  color: var(--text-color-secondary, #999999);
 }
 
 /* 对话框样式 */

@@ -33,15 +33,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useTerminalStore } from '@/stores/terminal'
-import { useSessionStore } from '@/stores/session'
 import type { Tab } from '@shared/types'
 import TerminalTab from './TerminalTab.vue'
 
 // 状态管理
 const terminalStore = useTerminalStore()
-const sessionStore = useSessionStore()
 
 // 定义属性
 // 支持外部传入过滤后的标签页列表（用于 SSH/SFTP 模式切换）

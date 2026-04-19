@@ -36,15 +36,18 @@ e2e/
 │   ├── tab-persistence.e2e.spec.ts
 │   └── tabs.e2e.spec.ts
 ├── sftp/                           # SFTP 文件传输测试
+│   ├── bug-032-fileitem-contextmenu-not-show.e2e.spec.ts  # BUG-032: file-item 右键菜单不弹出
+│   ├── bug-033-click-not-close-menu.e2e.spec.ts           # BUG-033: 左键点击不关闭右键菜单
 │   ├── cancel-upload-simple.e2e.spec.ts
 │   ├── cancel-upload.e2e.spec.ts
-│   ├── sftp-local-create-folder.e2e.spec.ts      # 本地创建文件夹功能测试
-│   ├── sftp-local-refresh.e2e.spec.ts            # 本地文件浏览器刷新功能测试
-│   ├── sftp-tree-expand-collapse.e2e.spec.ts      # SFTP 传输树展开/折叠功能测试
-│   ├── sftp-tree-status.e2e.spec.ts              # SFTP 树形状态测试
+│   ├── sftp-local-create-folder.e2e.spec.ts              # 本地创建文件夹功能测试
+│   ├── sftp-local-refresh.e2e.spec.ts                    # 本地文件浏览器刷新功能测试
+│   ├── sftp-tree-expand-collapse.e2e.spec.ts             # SFTP 传输树展开/折叠功能测试
+│   ├── sftp-tree-status.e2e.spec.ts                     # SFTP 树形状态测试
 │   ├── sftp-tree-upload.e2e.spec.ts
-│   └── sftp-transfer.e2e.spec.ts                 # SFTP 窗口功能测试
+│   └── sftp-transfer.e2e.spec.ts                        # SFTP 窗口功能测试
 ├── session/                        # 会话管理测试
+│   ├── bug-034-unified-global-menu.e2e.spec.ts           # BUG-034: GroupHeader/SessionItem 统一全局菜单
 │   ├── debug-session-group-contextmenu.e2e.spec.ts
 │   ├── five-level-nested-groups.e2e.spec.ts
 │   ├── last-level-group-display-fix.e2e.spec.ts
@@ -174,10 +177,11 @@ npx playwright show-report
 | [tab-persistence.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\layout\tab-persistence.e2e.spec.ts) | 标签页持久化测试 |
 | [tabs.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\layout\tabs.e2e.spec.ts) | 多标签页功能测试 |
 
-### Session - 会话管理 (6 个文件)
+### Session - 会话管理 (7 个文件)
 
 | 文件名 | 描述 |
 |--------|------|
+| [bug-034-unified-global-menu.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\bug-034-unified-global-menu.e2e.spec.ts) | BUG-034: GroupHeader/SessionItem 统一全局右键菜单 |
 | [session-group.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\session-group.e2e.spec.ts) | 会话分组功能测试 |
 | [subgroup-indent.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\subgroup-indent.e2e.spec.ts) | 子分组缩进测试 |
 | [debug-session-group-contextmenu.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\session\debug-session-group-contextmenu.e2e.spec.ts) | 会话分组右键菜单调试 |
@@ -198,18 +202,20 @@ npx playwright show-report
 |--------|------|
 | [settings.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/settings/settings.e2e.spec.ts) | 设置页面功能测试 |
 
-### SFTP - 文件传输 (8 个文件)
+### SFTP - 文件传输 (10 个文件)
 
 | 文件名 | 描述 |
 |--------|------|
+| [bug-032-fileitem-contextmenu-not-show.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\sftp\bug-032-fileitem-contextmenu-not-show.e2e.spec.ts) | BUG-032: file-item 右键菜单不弹出 |
+| [bug-033-click-not-close-menu.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\sftp\bug-033-click-not-close-menu.e2e.spec.ts) | BUG-033: 左键点击不关闭右键菜单 |
 | [cancel-upload-simple.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/cancel-upload-simple.e2e.spec.ts) | 简单取消上传测试 |
 | [cancel-upload.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/cancel-upload.e2e.spec.ts) | 取消上传功能测试 |
-| [sftp-local-create-folder.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-local-create-folder.e2e.spec.ts) | 本地创建文件夹功能测试 |
-| [sftp-local-refresh.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-local-refresh.e2e.spec.ts) | 本地文件浏览器刷新功能测试 |
-| [sftp-tree-expand-collapse.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-tree-expand-collapse.e2e.spec.ts) | SFTP 传输树展开/折叠功能测试 |
+| [sftp-local-create-folder.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\sftp\sftp-local-create-folder.e2e.spec.ts) | 本地创建文件夹功能测试 |
+| [sftp-local-refresh.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\sftp\sftp-local-refresh.e2e.spec.ts) | 本地文件浏览器刷新功能测试 |
+| [sftp-tree-expand-collapse.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\sftp\sftp-tree-expand-collapse.e2e.spec.ts) | SFTP 传输树展开/折叠功能测试 |
 | [sftp-tree-status.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-tree-status.e2e.spec.ts) | SFTP 树形状态测试 |
 | [sftp-tree-upload.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-tree-upload.e2e.spec.ts) | SFTP 树形上传功能测试 |
-| [sftp-transfer.e2e.spec.ts](file://f:/tech-docs/diy-linux-shell/e2e/sftp/sftp-transfer.e2e.spec.ts) | SFTP 窗口功能测试 |
+| [sftp-transfer.e2e.spec.ts](file://f:\tech-docs\diy-linux-shell\e2e\sftp\sftp-transfer.e2e.spec.ts) | SFTP 窗口功能测试 |
 
 ### Terminal - 终端功能 (2 个文件)
 

@@ -34,7 +34,7 @@ interface Props {
   taskRoot: TransferNode
 }
 
-const props = defineProps<Props>()
+defineProps<Props>()
 
 
 /**

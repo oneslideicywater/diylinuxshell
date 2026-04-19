@@ -146,6 +146,18 @@ test.describe('SFTP - SFTP 文件传输', () => {
     // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
   })
 
+  test('SFTP Local和Remote右键菜单全局互斥（PRD场景1）', async () => {
+    // 测试在 sftp/sftp-context-menu-global-unique.e2e.spec.ts 中定义
+  })
+
+  test('SFTP同组件内切换文件时菜单位置跟随鼠标（PRD场景2）', async () => {
+    // 测试在 sftp/sftp-context-menu-global-unique.e2e.spec.ts 中定义
+  })
+
+  test('SFTP左键点击菜单外部区域关闭右键菜单（PRD场景3）', async () => {
+    // 测试在 sftp/sftp-context-menu-global-unique.e2e.spec.ts 中定义
+  })
+
   test('SFTP 窗口应该能新建文件夹', async () => {
     // 测试在 sftp/sftp-transfer.e2e.spec.ts 中定义
   })
@@ -224,6 +236,34 @@ test.describe('SFTP - SFTP 文件传输', () => {
 
   test('点击折叠图标应该折叠节点', async () => {
     // 测试在 sftp/sftp-tree-expand-collapse.e2e.spec.ts 中定义
+  })
+
+  test('BUG-032: 右键点击 SftpLocal file-item 应弹出全局菜单', async () => {
+    // 测试在 sftp/bug-032-fileitem-contextmenu-not-show.e2e.spec.ts 中定义
+  })
+
+  test('BUG-032: 右键点击 SftpRemote file-item 应弹出全局菜单', async () => {
+    // 测试在 sftp/bug-032-fileitem-contextmenu-not-show.e2e.spec.ts 中定义
+  })
+
+  test('BUG-032: 左键点击空白区域应关闭已打开的全局菜单', async () => {
+    // 测试在 sftp/bug-032-fileitem-contextmenu-not-show.e2e.spec.ts 中定义
+  })
+
+  test('BUG-032: 按 ESC 键应关闭已打开的全局菜单', async () => {
+    // 测试在 sftp/bug-032-fileitem-contextmenu-not-show.e2e.spec.ts 中定义
+  })
+
+  test('BUG-033: 右键弹出菜单后左键点击另一个 file-item 应关闭菜单', async () => {
+    // 测试在 sftp/bug-033-click-not-close-menu.e2e.spec.ts 中定义
+  })
+
+  test('BUG-033: 右键弹出菜单后左键点击空白区域应关闭菜单', async () => {
+    // 测试在 sftp/bug-033-click-not-close-menu.e2e.spec.ts 中定义
+  })
+
+  test('BUG-033: 远程面板右键菜单后左键点击 file-item 也应关闭', async () => {
+    // 测试在 sftp/bug-033-click-not-close-menu.e2e.spec.ts 中定义
   })
 })
 

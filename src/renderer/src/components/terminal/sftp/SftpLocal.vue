@@ -5,7 +5,7 @@
  */
 
 <template>
-  <div class="file-panel local">
+  <div class="file-panel local" ref="panelRef">
     <div class="panel-header">
       <div class="panel-path">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -50,26 +50,7 @@
       </div>
     </div>
     
-    <!-- 本地文件右键菜单 -->
-    <div v-if="contextMenuVisible" class="context-menu file-context-menu" :style="contextMenuStyle">
-      <div class="context-menu-item" @click="handleMenuAction('createFolder')">
-        <span class="menu-item-title">新建文件夹</span>
-        <span class="menu-item-description">在当前本地目录创建新文件夹</span>
-      </div>
-      <div class="context-menu-item" @click="handleMenuAction('refresh')">
-        <span class="menu-item-title">刷新</span>
-        <span class="menu-item-description">重新加载当前浏览目录</span>
-      </div>
-      <div class="context-menu-item" @click="handleMenuAction('upload')" v-if="selectedFile || hasMultipleSelection">
-        <span class="menu-item-title">上传</span>
-        <span class="menu-item-description">将选中的本地文件/文件夹上传到远程目录</span>
-      </div>
-      <div class="context-menu-item" @click="handleMenuAction('deleteLocal')" v-if="selectedFile">
-        <span class="menu-item-title">删除</span>
-        <span class="menu-item-description">删除选中的本地文件或文件夹</span>
-      </div>
-    </div>
-    
+    <!-- 本地文件右键菜单（通过 Store 管理全局唯一性） -->
     <!-- 新建文件夹对话框 -->
     <div v-if="createFolderDialogVisible" class="dialog-overlay" @click.self="closeCreateFolderDialog">
       <div class="dialog">
@@ -102,11 +83,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import type { TransferTask } from '@shared/types/sftp'
 
 import { formatSize } from '@/utils/fs-utils'
-import { requestContextMenu, clearContextMenuOwner } from './script/globalState'
+import { useContextMenuStore } from '@/stores/contextMenu'
 import { loadLocalFiles, handleLocalDblClick, localUp, type LocalFileState } from './script/local'
 
 /**
@@ -168,9 +149,9 @@ const getLocalState = (): LocalFileState => ({
 /**
  * 右键菜单状态
  */
-const contextMenuVisible = ref(false)
-const contextMenuPosition = ref({ x: 0, y: 0 })
-const selectedFile = ref<any | null>(null)
+/* 右键菜单 Store（全局唯一管理） */
+const contextMenuStore = useContextMenuStore()
+const menuOwnerId = 'sftp-local'
 
 /**
  * 创建文件夹对话框状态
@@ -179,25 +160,6 @@ const createFolderDialogVisible = ref(false)
 const folderName = ref('')
 const folderNameError = ref('')
 const folderNameInput = ref<HTMLInputElement | null>(null)
-
-/**
- * 右键菜单样式
- */
-const contextMenuStyle = computed(() => ({
-  position: 'absolute' as const,
-  left: `${contextMenuPosition.value.x}px`,
-  top: `${contextMenuPosition.value.y}px`,
-  zIndex: 10000
-}))
-
-/**
- * 是否有多选文件/文件夹
- */
-const hasMultipleSelection = computed(() => {
-  // 简化处理：如果选中的文件路径包含多个路径（用分隔符分隔），则为多选
-  // 这里需要根据实际的多选实现来调整
-  return false // TODO: 实现真正的多选逻辑
-})
 
 /**
  * 监听 props 变化
@@ -297,109 +259,63 @@ function handleDblClick(event: MouseEvent): void {
 
 /**
  * 处理右键菜单
+ * 通过全局 Store 管理菜单状态，确保全局唯一性
+ * 菜单左上角 = 鼠标右击位置
  */
 function handleContextMenu(event: MouseEvent): void {
   const target = event.target as HTMLElement
   const fileItem = target.closest('.file-item') as HTMLElement
-  
-  // 请求显示右键菜单（无论是否点击文件项都可以显示）
-  const canShow = requestContextMenu('local', closeContextMenu)
-  if (!canShow) return
-  
-  // 设置菜单位置 - 使用相对于文件面板的位置
-  const panelRect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  
+
+  let clickedFile: any = null
+
   if (fileItem) {
-    // 点击了文件/文件夹项：选中该文件并设置菜单位置
     const path = fileItem.dataset.path
     const file = localFiles.value.find(f => f.path === path)
-    
     if (!file) return
-    
-    // 选中该文件
     selectedLocal.value = file.path
-    
-    // 设置选中的文件
-    selectedFile.value = file
-    
-    const rect = fileItem.getBoundingClientRect()
-    contextMenuPosition.value = {
-      x: rect.left - panelRect.left + 10,
-      y: rect.bottom - panelRect.top + 4
-    }
-  } else {
-    // 点击了空白区域：不选中任何文件，只显示部分菜单选项
-    selectedFile.value = null
-    
-    contextMenuPosition.value = {
-      x: event.offsetX,
-      y: event.offsetY
-    }
+    clickedFile = file
   }
-  
-  // 显示菜单
-  contextMenuVisible.value = true
-}
 
-/**
- * 关闭右键菜单
- */
-function closeContextMenu(): void {
-  contextMenuVisible.value = false
-  selectedFile.value = null
-  clearContextMenuOwner('local')
-}
+  const x = event.clientX
+  const y = event.clientY
 
-/**
- * 处理右键菜单动作
- */
-function handleMenuAction(action: string): void {
-  const file = selectedFile.value
-  console.log('[SftpLocal] handleMenuAction called, action:', action, 'file:', file)
-  
-  switch (action) {
-    case 'createFolder':
-      // 创建文件夹（不需要选中文件）
-      console.log('[SftpLocal] Emitting create-folder event')
-      showCreateFolderDialog()
-      break
-    case 'refresh':
-      // 刷新当前目录（不需要选中文件）
-      handleRefresh()
-      break
-    case 'upload':
-      // 根据文件类型决定上传文件还是文件夹（需要选中文件）
-      if (!file) {
-        console.error('[SftpLocal] No file selected for upload')
-        closeContextMenu()
-        return
-      }
-      // TODO: 未来实现多选后，需要遍历所有选中的文件
-      if (file.isDirectory) {
-        // 上传文件夹
-        console.log('[SftpLocal] Emitting upload-folder event with path:', file.path)
-        emit('upload-folder', file.path)
-      } else {
-        // 上传文件
-        console.log('[SftpLocal] Emitting upload-file event with path:', file.path)
-        emit('upload-file', file.path)
-      }
-      break
-    case 'deleteLocal':
-      // 删除文件（需要选中文件）
-      if (!file) {
-        console.error('[SftpLocal] No file selected for delete')
-        closeContextMenu()
-        return
-      }
-      // 删除文件
-      console.log('[SftpLocal] Emitting delete-local event with path:', file.path)
-      emit('delete-local', file.path)
-      break
-  }
-  
-  // 关闭菜单
-  closeContextMenu()
+  const menuItems = [
+    { action: 'createFolder', title: '新建文件夹', description: '在当前本地目录创建新文件夹' },
+    { action: 'refresh', title: '刷新', description: '重新加载当前浏览目录' },
+    {
+      action: 'upload',
+      title: '上传',
+      description: '将选中的本地文件/文件夹上传到远程目录',
+      visible: !!clickedFile
+    },
+    {
+      action: 'deleteLocal',
+      title: '删除',
+      description: '删除选中的本地文件或文件夹',
+      visible: !!clickedFile
+    }
+  ]
+
+  contextMenuStore.showContextMenu(menuOwnerId, { x, y }, menuItems, (action: string) => {
+    switch (action) {
+      case 'createFolder':
+        showCreateFolderDialog()
+        break
+      case 'refresh':
+        handleRefresh()
+        break
+      case 'upload':
+        if (clickedFile?.isDirectory) {
+          emit('upload-folder', clickedFile.path)
+        } else {
+          emit('upload-file', clickedFile.path)
+        }
+        break
+      case 'deleteLocal':
+        emit('delete-local', clickedFile.path)
+        break
+    }
+  })
 }
 
 /**
@@ -504,16 +420,6 @@ async function confirmCreateFolder(): Promise<void> {
     folderNameError.value = error.message || '创建文件夹失败，请重试'
   }
 }
-
-// 监听全局点击事件以关闭菜单
-onMounted(() => {
-  document.addEventListener('click', closeContextMenu)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', closeContextMenu)
-  clearContextMenuOwner('local')
-})
 
 // 导出函数供父组件调用
 defineExpose({
@@ -633,42 +539,6 @@ defineExpose({
 .file-size {
   flex-shrink: 0;
   font-size: 12px;
-  color: var(--text-color-secondary, #999999);
-}
-
-/* 右键菜单样式 */
-.context-menu {
-  position: absolute;
-  background: var(--card-bg, var(--bg-color, #ffffff));
-  border: 1px solid var(--border-color, #e0e0e0);
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  padding: 4px 0;
-  min-width: 200px;
-  z-index: 10000;
-}
-
-.context-menu-item {
-  padding: 8px 16px;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  transition: background-color 0.2s;
-}
-
-.context-menu-item:hover {
-  background: var(--hover-bg, #f0f0f0);
-}
-
-.menu-item-title {
-  font-size: 13px;
-  color: var(--text-color, #333333);
-  font-weight: 500;
-}
-
-.menu-item-description {
-  font-size: 11px;
   color: var(--text-color-secondary, #999999);
 }
 

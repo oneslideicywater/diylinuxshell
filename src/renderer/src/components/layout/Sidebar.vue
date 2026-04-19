@@ -17,7 +17,7 @@
           </svg>
         </button>
       </div>
-      <SessionList @select="handleSelectSession" @edit-session="handleEditSession" @add-session="handleAddSession" />
+      <SessionSidebarContainer @select="handleSelectSession" @edit-session="handleEditSession" @add-session="handleAddSession" />
     </div>
 
     <!-- 快捷命令区域 -->
@@ -62,7 +62,7 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
-import SessionList from '@/components/session/SessionList.vue'
+import SessionSidebarContainer from '@/components/session/SessionSidebarContainer.vue'
 import type { Session } from '@shared/types'
 
 const router = useRouter()

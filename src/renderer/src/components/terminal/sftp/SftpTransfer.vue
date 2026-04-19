@@ -289,7 +289,7 @@ function handleOverlayClick(): void {
   if (props.embedded) {
     return
   }
-  
+
   close()
 }
 
@@ -515,9 +515,9 @@ function cancelNewFolder(): void {
  * 确认新建文件夹（远程）
  * @param folderName 文件夹名称（来自 SftpRemote 组件的 create-folder 事件）
  */
-async function confirmNewFolder(folderName?: string): Promise<void> {
-  // 优先使用传入的文件夹名称，否则使用对话框中的输入值
-  const nameToUse = folderName || newFolderName.value.trim()
+async function confirmNewFolder(folderName?: string | Event): Promise<void> {
+  // 如果传入的是 Event 对象，忽略它，使用输入框的值
+  const nameToUse = (typeof folderName === 'string' ? folderName : undefined) || newFolderName.value.trim()
   
   if (!nameToUse) {
     console.error('[SftpTransfer] 文件夹名称不能为空')

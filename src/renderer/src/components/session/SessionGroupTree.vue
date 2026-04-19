@@ -13,7 +13,6 @@
       :data-group-id="subGroup.id"
       :data-group-depth="subGroup.depth"
       :style="{ paddingLeft: '12px' }"
-      @contextmenu.prevent="handleGroupContextMenu($event, subGroup)"
     >
       <!-- 子分组头部 -->
       <GroupHeader
@@ -22,7 +21,6 @@
         :session-count="getGroupSessionCount(subGroup.id)"
         :can-create-sub-group="canCreateSubGroupIn(subGroup.id)"
         @toggle="handleToggleGroup(subGroup.id)"
-        @contextmenu.prevent.stop="handleGroupContextMenu($event, subGroup)"
         @add-session-to-group="handleAddSessionToGroup"
         @create-subgroup="handleCreateSubGroupFromGroupHeader"
         @edit-group="handleEditGroupFromGroupHeader"
@@ -30,7 +28,10 @@
       />
       
       <!-- 子分组内容 -->
-      <div v-show="expandedGroups.has(subGroup.id)" class="group-content">
+      <div
+        v-show="expandedGroups.has(subGroup.id)"
+        class="group-content"
+      >
         <!-- 递归渲染更深层的子分组 -->
         <SessionGroupTree
           v-if="hasSubGroups(subGroup.id)"
@@ -46,8 +47,6 @@
           @delete-session="handleDeleteSession"
           @duplicate-session="handleDuplicateSession"
           @properties-session="handlePropertiesSession"
-          @group-contextmenu="handleGroupContextMenu"
-          @session-contextmenu="handleSessionContextMenu"
           @create-subgroup="handleCreateSubGroup"
           @add-session-to-group="handleAddSessionToGroup"
         />
@@ -66,7 +65,6 @@
             @delete="handleDeleteSession(session)"
             @duplicate="handleDuplicateSession(session)"
             @properties="handlePropertiesSession(session)"
-            @contextmenu.prevent="handleSessionContextMenu($event, session)"
           />
         </div>
       </div>
@@ -78,10 +76,8 @@
 import { computed } from 'vue'
 import type { Session, SessionGroup } from '@shared/types'
 import SessionItem from './SessionItem.vue'
-import GroupIcon from './GroupIcon.vue'
 import GroupHeader from './GroupHeader.vue'
 import { useSessionGroup } from './script/useSessionGroup'
-import { MAX_GROUP_DEPTH } from '@shared/types'
 
 /**
  * Props 定义
@@ -109,8 +105,6 @@ const emit = defineEmits<{
   deleteSession: [session: Session]
   duplicateSession: [session: Session]
   propertiesSession: [session: Session]
-  groupContextmenu: [event: MouseEvent, group: SessionGroup]
-  sessionContextmenu: [event: MouseEvent, session: Session]
   createSubgroup: [group: SessionGroup]
   addSessionToGroup: [group: SessionGroup]
 }>()
@@ -138,20 +132,6 @@ const {
  */
 const handleToggleGroup = (groupId: string) => {
   emit('toggleGroup', groupId)
-}
-
-/**
- * 处理分组右键菜单
- */
-const handleGroupContextMenu = (event: MouseEvent, group: SessionGroup) => {
-  emit('groupContextmenu', event, group)
-}
-
-/**
- * 处理会话右键菜单
- */
-const handleSessionContextMenu = (event: MouseEvent, session: Session) => {
-  emit('sessionContextmenu', event, session)
 }
 
 /**

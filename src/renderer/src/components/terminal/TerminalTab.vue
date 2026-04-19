@@ -100,7 +100,7 @@ const props = defineProps<{
 }>()
 
 // 定义事件
-const emit = defineEmits<{
+defineEmits<{
   (e: 'click'): void
   (e: 'close'): void
 }>()
@@ -138,27 +138,27 @@ const canReconnect = computed(() => {
  * 处理右键菜单显示
  */
 const handleContextMenu = (event: MouseEvent): void => {
-  // 打开标签页菜单（会自动关闭其他菜单）
-  contextMenuStore.openMenu('tab')
-  
   // 使用全局坐标（相对于窗口）
   let x = event.clientX
   let y = event.clientY
-  
+
   // 确保菜单不超出窗口右边界
   const menuWidth = 160
   const windowWidth = window.innerWidth
   if (x + menuWidth > windowWidth) {
     x = windowWidth - menuWidth - 10
   }
-  
+
   // 确保菜单不超出窗口下边界
   const menuHeight = 120
   const windowHeight = window.innerHeight
   if (y + menuHeight > windowHeight) {
     y = windowHeight - menuHeight - 10
   }
-  
+
+  // 通过 Store 注册菜单所有权（自动关闭其他组件的菜单）
+  contextMenuStore.showContextMenu('tab', { x, y }, [])
+
   contextMenuPosition.value = { x, y }
   contextMenuVisible.value = true
 }
@@ -243,10 +243,9 @@ const handleClickOutside = (event: MouseEvent): void => {
 
 // 监听菜单状态变化，确保菜单互斥
 watch(
-  () => contextMenuStore.currentMenu,
-  (newMenu) => {
-    // 如果当前菜单不是标签页菜单，关闭标签页菜单
-    if (newMenu !== 'tab') {
+  () => contextMenuStore.visible,
+  (isVisible) => {
+    if (isVisible && contextMenuStore.ownerId !== 'tab') {
       contextMenuVisible.value = false
     }
   }
@@ -332,15 +331,38 @@ const handleEditFromError = (sessionId: string): void => {
 
 /* SFTP 标签页特殊样式 */
 .terminal-tab.sftp-tab {
-  background: linear-gradient(135deg, var(--tab-bg, #2d2d2d) 0%, rgba(76, 175, 80, 0.1) 100%);
+  background: linear-gradient(135deg, var(--tab-bg, #2d2d2d) 0%, rgba(76, 175, 80, 0.08) 100%);
+  border-left: 3px solid transparent;
 }
 
 .terminal-tab.sftp-tab:hover {
-  background: linear-gradient(135deg, var(--tab-hover-bg, #3c3c3c) 0%, rgba(76, 175, 80, 0.15) 100%);
+  background: linear-gradient(135deg, var(--tab-hover-bg, #3c3c3c) 0%, rgba(76, 175, 80, 0.12) 100%);
 }
 
+/* SFTP 激活状态：高亮 + 左侧绿色指示条 */
 .terminal-tab.sftp-tab.active {
-  background: linear-gradient(135deg, var(--tab-active-bg, #1e1e1e) 0%, rgba(76, 175, 80, 0.2) 100%);
+  background: linear-gradient(135deg, #1a3d1a 0%, rgba(76, 175, 80, 0.25) 100%);
+  border-left: 3px solid #4CAF50;
+  box-shadow: inset 0 0 12px rgba(76, 175, 80, 0.15);
+}
+
+/* SFTP 未激活：图标和文字变暗 */
+.terminal-tab.sftp-tab:not(.active) .type-icon.sftp-icon {
+  opacity: 0.5;
+}
+
+.terminal-tab.sftp-tab:not(.active) .tab-title {
+  opacity: 0.6;
+}
+
+/* SFTP 激活：图标和文字明亮 */
+.terminal-tab.sftp-tab.active .type-icon.sftp-icon {
+  color: #66BB6A;
+  filter: drop-shadow(0 0 3px rgba(76, 175, 80, 0.5));
+}
+
+.terminal-tab.sftp-tab.active .tab-title {
+  color: var(--text-color, #e8e8e8);
 }
 
 /* 标签类型图标 */
