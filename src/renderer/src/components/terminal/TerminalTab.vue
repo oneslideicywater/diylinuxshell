@@ -40,35 +40,6 @@
       </svg>
     </button>
 
-    <!-- 右键菜单 -->
-    <div 
-      v-show="contextMenuVisible" 
-      ref="contextMenu"
-      class="context-menu"
-      :style="{ left: contextMenuPosition.x + 'px', top: contextMenuPosition.y + 'px' }"
-    >
-      <!-- 复制会话菜单项 -->
-      <div class="context-menu-item" @click.stop="handleDuplicateSession">
-        <span>复制会话</span>
-      </div>
-      <!-- 断开会话菜单项 -->
-      <div 
-        class="context-menu-item" 
-        :class="{ disabled: !canDisconnect }"
-        @click.stop="handleDisconnectSession"
-      >
-        <span>断开会话</span>
-      </div>
-      <!-- 重连会话菜单项 -->
-      <div 
-        class="context-menu-item" 
-        :class="{ disabled: !canReconnect }"
-        @click.stop="handleReconnectSession"
-      >
-        <span>重连会话</span>
-      </div>
-    </div>
-
     <!-- 连接错误对话框 -->
     <ErrorDialog
       :visible="errorDialogVisible"
@@ -85,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed } from 'vue'
 import { useTerminalStore } from '@/stores/terminal'
 import { useSessionStore } from '@/stores/session'
 import { useContextMenuStore } from '@/stores/contextMenu'
@@ -111,12 +82,8 @@ const sessionStore = useSessionStore()
 const contextMenuStore = useContextMenuStore()
 const errorDialogStore = useErrorDialogStore()
 
-// 右键菜单引用
-const contextMenu = ref<HTMLDivElement | null>(null)
-
-// 右键菜单状态
-const contextMenuVisible = ref(false)
-const contextMenuPosition = ref({ x: 0, y: 0 })
+/** 标签页右键菜单 owner ID */
+const menuOwnerId = 'tab'
 
 // 错误对话框相关计算属性
 const errorDialogVisible = computed(() => errorDialogStore.visible)
@@ -124,43 +91,70 @@ const errorDialogTitle = computed(() => errorDialogStore.title)
 const errorDialogMessage = computed(() => errorDialogStore.message)
 const errorDialogSessionId = computed(() => errorDialogStore.sessionId)
 
-// 计算属性：是否可以断开会话
-const canDisconnect = computed(() => {
-  return props.tab.status === 'connected' || props.tab.status === 'connecting'
+/** 从 terminalStore 获取标签页实时连接状态 */
+const tabStatus = computed(() => {
+  const storeTab = terminalStore.getTabById(props.tab.id)
+  return storeTab?.status ?? props.tab.status
 })
 
-// 计算属性：是否可以重连会话
+/** 计算属性：是否可以断开会话 */
+const canDisconnect = computed(() => {
+  return tabStatus.value === 'connected' || tabStatus.value === 'connecting'
+})
+
+/** 计算属性：是否可以重连会话 */
 const canReconnect = computed(() => {
-  return props.tab.status === 'disconnected' || props.tab.status === 'error'
+  return tabStatus.value === 'disconnected' || tabStatus.value === 'error'
 })
 
 /**
- * 处理右键菜单显示
+ * 处理右键菜单显示：使用全局 GlobalContextMenu 组件
  */
 const handleContextMenu = (event: MouseEvent): void => {
-  // 使用全局坐标（相对于窗口）
   let x = event.clientX
   let y = event.clientY
 
-  // 确保菜单不超出窗口右边界
+  /* 确保菜单不超出窗口右边界 */
   const menuWidth = 160
-  const windowWidth = window.innerWidth
-  if (x + menuWidth > windowWidth) {
-    x = windowWidth - menuWidth - 10
+  if (x + menuWidth > window.innerWidth) {
+    x = window.innerWidth - menuWidth - 10
   }
 
-  // 确保菜单不超出窗口下边界
+  /* 确保菜单不超出窗口下边界 */
   const menuHeight = 120
-  const windowHeight = window.innerHeight
-  if (y + menuHeight > windowHeight) {
-    y = windowHeight - menuHeight - 10
+  if (y + menuHeight > window.innerHeight) {
+    y = window.innerHeight - menuHeight - 10
   }
 
-  // 通过 Store 注册菜单所有权（自动关闭其他组件的菜单）
-  contextMenuStore.showContextMenu('tab', { x, y }, [])
+  const menuItems = [
+    { action: 'duplicate', title: '复制会话', icon: 'duplicate' },
+    {
+      action: 'disconnect',
+      title: '断开会话',
+      icon: 'disconnect',
+      visible: canDisconnect.value
+    },
+    {
+      action: 'reconnect',
+      title: '重连会话',
+      icon: 'connect',
+      visible: canReconnect.value
+    }
+  ]
 
-  contextMenuPosition.value = { x, y }
-  contextMenuVisible.value = true
+  contextMenuStore.showContextMenu(menuOwnerId, { x, y }, menuItems, (action: string) => {
+    switch (action) {
+      case 'duplicate':
+        handleDuplicateSession()
+        break
+      case 'disconnect':
+        handleDisconnectSession()
+        break
+      case 'reconnect':
+        handleReconnectSession()
+        break
+    }
+  })
 }
 
 /**
@@ -187,9 +181,6 @@ const handleDuplicateSession = async (): Promise<void> => {
     const errorMessage = error instanceof Error ? error.message : String(error)
     showErrorDialog('连接失败', errorMessage, session.id)
   }
-  
-  // 隐藏菜单
-  contextMenuVisible.value = false
 }
 
 /**
@@ -197,16 +188,17 @@ const handleDuplicateSession = async (): Promise<void> => {
  */
 const handleDisconnectSession = async (): Promise<void> => {
   if (!canDisconnect.value) return
-  
+
   try {
-    await window.api.session.disconnect(props.tab.id)
+    if (props.tab.type === 'sftp' && props.tab.sftpConnectionId) {
+      await window.api.sftp.disconnect(props.tab.sftpConnectionId)
+    } else {
+      await window.api.session.disconnect(props.tab.id)
+    }
     terminalStore.updateTabStatus(props.tab.id, 'disconnected')
   } catch (error) {
     console.error('Failed to disconnect:', error)
   }
-  
-  // 隐藏菜单
-  contextMenuVisible.value = false
 }
 
 /**
@@ -214,51 +206,26 @@ const handleDisconnectSession = async (): Promise<void> => {
  */
 const handleReconnectSession = async (): Promise<void> => {
   if (!canReconnect.value) return
-  
+
   try {
     terminalStore.updateTabStatus(props.tab.id, 'connecting')
-    await window.api.session.connect(props.tab.id, props.tab.sessionId)
+    if (props.tab.type === 'sftp' && props.tab.sftpConnectionId) {
+      const result = await window.api.sftp.connect(props.tab.sftpConnectionId, props.tab.sessionId)
+      if (!result.success) {
+        throw new Error(result.error || 'SFTP 重连失败')
+      }
+    } else {
+      await window.api.session.connect(props.tab.id, props.tab.sessionId)
+    }
     terminalStore.updateTabStatus(props.tab.id, 'connected')
   } catch (error: unknown) {
     console.error('Failed to reconnect:', error)
     terminalStore.updateTabStatus(props.tab.id, 'error')
-    
-    // 显示错误对话框
+
     const errorMessage = error instanceof Error ? error.message : String(error)
     showErrorDialog('重连失败', errorMessage, props.tab.sessionId)
   }
-  
-  // 隐藏菜单
-  contextMenuVisible.value = false
 }
-
-/**
- * 点击菜单外部关闭菜单
- */
-const handleClickOutside = (event: MouseEvent): void => {
-  if (contextMenu.value && !contextMenu.value.contains(event.target as Node)) {
-    contextMenuVisible.value = false
-  }
-}
-
-// 监听菜单状态变化，确保菜单互斥
-watch(
-  () => contextMenuStore.visible,
-  (isVisible) => {
-    if (isVisible && contextMenuStore.ownerId !== 'tab') {
-      contextMenuVisible.value = false
-    }
-  }
-)
-
-onMounted(() => {
-  // 监听点击事件，用于关闭右键菜单
-  document.addEventListener('click', handleClickOutside)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside)
-})
 
 /**
  * 显示错误对话框
@@ -312,8 +279,8 @@ const handleEditFromError = (sessionId: string): void => {
   gap: 6px;
   height: 36px;
   padding: 0 8px 0 12px;
-  background-color: var(--tab-bg, #2d2d2d);
-  border-right: 1px solid var(--border-color, #3c3c3c);
+  background-color: var(--tab-bg, var(--bg-color, #f0f0f0));
+  border-right: 1px solid var(--border-color, #e0e0e0);
   cursor: pointer;
   min-width: 100px;
   max-width: 200px;
@@ -322,28 +289,28 @@ const handleEditFromError = (sessionId: string): void => {
 }
 
 .terminal-tab:hover {
-  background-color: var(--tab-hover-bg, #3c3c3c);
+  background-color: var(--tab-hover-bg, var(--hover-bg, #e5e5e5));
 }
 
 .terminal-tab.active {
-  background-color: var(--tab-active-bg, #1e1e1e);
+  background-color: var(--tab-active-bg, var(--bg-color, #ffffff));
 }
 
 /* SFTP 标签页特殊样式 */
 .terminal-tab.sftp-tab {
-  background: linear-gradient(135deg, var(--tab-bg, #2d2d2d) 0%, rgba(76, 175, 80, 0.08) 100%);
+  background: linear-gradient(135deg, var(--tab-bg, var(--bg-color, #f0f0f0)) 0%, rgba(76, 175, 80, 0.06) 100%);
   border-left: 3px solid transparent;
 }
 
 .terminal-tab.sftp-tab:hover {
-  background: linear-gradient(135deg, var(--tab-hover-bg, #3c3c3c) 0%, rgba(76, 175, 80, 0.12) 100%);
+  background: linear-gradient(135deg, var(--tab-hover-bg, var(--hover-bg, #e5e5e5)) 0%, rgba(76, 175, 80, 0.10) 100%);
 }
 
 /* SFTP 激活状态：高亮 + 左侧绿色指示条 */
 .terminal-tab.sftp-tab.active {
-  background: linear-gradient(135deg, #1a3d1a 0%, rgba(76, 175, 80, 0.25) 100%);
+  background: linear-gradient(135deg, rgba(76, 175, 80, 0.12) 0%, rgba(76, 175, 80, 0.18) 100%);
   border-left: 3px solid #4CAF50;
-  box-shadow: inset 0 0 12px rgba(76, 175, 80, 0.15);
+  box-shadow: inset 0 0 8px rgba(76, 175, 80, 0.1);
 }
 
 /* SFTP 未激活：图标和文字变暗 */
@@ -357,12 +324,11 @@ const handleEditFromError = (sessionId: string): void => {
 
 /* SFTP 激活：图标和文字明亮 */
 .terminal-tab.sftp-tab.active .type-icon.sftp-icon {
-  color: #66BB6A;
-  filter: drop-shadow(0 0 3px rgba(76, 175, 80, 0.5));
+  color: #4CAF50;
 }
 
 .terminal-tab.sftp-tab.active .tab-title {
-  color: var(--text-color, #e8e8e8);
+  color: var(--text-color, #333333);
 }
 
 /* 标签类型图标 */
@@ -388,7 +354,7 @@ const handleEditFromError = (sessionId: string): void => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: var(--text-tertiary, #606060);
+  background-color: var(--text-tertiary, #aaaaaa);
 }
 
 /* 已连接状态 - 绿色 */
@@ -404,7 +370,7 @@ const handleEditFromError = (sessionId: string): void => {
 
 /* 断开状态 - 灰色 */
 .status-indicator.disconnected .status-dot {
-  background-color: var(--text-tertiary, #606060);
+  background-color: var(--text-tertiary, #aaaaaa);
 }
 
 /* 错误状态 - 红色 */
@@ -425,14 +391,14 @@ const handleEditFromError = (sessionId: string): void => {
 .tab-title {
   flex: 1;
   font-size: 12px;
-  color: var(--text-secondary, #808080);
+  color: var(--text-secondary, #888888);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .terminal-tab.active .tab-title {
-  color: var(--text-color, #cccccc);
+  color: var(--text-color, #333333);
 }
 
 .close-btn {
@@ -443,7 +409,7 @@ const handleEditFromError = (sessionId: string): void => {
   height: 18px;
   border: none;
   background: transparent;
-  color: var(--text-tertiary, #606060);
+  color: var(--text-tertiary, #aaaaaa);
   cursor: pointer;
   border-radius: 3px;
   opacity: 0;
@@ -455,50 +421,16 @@ const handleEditFromError = (sessionId: string): void => {
 }
 
 .close-btn:hover {
-  background-color: var(--hover-bg, #4c4c4c);
-  color: var(--text-color, #cccccc);
+  background-color: var(--hover-bg, #e5e5e5);
+  color: var(--text-color, #333333);
 }
 
-/* 右键菜单样式 */
-.context-menu {
-  position: fixed;
-  background-color: var(--card-bg, #2d2d2d);
-  border: 1px solid var(--border-color, #3d3d3d);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  z-index: 1000;
-  min-width: 160px;
-  padding: 6px 0;
-  backdrop-filter: blur(10px);
+/* SFTP 激活：图标和文字明亮 */
+.terminal-tab.sftp-tab.active .type-icon.sftp-icon {
+  color: #4CAF50;
 }
 
-.context-menu-item {
-  display: flex;
-  align-items: center;
-  padding: 8px 20px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--text-color, #e0e0e0);
-  font-size: 13px;
-  user-select: none;
-}
-
-.context-menu-item:hover {
-  background-color: var(--primary-color, #0e639c);
-  color: #ffffff;
-}
-
-.context-menu-item:active {
-  background-color: var(--primary-hover, #1177bb);
-}
-
-.context-menu-item.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.context-menu-item.disabled:hover {
-  background-color: transparent;
-  color: var(--text-color, #e0e0e0);
+.terminal-tab.sftp-tab.active .tab-title {
+  color: var(--text-color, #333333);
 }
 </style>
