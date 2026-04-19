@@ -13,10 +13,15 @@
         v-for="item in visibleItems"
         :key="item.action"
         class="context-menu-item"
+        :class="{ 'is-danger': item.danger }"
         @click="contextMenuStore.handleSelect(item.action)"
       >
+        <span
+          v-if="item.icon && getIconSvg(item.icon)"
+          class="menu-item-icon"
+          v-html="getIconSvg(item.icon)"
+        />
         <span class="menu-item-title">{{ item.title }}</span>
-        <span v-if="item.description" class="menu-item-description">{{ item.description }}</span>
       </div>
     </div>
   </Teleport>
@@ -25,6 +30,33 @@
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { useContextMenuStore } from '@/stores/contextMenu'
+
+/**
+ * 使用 Vite import.meta.glob 静态导入 contextmenu 目录下所有 SVG 图标
+ * Vite 会在构建时将 SVG 处理为 URL，避免 loadFile() 模式下路径解析问题
+ */
+const iconModules = import.meta.glob('./contextmenu/*.svg', { eager: true, as: 'raw' })
+
+/** 从文件名提取 icon key（如 './contextmenu/add.svg' → 'add'） */
+function extractIconName(path: string): string {
+  return path.replace(/^\.\/contextmenu\/(.+)\.svg$/, '$1')
+}
+
+/** 构建 icon name → SVG 内容的映射表 */
+const iconMap: Record<string, string> = {}
+for (const [path, mod] of Object.entries(iconModules)) {
+  const name = extractIconName(path)
+  iconMap[name] = (mod as string)
+}
+
+/**
+ * 根据 icon 名称获取对应的 SVG 字符串
+ * @param icon 图标名称
+ * @returns SVG 字符串，不存在则返回空字符串
+ */
+function getIconSvg(icon: string): string {
+  return iconMap[icon] || ''
+}
 
 const contextMenuStore = useContextMenuStore()
 const menuRef = ref<HTMLElement | null>(null)
@@ -83,32 +115,37 @@ onUnmounted(() => {
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  padding: 4px 0;
-  min-width: 200px;
+  padding: 3px 0;
+  min-width: 140px;
   z-index: 99999;
 }
 
 .context-menu-item {
-  padding: 8px 16px;
+  padding: 5px 12px;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  transition: background-color 0.15s;
+  align-items: center;
+  gap: 6px;
+  transition: background-color 0.12s;
 }
 
 .context-menu-item:hover {
   background: var(--hover-bg, #f0f0f0);
 }
 
-.menu-item-title {
-  font-size: 13px;
-  color: var(--text-color, #333333);
-  font-weight: 500;
+.menu-item-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
-.menu-item-description {
-  font-size: 11px;
-  color: var(--text-color-secondary, #999999);
+.context-menu-item.is-danger .menu-item-title {
+  color: #f56c6c;
+}
+
+.menu-item-title {
+  font-size: 12px;
+  color: var(--text-color, #333333);
+  white-space: nowrap;
 }
 </style>
