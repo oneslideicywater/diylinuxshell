@@ -8,6 +8,11 @@
   <div class="tree-node">
     <!-- 节点内容 -->
     <div v-if="node" class="node-row" :class="{ 'is-folder': node.isDirectory, 'is-error': node.status === 'error' }">
+      <!-- 复选框占位列（与表头对齐） -->
+      <div class="column checkbox-column">
+        <span class="checkbox-placeholder"></span>
+      </div>
+
       <!-- 名称列（根据层级动态调整左侧缩进） -->
       <div class="column name-column" :style="{ paddingLeft: (level * 20) + 'px' }">
         <!-- 文件夹展开/折叠图标 -->
@@ -203,6 +208,22 @@ const statusText = computed(() => {
   padding: 6px 12px;
   display: flex;
   align-items: center;
+}
+
+/* 复选框占位列（与表头对齐） */
+.checkbox-column {
+  width: 40px;
+  min-width: 40px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkbox-placeholder {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
 }
 
 .name-column {
