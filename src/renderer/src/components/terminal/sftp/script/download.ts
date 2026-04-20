@@ -11,7 +11,7 @@
 
 import type { TransferTask, TransferNode } from '@shared/types/sftp'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
-import { formatTime, formatSize, createTransferNode, createTransferTask } from './utils'
+import { formatTime, formatSize, createTransferNode, createTransferTask, isTaskCancelled } from './utils'
 
 /**
  * 递归扫描远程文件夹并构建传输节点树
@@ -154,6 +154,11 @@ async function downloadSingleFile(
     throw new Error('SFTP 连接标识符不能为空（连接未建立）')
   }
   
+  // ✅ 检查任务是否已被取消（真正的取消机制）
+  if (isTaskCancelled(taskId, `跳过下载: ${node.name}`)) {
+    return
+  }
+  
   // 检查任务状态：如果当前是 pending，则更新为 transferring
   // 只有当第一个文件节点真正开始传输时，才改变任务状态
   const currentTask = sftpTransferStore.getTask(taskId)
@@ -198,6 +203,11 @@ async function downloadSingleFile(
     
     // 监听下载进度（实时更新节点状态）
     const cleanupProgress = window.api.sftp.onDownloadProgress((data) => {
+      // ✅ 检查任务是否已被取消（在进度回调中也检查）
+      if (isTaskCancelled(taskId)) {
+        return  // 停止更新进度，但不影响下载完成后的状态检查
+      }
+      
       // 匹配当前正在下载的文件（通过远程路径和本地路径）
       if (data.remotePath === node.remotePath && data.localPath === node.localPath) {
         // 计算进度信息
@@ -233,6 +243,11 @@ async function downloadSingleFile(
     
     // 清理进度监听
     cleanupProgress()
+    
+    // ✅ 下载完成后再次检查是否已被取消
+    if (isTaskCancelled(taskId, `下载完成但任务已取消: ${node.name}`)) {
+      return  // 不更新状态，保持 cancelled
+    }
     
     if (!result.success) {
       throw new Error(result.error || '下载失败')
@@ -296,6 +311,11 @@ async function downloadFolderContent(
   if (!sftpConnectionId) return
   
   if (node.isDirectory && node.children && node.children.length > 0) {
+    // ✅ 检查任务是否已被取消（在文件夹处理开始前）
+    if (isTaskCancelled(taskId, `跳过文件夹: ${node.name}`)) {
+      return
+    }
+    
     // 如果是文件夹，先在本地创建目录
     if (node.localPath) {
       try {
@@ -326,6 +346,11 @@ async function downloadFolderContent(
     
     // 递归下载所有子节点（传递 sftpConnectionId）
     for (const child of node.children) {
+      // ✅ 检查任务是否已被取消（在每个子节点下载前）
+      if (isTaskCancelled(taskId, `停止下载剩余子节点: ${node.name}`)) {
+        break  // 跳出循环，不再下载剩余子节点
+      }
+      
       await downloadFolderContent(child, sftpConnectionId, taskId)
       
       // 计算父节点的完成统计
@@ -344,7 +369,12 @@ async function downloadFolderContent(
       })
     }
     
-    // 所有子节点下载完成 - 更新最终状态
+    // 所有子节点下载完成 - 检查是否被取消
+    if (isTaskCancelled(taskId, `文件夹下载完成但任务已取消: ${node.name}`)) {
+      return  // 不更新状态，保持 cancelled
+    }
+    
+    // 更新最终状态
     sftpTransferStore.updateNodeStatus(taskId, node.id, {
       status: 'completed',
       progress: 100
@@ -512,7 +542,8 @@ export async function downloadFolder(
   }
   
   try {
-    // 获取文件夹名和本地基础路径（localPath 现在是可选参数）
+    // ========== 两阶段策略 ==========
+    // 阶段1：先创建占位根节点，立即入 Store（UI 可即时显示）
     const folderName = remotePath.split('/').pop() || 'folder'
     const localBasePath = typeof localPath === 'string' 
       ? localPath 
@@ -521,34 +552,75 @@ export async function downloadFolder(
     console.log(`[download] 文件夹名: ${folderName}`)
     console.log(`[download] 本地目标路径: ${localBasePath}`)
     
-    // 递归扫描远程文件夹结构（使用已建立的 sftpConnectionId）
-    console.log('[download] 正在扫描远程文件夹结构...')
-    const scanResult = await scanRemoteFolderRecursive(remotePath, localBasePath, sftpConnectionId)
+    console.log(`[download] 创建文件夹下载任务（先入 Store）: ${folderName}`)
     
-    console.log(`[download] 扫描完成：${scanResult.totalFiles} 个文件，总计 ${(scanResult.totalBytes / 1024 / 1024).toFixed(2)} MB`)
-    
-    // 创建传输任务（安全架构 v4：直接使用 sftpConnectionId）
-    const task = createTransferTask({
+    const placeholderNode = createTransferNode({
+      name: folderName,
+      isDirectory: true,
       type: 'download',
-      root: scanResult.rootNode,
-      sftpConnectionId: sftpConnectionId,
-      sessionId: sessionId,
-      totalBytes: scanResult.totalBytes
+      localPath: `${localBasePath}/${folderName}`,
+      remotePath: remotePath,
+      children: [],
+      totalFiles: 0,
+      completedFiles: 0,
+      status: 'pending'
     })
     
-    // 添加到 Store
+    const task = createTransferTask({
+      type: 'download',
+      root: placeholderNode,
+      sftpConnectionId: sftpConnectionId,
+      sessionId: sessionId,
+      totalBytes: 0
+    })
+    
     sftpTransferStore.addTask(task)
+    
+    console.log(`[download] ✅ 已创建下载任务（占位）: ${folderName}`)
+    
+    // 阶段2：异步递归扫描子项，完成后更新 Store 中的 root 节点
+    try {
+      sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
+        status: 'transferring'
+      })
+      
+      console.log('[download] 正在扫描远程文件夹结构...')
+      const scanResult = await scanRemoteFolderRecursive(remotePath, localBasePath, sftpConnectionId)
+      
+      console.log(`[download] 扫描完成：${scanResult.totalFiles} 个文件，总计 ${(scanResult.totalBytes / 1024 / 1024).toFixed(2)} MB`)
+      
+      // 用完整的树形结构替换占位根节点
+      sftpTransferStore.updateTask(task.id, {
+        root: scanResult.rootNode,
+        totalBytes: scanResult.totalBytes
+      })
+      
+      // 同步本地引用（供后续下载流程使用）
+      task.root = scanResult.rootNode
+      task.totalBytes = scanResult.totalBytes
+      
+    } catch (scanError: any) {
+      console.error(`[download] 扫描远程文件夹失败: ${remotePath}`, scanError)
+      
+      // 扫描失败时将占位节点标记为错误状态
+      sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
+        status: 'error',
+        error: `扫描失败: ${scanError.message}`
+      })
+      sftpTransferStore.updateTaskStatus(task.id, 'error')
+      throw scanError
+    }
     
     // 开始递归下载文件夹内容（传递 sftpConnectionId）
     console.log('[download] 开始下载文件夹内容...')
     
-    await downloadFolderContent(scanResult.rootNode, sftpConnectionId, task.id)
+    await downloadFolderContent(task.root, sftpConnectionId, task.id)
     
     // 更新任务状态和统计
     task.status = 'completed'
     task.completedAt = Date.now()
     task.elapsedTime = Math.round((task.completedAt - task.createdAt) / 1000)
-    task.transferredBytes = scanResult.totalBytes
+    task.transferredBytes = task.totalBytes
     
     sftpTransferStore.updateTaskStatus(task.id, 'completed')
     
@@ -609,13 +681,71 @@ export async function downloadBatch(
           const entry = listResult.data.find((item: any) => item.name === fileName)
           
           if (entry && (entry.type === 'd' || entry.isDirectory)) {
-            console.log(`[download] 扫描远程文件夹: ${remoteFilePath}`)
-            const folderResult = await scanRemoteFolderRecursive(remoteFilePath, localBasePath, sftpConnectionId)
+            // ========== 文件夹：两阶段策略 ==========
+            // 阶段1：先创建占位根节点，立即入 Store（UI 可即时显示）
+            console.log(`[download] 创建文件夹下载任务（先入 Store）: ${remoteFilePath}`)
             
-            taskRootNode = folderResult.rootNode
-            taskTotalBytes = folderResult.totalBytes
+            const placeholderNode = createTransferNode({
+              name: fileName,
+              isDirectory: true,
+              type: 'download',
+              localPath: `${localBasePath}/${fileName}`,
+              remotePath: remoteFilePath,
+              children: [],
+              totalFiles: 0,
+              completedFiles: 0,
+              status: 'pending'
+            })
             
-            console.log(`[download] 远程文件夹扫描完成: ${folderResult.totalFiles} 个文件, ${formatSize(taskTotalBytes)}`)
+            taskRootNode = placeholderNode
+            
+            const task = createTransferTask({
+              type: 'download',
+              root: placeholderNode,
+              sftpConnectionId: sftpConnectionId,
+              sessionId: sessionId,
+              totalBytes: 0
+            })
+            
+            sftpTransferStore.addTask(task)
+            createdTasks.push(task)
+            
+            console.log(`[download] ✅ 已创建下载任务 #${createdTasks.length}（占位）: ${fileName}`)
+            
+            // 阶段2：异步递归扫描子项，完成后更新 Store 中的 root 节点
+            try {
+              sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
+                status: 'transferring'
+              })
+              
+              console.log(`[download] 扫描远程文件夹: ${remoteFilePath}`)
+              const folderResult = await scanRemoteFolderRecursive(remoteFilePath, localBasePath, sftpConnectionId)
+              
+              console.log(`[download] 远程文件夹扫描完成: ${folderResult.totalFiles} 个文件, ${formatSize(folderResult.totalBytes)}`)
+              
+              // 用完整的树形结构替换占位根节点
+              sftpTransferStore.updateTask(task.id, {
+                root: folderResult.rootNode,
+                totalBytes: folderResult.totalBytes
+              })
+              
+              // 同步本地引用（供后续下载流程使用）
+              task.root = folderResult.rootNode
+              task.totalBytes = folderResult.totalBytes
+              
+            } catch (scanError: any) {
+              console.error(`[download] 扫描远程文件夹失败: ${remoteFilePath}`, scanError)
+              
+              // 扫描失败时将占位节点标记为错误状态
+              sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
+                status: 'error',
+                error: `扫描失败: ${scanError.message}`
+              })
+              sftpTransferStore.updateTaskStatus(task.id, 'error')
+              task.status = 'error'
+            }
+            
+            continue
           } else {
             const fileSize = entry?.size || 0
             

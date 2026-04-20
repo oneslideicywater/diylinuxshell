@@ -10,6 +10,7 @@
  */
 
 import type { TransferTask, TransferNode, TransferStatus, TransferType } from '@shared/types/sftp'
+import { useSftpTransferStore } from '@/stores/sftpTransfer'
 
 /**
  * 格式化时间（秒 -> HH:MM:SS）
@@ -153,4 +154,35 @@ export function createTransferTask(config: {
     elapsedTime: 0,
     createdAt: Date.now()
   }
+}
+
+/**
+ * 检查传输任务是否已被取消
+ * 
+ * ✅ 统一版本：消除 upload.ts/download.ts 中重复的取消检查代码
+ * - 用于在传输操作的关键节点检测任务是否被用户取消
+ * - 支持日志记录，便于调试和追踪取消时机
+ * 
+ * 使用场景：
+ * - 文件上传/下载开始前检查
+ * - 文件夹递归处理前检查
+ * - for 循环每个子节点处理前检查
+ * - 进度回调中检查（停止 UI 更新）
+ * - 操作完成后检查（防止状态覆盖）
+ * 
+ * @param taskId 任务 ID
+ * @param context 日志上下文信息（如文件名、操作类型等）
+ * @returns 如果任务已取消返回 true，否则返回 false
+ */
+export function isTaskCancelled(taskId: string, context: string = ''): boolean {
+  const sftpTransferStore = useSftpTransferStore()
+  
+  const task = sftpTransferStore.getTask(taskId)
+  const cancelled = !!task && task.status === 'cancelled'
+  
+  if (cancelled) {
+    console.log(`[sftp] ⚠️ 任务已取消${context ? `: ${context}` : ''}`)
+  }
+  
+  return cancelled
 }

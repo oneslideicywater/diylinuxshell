@@ -6,11 +6,13 @@
  */
 
 import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { exec } from 'child_process'
 import { sftpPool, type SFTPConfig, type FileInfo } from '../services/sftp'
 import { StoreService } from '../services/store'
 import { CryptoService } from '../services/crypto'
 import * as fs from 'fs'
 import * as path from 'path'
+import * as os from 'os'
 
 /**
  * 注册 SFTP 相关的 IPC 处理器
@@ -297,7 +299,7 @@ export function registerSFTPIpcHandlers(): void {
   ipcMain.handle('sftp:getHomeDir', async () => {
     try {
       // 返回当前用户的家目录
-      const homeDir = require('os').homedir()
+      const homeDir = os.homedir()
       return { success: true, data: homeDir }
     } catch (error: any) {
       return { success: false, error: error.message }
@@ -317,13 +319,26 @@ export function registerSFTPIpcHandlers(): void {
   })
 
   /**
+   * 获取系统盘符列表（仅 Windows）
+   * 返回所有可用盘符的文件信息，用于"此电脑"视图
+   */
+  ipcMain.handle('sftp:getDrives', async () => {
+    try {
+      const drives = await getSystemDrives()
+      return { success: true, data: drives }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  /**
    * 选择本地文件
    */
   ipcMain.handle('sftp:selectLocalFile', async (_event, options: { selectFolder?: boolean }) => {
     try {
       const result = await dialog.showOpenDialog({
         properties: options?.selectFolder ? ['openDirectory'] : ['openFile'],
-        defaultPath: require('os').homedir()
+        defaultPath: os.homedir()
       })
 
       if (result.canceled || result.filePaths.length === 0) {
@@ -467,6 +482,65 @@ async function getLocalDirectoryContents(dirPath: string): Promise<FileInfo[]> {
       }
 
       resolve(files)
+    })
+  })
+}
+
+/**
+ * 获取系统盘符列表（仅 Windows 平台）
+ * 返回所有可用盘符的文件信息，用于"此电脑"视图
+ * @returns 盘符文件信息数组
+ */
+async function getSystemDrives(): Promise<FileInfo[]> {
+  return new Promise((resolve, reject) => {
+    if (process.platform !== 'win32') {
+      resolve([{
+        name: '/',
+        path: '/',
+        isDirectory: true,
+        size: 0,
+        modifyTime: new Date()
+      }])
+      return
+    }
+
+    exec('wmic logicaldisk get name', (error: Error | null, stdout: string) => {
+      if (error) {
+        console.error('[SFTP] 获取盘符列表失败:', error)
+        reject(error)
+        return
+      }
+
+      console.log('[SFTP] wmic 输出:', stdout)
+
+      const drives: FileInfo[] = []
+      
+      const lines = stdout.split('\n')
+        .map(line => line.trim())
+        .filter(line => /^[A-Za-z]:$/.test(line))
+
+      console.log('[SFTP] 解析到的盘符:', lines)
+
+      for (const driveLetter of lines) {
+        const drivePath = `${driveLetter}\\`
+        
+        try {
+          const stats = fs.statSync(drivePath)
+          drives.push({
+            name: driveLetter,
+            path: drivePath,
+            isDirectory: true,
+            size: stats.size,
+            modifyTime: stats.mtime
+          })
+          console.log('[SFTP] 成功添加盘符:', driveLetter, drivePath)
+        } catch (error: any) {
+          console.warn(`[SFTP] 无法访问盘符：${drivePath}`, error)
+        }
+      }
+
+      console.log('[SFTP] 最终盘符列表:', drives.length, '个')
+      resolve(drives)
     })
   })
 }

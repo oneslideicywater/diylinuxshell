@@ -207,30 +207,100 @@ watch(localFiles, (newVal) => {
 
 /**
  * 加载本地文件列表
+ * 支持普通目录和盘符列表视图
  */
 async function loadFiles(): Promise<void> {
+  // 盘符列表视图：加载所有盘符
+  if (localPath.value === DRIVES_PATH) {
+    await loadDrives()
+    return
+  }
+  
+  // 普通目录：加载目录内容
   await loadLocalFiles(getLocalState())
 }
 
 /**
  * 处理路径输入回车
+ * 支持普通路径和盘符列表视图
  */
 function handlePathEnter(): void {
+  const inputPath = localPath.value.trim()
+  
+  // 空路径或特殊标识：加载盘符列表
+  if (!inputPath || inputPath === DRIVES_PATH) {
+    localPath.value = DRIVES_PATH
+    loadDrives()
+    return
+  }
+  
+  // Windows 盘符格式检查（如 C:\、D: 等）
+  if (/^[A-Za-z]:\\?$/.test(inputPath)) {
+    const drivePath = inputPath.endsWith('\\') ? inputPath : `${inputPath}\\`
+    localPath.value = drivePath
+    loadFiles()
+    return
+  }
+  
   loadFiles()
 }
 
 /**
+ * 盘符列表视图的特殊路径标识
+ * Windows 平台：从盘符根目录继续向上导航时显示所有盘符
+ */
+const DRIVES_PATH = '此电脑'
+
+/**
  * 处理上级目录点击
- * 跨平台兼容：根据路径分隔符自动检测 Windows/Linux/macOS
+ * 跨平台兼容：Windows 支持回退到盘符列表，Linux 回退到根目录 /
  */
 function handleUp(): void {
-  localUp(getLocalState(), {
-    dirname: (p: string) => {
-      const sep = p.includes('\\') ? '\\' : '/'
-      const idx = p.lastIndexOf(sep)
-      return idx > 0 ? p.substring(0, idx) : (sep === '/' ? '/' : p.substring(0, 3))
+  const currentPath = localPath.value
+  
+  // 已经在盘符列表视图，无法继续向上
+  if (currentPath === DRIVES_PATH) {
+    return
+  }
+  
+  // Windows 盘符根目录检测（如 C:\、D:\ 等）
+  const isWindowsDriveRoot = /^[A-Za-z]:\\$/.test(currentPath)
+  
+  if (isWindowsDriveRoot) {
+    // 从盘符根目录回退到盘符列表视图
+    localPath.value = DRIVES_PATH
+    loadDrives()
+  } else {
+    // 正常向上级目录导航
+    localUp(getLocalState(), {
+      dirname: (p: string) => {
+        const sep = p.includes('\\') ? '\\' : '/'
+        const idx = p.lastIndexOf(sep)
+        if (idx > 0) {
+          return p.substring(0, idx)
+        }
+        // Linux 根目录 / 返回 / 本身
+        // Windows 盘符根目录在上面已经处理
+        return sep === '/' ? '/' : p.substring(0, 3)
+      }
+    })
+  }
+}
+
+/**
+ * 加载系统盘符列表（仅 Windows 有效）
+ */
+async function loadDrives(): Promise<void> {
+  try {
+    const result = await window.api.sftp.getDrives()
+    if (result.success && result.data) {
+      localFiles.value = result.data
+      localFileCount.value = localFiles.value.length
+      console.log('[SftpLocal] ✅ 加载盘符列表成功:', localFiles.value.length, '个盘符')
     }
-  })
+  } catch (error: any) {
+    console.error('[SftpLocal] ❌ 加载盘符列表失败:', error)
+  }
 }
 
 /**

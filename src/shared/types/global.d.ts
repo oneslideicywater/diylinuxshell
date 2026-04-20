@@ -76,6 +76,7 @@ export interface CustomAPI {
     disconnect: (sessionId: string) => Promise<{ success: boolean; error?: string }>
     selectLocalFile: (options: { selectFolder?: boolean }) => Promise<{ success: boolean; path?: string; error?: string }>
     getLocalFiles: (localPath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
+    getDrives: () => Promise<{ success: boolean; data?: any[]; error?: string }>
     getHomeDir: () => Promise<{ success: boolean; data?: string; error?: string }>
     deleteLocalFile: (localPath: string) => Promise<{ success: boolean; error?: string }>
     statLocal: (localPath: string) => Promise<{ success: boolean; data?: { isDirectory: boolean; size: number }; error?: string }>

@@ -265,6 +265,10 @@ const api: CustomAPI = {
     getLocalFiles: (localPath: string): Promise<{ success: boolean; data?: any[]; error?: string }> => 
       ipcRenderer.invoke('sftp:getLocalFiles', localPath),
     
+    // 获取系统盘符列表（Windows 平台返回所有盘符，其他平台返回根目录）
+    getDrives: (): Promise<{ success: boolean; data?: any[]; error?: string }> =>
+      ipcRenderer.invoke('sftp:getDrives'),
+    
     // 获取用户主目录
     getHomeDir: (): Promise<{ success: boolean; data?: string; error?: string }> => 
       ipcRenderer.invoke('sftp:getHomeDir'),

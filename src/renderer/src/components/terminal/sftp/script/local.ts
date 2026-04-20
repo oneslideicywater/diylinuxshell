@@ -59,8 +59,7 @@ const DEFAULT_LOCAL_PATH = 'D:\\develop\\goworkbunch\\memcached-operator'
  */
 export async function loadLocalFiles(state: LocalFileState): Promise<void> {
   try {
-    // 始终使用 D 盘开发目录作为默认路径（避免 C 盘权限问题）
-    let pathToLoad = state.localPath.value || DEFAULT_LOCAL_PATH
+    const pathToLoad = state.localPath.value || DEFAULT_LOCAL_PATH
     
     state.localPath.value = pathToLoad
     
@@ -71,7 +70,6 @@ export async function loadLocalFiles(state: LocalFileState): Promise<void> {
     }
   } catch (error) {
     console.error('加载本地文件失败:', error)
-    // 出错时加载 D 盘开发目录（避免 C 盘权限问题）
     state.localPath.value = DEFAULT_LOCAL_PATH
     const result = await window.api.sftp.getLocalFiles(state.localPath.value)
     if (result.success && result.data) {

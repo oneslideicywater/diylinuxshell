@@ -447,8 +447,6 @@ export async function deleteRemoteBatch(
     try {
       const itemName = remotePath.split('/').pop() || 'item'
       
-      let taskRootNode: TransferNode
-      
       // 判断是文件还是文件夹（通过查询远程路径类型）
       const listResult = await window.api.sftp.listDir(
         sftpConnectionId, 
@@ -460,35 +458,88 @@ export async function deleteRemoteBatch(
       ) : null
       
       if (selectedItem && (selectedItem.type === 'd' || selectedItem.isDirectory)) {
-        // 文件夹：扫描子项构建树形结构
-        console.log(`[delete-remote] 扫描远程文件夹: ${remotePath}`)
+        // ========== 文件夹：两阶段策略 ==========
+        // 阶段1：先创建仅含根节点的占位任务，立即入 Store（UI 可即时显示）
+        console.log(`[delete-remote] 创建文件夹删除任务（先入 Store）: ${remotePath}`)
         
-        const folderResult = await scanRemoteFolderForDelete(remotePath, sftpConnectionId)
-        taskRootNode = folderResult.rootNode
+        const placeholderNode = createTransferNode({
+          name: itemName,
+          isDirectory: true,
+          type: 'delete',
+          remotePath: remotePath,
+          children: [],
+          totalFiles: 0,
+          completedFiles: 0,
+          status: 'pending'
+        })
         
-        console.log(`[delete-remote] 远程文件夹扫描完成: ${folderResult.totalFiles} 个文件`)
+        const task = createTransferTask({
+          type: 'delete',
+          root: placeholderNode,
+          sftpConnectionId: sftpConnectionId,
+          sessionId: sessionId,
+          totalBytes: 0
+        })
+        
+        sftpTransferStore.addTask(task)
+        createdTasks.push(task)
+        
+        console.log(`[delete-remote] ✅ 已创建删除任务 #${createdTasks.length}（占位）: ${itemName}`)
+        
+        // 阶段2：异步递归扫描子项，完成后更新 Store 中的 root 节点
+        try {
+          sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
+            status: 'transferring'
+          })
+          
+          const folderResult = await scanRemoteFolderForDelete(remotePath, sftpConnectionId)
+          
+          console.log(`[delete-remote] 远程文件夹扫描完成: ${folderResult.totalFiles} 个文件`)
+          
+          // 用完整的树形结构替换占位根节点
+          sftpTransferStore.updateTask(task.id, {
+            root: folderResult.rootNode,
+            totalBytes: folderResult.rootNode.size || 0
+          })
+          
+          // 同步更新本地引用（供后续删除流程使用）
+          task.root = folderResult.rootNode
+          task.totalBytes = folderResult.rootNode.size || 0
+          
+        } catch (scanError: any) {
+          console.error(`[delete-remote] 扫描远程文件夹失败: ${remotePath}`, scanError)
+          
+          // 扫描失败时将占位节点标记为错误状态
+          sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
+            status: 'error',
+            error: `扫描失败: ${scanError.message}`
+          })
+          sftpTransferStore.updateTaskStatus(task.id, 'error')
+          task.status = 'error'
+        }
+        
       } else {
-        // 单文件：直接创建单节点
-        taskRootNode = createTransferNode({
+        // ========== 单文件：直接创建完整节点 ==========
+        const fileNode = createTransferNode({
           name: itemName,
           isDirectory: false,
           type: 'delete',
           remotePath: remotePath
         })
+        
+        const task = createTransferTask({
+          type: 'delete',
+          root: fileNode,
+          sftpConnectionId: sftpConnectionId,
+          sessionId: sessionId,
+          totalBytes: 0
+        })
+        
+        sftpTransferStore.addTask(task)
+        createdTasks.push(task)
+        
+        console.log(`[delete-remote] ✅ 已创建删除任务 #${createdTasks.length}: ${itemName}`)
       }
-      
-      const task = createTransferTask({
-        type: 'delete',
-        root: taskRootNode,
-        sftpConnectionId: sftpConnectionId,
-        sessionId: sessionId,
-        totalBytes: taskRootNode.size || 0
-      })
-      
-      sftpTransferStore.addTask(task)
-      createdTasks.push(task)
-      
-      console.log(`[delete-remote] ✅ 已创建删除任务 #${createdTasks.length}: ${taskRootNode.name}`)
       
     } catch (error: any) {
       console.error(`[delete-remote] 处理远程路径失败: ${remotePath}`, error)

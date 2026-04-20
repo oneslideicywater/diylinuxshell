@@ -80,7 +80,7 @@
 
     <!-- 会话表单对话框 -->
     <SessionForm :visible="sessionFormVisible" :session="editingSession" @close="handleCloseSessionForm"
-      @submit="handleSubmitSessionForm" />
+      @save="handleSubmitSessionForm" />
 
     <!-- 确认对话框 -->
     <ConfirmDialog :visible="confirmDialogVisible" :title="confirmDialogTitle" :message="confirmDialogMessage"
@@ -565,15 +565,15 @@ const handleSubmitGroupForm = async (data: { name: string; parentId?: string; de
 /**
  * 提交会话表单
  */
-const handleSubmitSessionForm = async (data: Session) => {
+const handleSubmitSessionForm = async (data: Partial<Session>) => {
   try {
     if (data.id) {
       // 更新会话
       await window.api.session.update(data.id, data)
       sessionStore.updateSession(data.id, data)
     } else {
-      // 创建会话
-      const session = await window.api.session.create(data)
+      // 创建会话（SessionForm 已确保必填字段不为空）
+      const session = await window.api.session.create(data as Omit<Session, 'id' | 'createdAt' | 'updatedAt'>)
       sessionStore.addSession(session)
     }
     handleCloseSessionForm()

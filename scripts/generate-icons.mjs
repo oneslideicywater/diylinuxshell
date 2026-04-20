@@ -3,14 +3,14 @@
  * 使用 electron-icon-builder 从 PNG 生成所有平台所需的图标
  */
 
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+import { execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 
 // 检查 sharp 是否可用（用于 SVG 转 PNG）
 let sharp;
 try {
-  sharp = require('sharp');
+  sharp = (await import('sharp')).default;
   console.log('✓ sharp 模块已加载');
 } catch (error) {
   console.error('✗ 需要安装 sharp 模块来转换 SVG 到 PNG');

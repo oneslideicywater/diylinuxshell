@@ -7,6 +7,9 @@
 import { test, expect } from '@playwright/test'
 import { startApp, closeApp } from '../helpers/electron-app'
 import type { ElectronApplication, Page } from '@playwright/test'
+import * as os from 'os'
+import * as path from 'path'
+import * as fs from 'fs'
 
 // 测试会话配置（使用提供的测试服务器）
 const TEST_SESSION = {
@@ -291,9 +294,8 @@ test.describe('SFTP 文件传输功能', () => {
     const testFileContent = `这是测试文件内容 - ${Date.now()}`
     
     // 使用 fs 模块创建临时文件
-    const tempDir = require('os').tmpdir()
-    const testFilePath = require('path').join(tempDir, testFileName)
-    const fs = require('fs')
+    const tempDir = os.tmpdir()
+    const testFilePath = path.join(tempDir, testFileName)
     fs.writeFileSync(testFilePath, testFileContent)
 
     console.log('创建测试文件:', testFilePath)
@@ -506,7 +508,7 @@ test.describe('SFTP 文件传输功能', () => {
     // 处理文件选择对话框（选择保存位置）
     page.once('filechooser', async fileChooser => {
       // 选择临时目录作为保存位置
-      const tempDir = require('os').tmpdir()
+      const tempDir = os.tmpdir()
       await fileChooser.accept([tempDir])
     })
     
@@ -534,9 +536,8 @@ test.describe('SFTP 文件传输功能', () => {
     const testFileName = `test_delete_${Date.now()}.txt`
     
     // 创建测试文件（使用本地文件系统 API）
-    const tempDir = require('os').tmpdir()
-    const testFilePath = require('path').join(tempDir, testFileName)
-    const fs = require('fs')
+    const tempDir = os.tmpdir()
+    const testFilePath = path.join(tempDir, testFileName)
     fs.writeFileSync(testFilePath, `这是测试文件内容 - ${Date.now()}`)
 
     console.log('创建测试文件:', testFilePath)
@@ -621,9 +622,8 @@ test.describe('SFTP 文件传输功能', () => {
 
     // 创建测试文件夹和文件
     const testFolderName = `test_upload_folder_${Date.now()}`
-    const tempDir = require('os').tmpdir()
-    const testFolderPath = require('path').join(tempDir, testFolderName)
-    const fs = require('fs')
+    const tempDir = os.tmpdir()
+    const testFolderPath = path.join(tempDir, testFolderName)
     
     // 创建测试文件夹
     if (!fs.existsSync(testFolderPath)) {
@@ -631,15 +631,15 @@ test.describe('SFTP 文件传输功能', () => {
     }
     
     // 创建测试文件
-    const testFile1 = require('path').join(testFolderPath, 'test1.txt')
-    const testFile2 = require('path').join(testFolderPath, 'test2.txt')
+    const testFile1 = path.join(testFolderPath, 'test1.txt')
+    const testFile2 = path.join(testFolderPath, 'test2.txt')
     fs.writeFileSync(testFile1, '测试文件 1 内容')
     fs.writeFileSync(testFile2, '测试文件 2 内容')
-    
+
     // 创建子文件夹
-    const subFolder = require('path').join(testFolderPath, 'subfolder')
+    const subFolder = path.join(testFolderPath, 'subfolder')
     fs.mkdirSync(subFolder, { recursive: true })
-    const testFile3 = require('path').join(subFolder, 'test3.txt')
+    const testFile3 = path.join(subFolder, 'test3.txt')
     fs.writeFileSync(testFile3, '测试文件 3 内容（子文件夹）')
 
     console.log('创建测试文件夹:', testFolderPath)
@@ -745,9 +745,8 @@ test.describe('SFTP 文件传输功能', () => {
 
     // 创建测试文件
     const testFileName = `test_progress_${Date.now()}.txt`
-    const tempDir = require('os').tmpdir()
-    const testFilePath = require('path').join(tempDir, testFileName)
-    const fs = require('fs')
+    const tempDir = os.tmpdir()
+    const testFilePath = path.join(tempDir, testFileName)
     
     // 创建较大的测试文件（用于观察进度）
     const largeContent = '测试内容\n'.repeat(10000)

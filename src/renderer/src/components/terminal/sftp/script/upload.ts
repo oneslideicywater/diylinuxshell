@@ -1,6 +1,6 @@
 import type { TransferTask, TransferNode } from '@shared/types/sftp'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
-import { formatTime, formatSize, createTransferNode, createTransferTask } from './utils'
+import { formatTime, formatSize, createTransferNode, createTransferTask, isTaskCancelled } from './utils'
 
 /**
  * 递归扫描文件夹并构建传输节点树
@@ -160,6 +160,11 @@ async function uploadSingleFile(
     throw new Error('缺少必要参数：sftpConnectionId 或文件路径')
   }
   
+  // ✅ 检查任务是否已被取消（真正的取消机制）
+  if (isTaskCancelled(taskId, `跳过上传: ${node.name}`)) {
+    return
+  }
+  
   // 检查任务状态：如果当前是 pending，则更新为 transferring
   // 只有当第一个文件节点真正开始传输并收到进度回调时，才改变任务状态
   const currentTask = sftpTransferStore.getTask(taskId)
@@ -181,6 +186,11 @@ async function uploadSingleFile(
   try {
     // 监听上传进度
     const cleanupProgress = window.api.sftp.onUploadProgress((data) => {
+      // ✅ 检查任务是否已被取消（在进度回调中也检查）
+      if (isTaskCancelled(taskId)) {
+        return  // 停止更新进度，但不影响上传完成后的状态检查
+      }
+      
       if (data.localPath === node.localPath && data.remotePath === node.remotePath) {
         // 计算进度信息
         const progress = Math.round((data.transferredSize / data.size) * 100)
@@ -214,6 +224,11 @@ async function uploadSingleFile(
     
     // 清理进度监听
     cleanupProgress()
+    
+    // ✅ 上传完成后再次检查是否已被取消
+    if (isTaskCancelled(taskId, `上传完成但任务已取消: ${node.name}`)) {
+      return  // 不更新状态，保持 cancelled
+    }
     
     if (!result.success) {
       throw new Error(result.error || '上传失败')
@@ -266,6 +281,11 @@ async function uploadFolderContent(
   if (!sftpConnectionId) return
   
   if (node.isDirectory && node.children && node.children.length > 0) {
+    // ✅ 检查任务是否已被取消（在文件夹处理开始前）
+    if (isTaskCancelled(taskId, `跳过文件夹: ${node.name}`)) {
+      return
+    }
+    
     // 如果是文件夹，先在远程创建目录（使用已建立的连接）
     if (node.remotePath) {
       try {
@@ -282,6 +302,11 @@ async function uploadFolderContent(
     
     // 递归上传所有子节点（传递 sftpConnectionId）
     for (const child of node.children) {
+      // ✅ 检查任务是否已被取消（在每个子文件上传前）
+      if (isTaskCancelled(taskId, `停止上传剩余子节点: ${node.name}`)) {
+        break  // 跳出循环，不再上传剩余子节点
+      }
+      
       await uploadFolderContent(child, sftpConnectionId, taskId)
       
       // 计算父节点的完成统计
@@ -300,7 +325,12 @@ async function uploadFolderContent(
       })
     }
     
-    // 所有子节点上传完成 - 更新最终状态
+    // 所有子节点上传完成 - 检查是否被取消
+    if (isTaskCancelled(taskId, `文件夹上传完成但任务已取消: ${node.name}`)) {
+      return  // 不更新状态，保持 cancelled
+    }
+    
+    // 更新最终状态
     sftpTransferStore.updateNodeStatus(taskId, node.id, {
       status: 'completed',
       progress: 100
@@ -473,28 +503,70 @@ export async function uploadFolder(
       ? remotePath 
       : (remotePath?.value || '/')
     
-    // 第一步：递归扫描文件夹并构建树形结构
-    console.log('[upload] 正在扫描文件夹...')
-    const scanResult = await scanFolderRecursive(folderPath, remoteBasePath)
+    // ========== 两阶段策略 ==========
+    // 阶段1：先创建占位根节点，立即入 Store（UI 可即时显示）
+    const folderName = folderPath.split(/[\\/]/).pop() || 'folder'
     
-    const rootNode = scanResult.rootNode
+    console.log(`[upload] 创建文件夹上传任务（先入 Store）: ${folderName}`)
     
-    console.log(`[upload] 扫描完成：${scanResult.totalFiles} 个文件，总大小 ${formatSize(scanResult.totalBytes)}`)
-    
-    // 第二步：创建传输任务并添加到 Store（安全架构 v4：直接使用 sftpConnectionId）
-    const task = createTransferTask({
+    const placeholderNode = createTransferNode({
+      name: folderName,
+      isDirectory: true,
       type: 'upload',
-      root: rootNode,
-      sftpConnectionId: sftpConnectionId,
-      sessionId: sessionId,
-      totalBytes: scanResult.totalBytes
+      localPath: folderPath,
+      remotePath: `${remoteBasePath}/${folderName}`,
+      children: [],
+      totalFiles: 0,
+      completedFiles: 0,
+      status: 'pending'
     })
     
-    // 添加到 Store（任务会被转换为 reactive 对象）
+    const task = createTransferTask({
+      type: 'upload',
+      root: placeholderNode,
+      sftpConnectionId: sftpConnectionId,
+      sessionId: sessionId,
+      totalBytes: 0
+    })
+    
     sftpTransferStore.addTask(task)
     
+    console.log(`[upload] ✅ 已创建上传任务（占位）: ${folderName}`)
     
-    // 第三步：开始上传（传递 taskId 以确保响应式更新）
+    // 阶段2：异步递归扫描子项，完成后更新 Store 中的 root 节点
+    try {
+      sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
+        status: 'transferring'
+      })
+      
+      console.log('[upload] 正在扫描文件夹...')
+      const scanResult = await scanFolderRecursive(folderPath, remoteBasePath)
+      
+      console.log(`[upload] 扫描完成：${scanResult.totalFiles} 个文件，总大小 ${formatSize(scanResult.totalBytes)}`)
+      
+      // 用完整的树形结构替换占位根节点
+      sftpTransferStore.updateTask(task.id, {
+        root: scanResult.rootNode,
+        totalBytes: scanResult.totalBytes
+      })
+      
+      // 同步本地引用（供后续上传流程使用）
+      task.root = scanResult.rootNode
+      task.totalBytes = scanResult.totalBytes
+      
+    } catch (scanError: any) {
+      console.error(`[upload] 扫描文件夹失败: ${folderPath}`, scanError)
+      
+      // 扫描失败时将占位节点标记为错误状态
+      sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
+        status: 'error',
+        error: `扫描失败: ${scanError.message}`
+      })
+      sftpTransferStore.updateTaskStatus(task.id, 'error')
+      throw scanError
+    }
+    
+    // 开始上传（传递 taskId 以确保响应式更新）
     console.log('[upload] 开始上传文件...')
     
     // 更新根节点初始状态
@@ -502,7 +574,7 @@ export async function uploadFolder(
       startTime: Date.now()
     })
     
-    await uploadFolderContent(rootNode, sftpConnectionId, task.id)
+    await uploadFolderContent(task.root, sftpConnectionId, task.id)
     
     // 第四步：更新任务状态
     task.status = 'completed'
@@ -581,12 +653,71 @@ export async function uploadBatch(
         let taskTotalBytes = 0
         
         if (entry.isDirectory) {
-          console.log(`[upload] 扫描文件夹: ${filePath}`)
-          const folderResult = await scanFolderRecursive(filePath, remoteBasePath)
-          taskRootNode = folderResult.rootNode
-          taskTotalBytes = folderResult.totalBytes
+          // ========== 文件夹：两阶段策略 ==========
+          // 阶段1：先创建占位根节点，立即入 Store（UI 可即时显示）
+          console.log(`[upload] 创建文件夹上传任务（先入 Store）: ${filePath}`)
           
-          console.log(`[upload] 文件夹扫描完成: ${folderResult.totalFiles} 个文件, ${formatSize(taskTotalBytes)}`)
+          const placeholderNode = createTransferNode({
+            name: fileName,
+            isDirectory: true,
+            type: 'upload',
+            localPath: filePath,
+            remotePath: `${remoteBasePath}/${fileName}`,
+            children: [],
+            totalFiles: 0,
+            completedFiles: 0,
+            status: 'pending'
+          })
+          
+          taskRootNode = placeholderNode
+          
+          const task = createTransferTask({
+            type: 'upload',
+            root: placeholderNode,
+            sftpConnectionId: sftpConnectionId,
+            sessionId: sessionId,
+            totalBytes: 0
+          })
+          
+          sftpTransferStore.addTask(task)
+          createdTasks.push(task)
+          
+          console.log(`[upload] ✅ 已创建上传任务 #${createdTasks.length}（占位）: ${fileName}`)
+          
+          // 阶段2：异步递归扫描子项，完成后更新 Store 中的 root 节点
+          try {
+            sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
+              status: 'transferring'
+            })
+            
+            console.log(`[upload] 扫描文件夹: ${filePath}`)
+            const folderResult = await scanFolderRecursive(filePath, remoteBasePath)
+            
+            console.log(`[upload] 文件夹扫描完成: ${folderResult.totalFiles} 个文件, ${formatSize(folderResult.totalBytes)}`)
+            
+            // 用完整的树形结构替换占位根节点
+            sftpTransferStore.updateTask(task.id, {
+              root: folderResult.rootNode,
+              totalBytes: folderResult.totalBytes
+            })
+            
+            // 同步本地引用（供后续上传流程使用）
+            task.root = folderResult.rootNode
+            task.totalBytes = folderResult.totalBytes
+            
+          } catch (scanError: any) {
+            console.error(`[upload] 扫描文件夹失败: ${filePath}`, scanError)
+            
+            // 扫描失败时将占位节点标记为错误状态
+            sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
+              status: 'error',
+              error: `扫描失败: ${scanError.message}`
+            })
+            sftpTransferStore.updateTaskStatus(task.id, 'error')
+            task.status = 'error'
+          }
+          
+          continue
         } else {
           const fileSize = entry.size || 0
           

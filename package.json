@@ -23,7 +23,7 @@
     "test:e2e:debug": "playwright test --debug",
     "test:all": "npm run test:unit && npm run test:integration && npm run test:e2e",
     "test:ci": "npm run test:unit && npm run test:integration",
-    "clean": "node -e \"const fs=require('fs');if(fs.existsSync('release')){fs.rmSync('release',{recursive:true,force:true});console.log('release folder cleaned');}else{console.log('release folder not exists');}\"",
+    "clean": "node scripts/clean.mjs",
     "package": "npm run build && electron-builder --dir",
     "package:win": "npm run build && electron-builder --win",
     "package:linux": "npm run build && electron-builder --linux",

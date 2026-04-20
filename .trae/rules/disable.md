@@ -8,3 +8,4 @@
 5. 永远不要吞没报错日志，要打印出来。
 6. 永远不要用C盘的文件路径，写测试用例。使用D盘的文件路径。
 7. 打开终端powershell后,先切换编码再运行命令,切换编码: `$OutputEncoding = [Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8;chcp 65001`
+8. 永远不要使用require,用import导入模块。

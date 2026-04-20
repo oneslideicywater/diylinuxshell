@@ -480,16 +480,33 @@ const handleOverlayClick = (): void => {
 
 /**
  * 提交表单
+ * 确保 groupId 不为空：如果未选择分组，自动使用"默认分组"
  */
 const handleSubmit = async () => {
   submitting.value = true
   try {
+    let finalGroupId = formData.value.groupId
+    
+    // 如果 groupId 为空，自动获取"默认分组"ID
+    if (!finalGroupId) {
+      const groups = sessionStore.sessionGroups
+      const defaultGroup = groups.find(g => g.name === '默认分组')
+      if (defaultGroup) {
+        finalGroupId = defaultGroup.id
+        console.log('[SessionForm] groupId 为空，使用默认分组:', defaultGroup.id)
+      } else if (groups.length > 0) {
+        // 如果没有"默认分组"，使用第一个可用分组
+        finalGroupId = groups[0].id
+        console.log('[SessionForm] 使用第一个可用分组:', finalGroupId)
+      }
+    }
+
     emit('save', {
       name: formData.value.name,
       host: formData.value.host,
       port: formData.value.port,
       username: formData.value.username,
-      groupId: formData.value.groupId || undefined,
+      groupId: finalGroupId,  // ✅ 确保 groupId 永远不为空
       authType: formData.value.authType,
       password: formData.value.authType === 'password' ? formData.value.password : undefined,
       keyPath: formData.value.authType === 'key' ? formData.value.keyPath : undefined,
