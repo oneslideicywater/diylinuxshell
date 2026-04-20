@@ -110,6 +110,7 @@
 import { computed } from 'vue'
 import type { TransferNode } from '@shared/types/sftp'
 import { formatSize, formatSpeed } from '@/utils/fs-utils'
+import { getStatusText } from '../script/statusText'
 
 /**
  * 组件名称（用于递归调用）
@@ -164,17 +165,10 @@ function handleChildExpanded(nodeId: string, expanded: boolean): void {
 }
 
 /**
- * 状态文本
+ * 状态文本（根据任务类型动态显示：删除任务显示"已删除/删除中"，其他任务保持原有文案）
  */
 const statusText = computed(() => {
-  const statusMap: Record<string, string> = {
-    pending: '等待中',
-    transferring: '传输中',
-    completed: '已完成',
-    error: '错误',
-    cancelled: '已取消'
-  }
-  return statusMap[props.node.status] || props.node.status
+  return getStatusText(props.node.type, props.node.status)
 })
 </script>
 

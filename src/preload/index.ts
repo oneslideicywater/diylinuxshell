@@ -273,6 +273,10 @@ const api: CustomAPI = {
     deleteLocalFile: (localPath: string): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('sftp:delete-local', localPath),
 
+    // 获取本地文件/文件夹状态
+    statLocal: (localPath: string): Promise<{ success: boolean; data?: { isDirectory: boolean; size: number }; error?: string }> =>
+      ipcRenderer.invoke('sftp:stat-local', localPath),
+
     // 创建本地文件夹
     createLocalFolder: (parentPath: string, folderName: string): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('sftp:create-local-folder', parentPath, folderName),

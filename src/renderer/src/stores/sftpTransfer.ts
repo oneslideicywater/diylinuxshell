@@ -18,6 +18,11 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   const transferTasks = ref<TransferTask[]>([])
 
   /**
+   * 选中的任务 ID 集合（用于批量取消操作）
+   */
+  const selectedTaskIds = ref<Set<string>>(new Set())
+
+  /**
    * 计算属性：待开始的任务列表（pending 状态）
    */
   const pendingTasks = computed(() => {
@@ -254,9 +259,82 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
     }
   }
 
+  /**
+   * 切换任务选中状态
+   * @param taskId 任务 ID
+   */
+  function toggleTaskSelection(taskId: string): void {
+    if (selectedTaskIds.value.has(taskId)) {
+      selectedTaskIds.value.delete(taskId)
+    } else {
+      selectedTaskIds.value.add(taskId)
+    }
+    // 触发响应式更新（Set 需要重新赋值）
+    selectedTaskIds.value = new Set(selectedTaskIds.value)
+  }
+
+  /**
+   * 取消所有选中的任务（仅限 pending 和 transferring 状态）
+   * 将选中的可取消任务及其所有子节点状态更新为 cancelled
+   */
+  function cancelSelectedTasks(): void {
+    const taskIdsToCancel = Array.from(selectedTaskIds.value)
+    
+    for (const taskId of taskIdsToCancel) {
+      const taskIndex = transferTasks.value.findIndex(t => t.id === taskId)
+      if (taskIndex === -1) continue
+      
+      const task = transferTasks.value[taskIndex]
+      
+      // 只取消待开始或传输中的任务
+      if (task.status === 'pending' || task.status === 'transferring') {
+        // 更新任务状态
+        updateTaskStatus(taskId, 'cancelled')
+        
+        // 递归标记所有子节点为 cancelled
+        if (task.root) {
+          markAllNodesCancelled(task.root, taskId)
+        }
+        
+        console.log(`[sftpTransfer] 🚫 已取消任务: ${taskId} (含所有子节点)`)
+      }
+    }
+    
+    // 清空选中状态
+    selectedTaskIds.value = new Set()
+  }
+
+  /**
+   * 递归标记树中所有节点为已取消状态
+   * @param node 当前节点
+   * @param taskId 任务 ID（用于更新 Store 状态）
+   */
+  function markAllNodesCancelled(node: TransferNode, taskId: string): void {
+    // 标记当前节点为 cancelled
+    updateNodeStatus(taskId, node.id, { 
+      status: 'cancelled',
+      progress: 0 
+    })
+    
+    // 递归处理所有子节点
+    if (node.children && node.children.length > 0) {
+      for (const child of node.children) {
+        markAllNodesCancelled(child, taskId)
+      }
+    }
+  }
+
+  /**
+   * 清空所有任务的选中状态
+   */
+  function clearSelectedTasks(): void {
+    selectedTaskIds.value = new Set()
+  }
+
   return {
     // 状态
     transferTasks,
+    selectedTaskIds,      // 选中的任务 ID 集合
     
     // ========== 按状态分类的任务列表 ==========
     pendingTasks,           // 待开始的任务
@@ -277,6 +355,10 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
     clearCompletedTasks,
     clearAllTasks,
     getTask,
-    setAllNodesExpanded
+    setAllNodesExpanded,
+    // ========== 任务选中相关方法 ==========
+    toggleTaskSelection,     // 切换任务选中状态
+    cancelSelectedTasks,     // 取消选中的任务
+    clearSelectedTasks       // 清空选中状态
   }
 })

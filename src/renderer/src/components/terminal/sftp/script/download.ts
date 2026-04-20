@@ -29,24 +29,17 @@ async function scanRemoteFolderRecursive(
   const folderName = remotePath.split('/').pop() || 'folder'
   
   // 创建当前文件夹节点（type 为 'download'）
-  const currentNode: TransferNode = {
-    id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  const currentNode = createTransferNode({
     name: folderName,
     isDirectory: true,
     type: 'download',
-    status: 'pending',
-    progress: 0,
-    size: 0,
     localPath: `${localBasePath}/${folderName}`,
     remotePath: remotePath,
-    speed: 0,
-    remaining: '',
-    elapsed: '',
     children: [],
     totalFiles: 0,
     completedFiles: 0,
     expanded: false
-  }
+  })
   
   let totalFiles = 0
   let totalBytes = 0
@@ -92,21 +85,15 @@ async function scanRemoteFolderRecursive(
           console.warn(`[download] 无法访问远程子目录 ${fullRemotePath}，已跳过:`, subError.message)
           
           // 创建错误标记节点
-          const errorNode: TransferNode = {
-            id: `node-error-${Date.now()}`,
+          const errorNode = createTransferNode({
             name: entry.name,
             isDirectory: true,
             type: 'download',
-            status: 'error',
-            progress: 0,
-            size: 0,
             localPath: fullLocalPath,
             remotePath: fullRemotePath,
-            speed: 0,
-            remaining: '',
-            elapsed: '',
+            status: 'error',
             error: subError.message
-          }
+          })
           
           if (currentNode.children) {
             currentNode.children.push(errorNode)
@@ -650,20 +637,13 @@ export async function downloadBatch(
             taskTotalBytes = fileSize
           }
         } else {
-          const fileNode: TransferNode = {
-            id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          const fileNode = createTransferNode({
             name: fileName,
             isDirectory: false,
             type: 'download',
-            status: 'pending',
-            progress: 0,
-            size: 0,
             localPath: `${localBasePath}/${fileName}`,
-            remotePath: remoteFilePath,
-            speed: 0,
-            remaining: '',
-            elapsed: ''
-          }
+            remotePath: remoteFilePath
+          })
           
           taskRootNode = fileNode
           taskTotalBytes = 0

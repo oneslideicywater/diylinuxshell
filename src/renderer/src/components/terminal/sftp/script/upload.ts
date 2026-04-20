@@ -16,24 +16,17 @@ async function scanFolderRecursive(
   const folderName = folderPath.split(/[\\/]/).pop() || 'folder'
   
   // 创建当前文件夹节点
-  const currentNode: TransferNode = {
-    id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  const currentNode = createTransferNode({
     name: folderName,
     isDirectory: true,
     type: 'upload',
-    status: 'pending',
-    progress: 0,
-    size: 0,
     localPath: folderPath,
     remotePath: `${remoteBasePath}/${folderName}`,
-    speed: 0,
-    remaining: '',
-    elapsed: '',
     children: [],
     totalFiles: 0,
     completedFiles: 0,
     expanded: false
-  }
+  })
   
   let totalFiles = 0
   let totalBytes = 0
@@ -89,21 +82,15 @@ async function scanFolderRecursive(
           console.warn(`[upload] 无法访问子目录 ${fullPath}，已跳过:`, subError.message)
           
           // 创建错误标记节点（可选）
-          const errorNode: TransferNode = {
-            id: `node-error-${Date.now()}`,
+          const errorNode = createTransferNode({
             name: entry.name,
             isDirectory: true,
             type: 'upload',
-            status: 'error',
-            progress: 0,
-            size: 0,
             localPath: fullPath,
             remotePath: remoteFullPath,
-            speed: 0,
-            remaining: '',
-            elapsed: '',
+            status: 'error',
             error: `无法访问: ${subError.message}`
-          }
+          })
           
           if (currentNode.children) {
             currentNode.children.push(errorNode)

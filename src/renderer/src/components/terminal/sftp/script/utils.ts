@@ -9,7 +9,7 @@
  * @module sftp/utils
  */
 
-import type { TransferTask, TransferNode } from '@shared/types/sftp'
+import type { TransferTask, TransferNode, TransferStatus, TransferType } from '@shared/types/sftp'
 
 /**
  * 格式化时间（秒 -> HH:MM:SS）
@@ -36,6 +36,7 @@ export function formatTime(seconds: number): string {
  * - 自动生成唯一 ID（时间戳 + 随机字符串）
  * - 统一默认值设置
  * - 支持上传、下载、删除三种操作类型
+ * - 支持普通节点、错误节点、根节点等多种场景
  * 
  * @param config 节点配置项
  * @returns 初始化完成的 TransferNode 对象
@@ -46,20 +47,34 @@ export function createTransferNode(config: {
   /** 是否为目录 */
   isDirectory: boolean
   /** 操作类型 */
-  type: 'upload' | 'download' | 'delete'
+  type: TransferType
   /** 本地路径（可选） */
   localPath?: string
   /** 远程路径（可选） */
   remotePath?: string
   /** 文件大小（字节，可选） */
   size?: number
+  /** 节点状态（可选，默认 'pending'） */
+  status?: TransferStatus
+  /** 错误信息（可选，用于 error 状态） */
+  error?: string
+  /** 子节点列表（可选，用于文件夹根节点） */
+  children?: TransferNode[]
+  /** 总文件数（可选，用于文件夹统计） */
+  totalFiles?: number
+  /** 已完成文件数（可选，用于文件夹统计） */
+  completedFiles?: number
+  /** 是否展开（可选，用于 UI 显示） */
+  expanded?: boolean
 }): TransferNode {
-  return {
-    id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  const node: TransferNode = {
+    id: config.status === 'error' 
+      ? `node-error-${Date.now()}` 
+      : `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     name: config.name,
     isDirectory: config.isDirectory,
     type: config.type,
-    status: 'pending',
+    status: config.status || 'pending',
     progress: 0,
     size: config.size || 0,
     localPath: config.localPath || '',
@@ -68,6 +83,19 @@ export function createTransferNode(config: {
     remaining: '',
     elapsed: ''
   }
+
+  if (config.error) {
+    node.error = config.error
+  }
+
+  if (config.children) {
+    node.children = config.children
+    node.totalFiles = config.totalFiles || 0
+    node.completedFiles = config.completedFiles || 0
+    node.expanded = config.expanded || false
+  }
+
+  return node
 }
 
 /**
@@ -102,7 +130,7 @@ export function formatSize(bytes: number): string {
  */
 export function createTransferTask(config: {
   /** 任务类型 */
-  type: 'upload' | 'download' | 'delete'
+  type: TransferType
   /** 根节点（文件或文件夹） */
   root: TransferNode
   /** SFTP 连接标识符 */

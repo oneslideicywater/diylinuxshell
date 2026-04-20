@@ -40,24 +40,17 @@ export async function scanRemoteFolderForDelete(
   const folderName = remotePath.split('/').pop() || 'folder'
   
   // 创建当前文件夹节点（type 为 'delete'）
-  const currentNode: TransferNode = {
-    id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+  const currentNode = createTransferNode({
     name: folderName,
     isDirectory: true,
     type: 'delete',
-    status: 'pending',
-    progress: 0,
-    size: 0,
-    localPath: '', // 删除操作不需要本地路径
+    localPath: '',
     remotePath: remotePath,
-    speed: 0,
-    remaining: '',
-    elapsed: '',
     children: [],
     totalFiles: 0,
     completedFiles: 0,
     expanded: false
-  }
+  })
   
   let totalFiles = 0
   let totalBytes = 0
@@ -98,22 +91,16 @@ export async function scanRemoteFolderForDelete(
           console.warn(`[delete] 无法访问远程子目录 ${fullRemotePath}，已跳过:`, subError.message)
           
           // 创建错误标记节点
-          const errorNode: TransferNode = {
-            id: `node-error-${Date.now()}`,
+          const errorNode = createTransferNode({
             name: entry.name,
             isDirectory: true,
             type: 'delete',
-            status: 'error',
-            progress: 0,
-            size: 0,
             localPath: '',
             remotePath: fullRemotePath,
-            speed: 0,
-            remaining: '',
-            elapsed: '',
+            status: 'error',
             error: `无法访问目录: ${subError.message}`,
             children: []
-          }
+          })
 
           if (currentNode.children) {
             currentNode.children.push(errorNode)
@@ -121,20 +108,14 @@ export async function scanRemoteFolderForDelete(
         }
       } else {
         // 创建文件节点
-        const fileNode: TransferNode = {
-          id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        const fileNode = createTransferNode({
           name: entry.name,
           isDirectory: false,
           type: 'delete',
-          status: 'pending',
-          progress: 0,
-          size: entry.size || 0,
           localPath: '',
           remotePath: fullRemotePath,
-          speed: 0,
-          remaining: '',
-          elapsed: ''
-        }
+          size: entry.size || 0
+        })
 
         if (currentNode.children) {
           currentNode.children.push(fileNode)
@@ -352,7 +333,7 @@ export async function deleteLocalBatch(
       
       try {
         const stat = await window.api.sftp.statLocal(filePath)
-        isDirectory = stat.success && stat.data?.isDirectory
+        isDirectory = !!stat.success && !!stat.data?.isDirectory
       } catch (statError: any) {
         console.warn(`[delete-local] 无法判断路径类型: ${filePath}`, statError.message)
       }
@@ -401,6 +382,10 @@ export async function deleteLocalBatch(
         status: 'transferring',
         startTime: Date.now()
       })
+      
+      if (!task.root.localPath) {
+        throw new Error('本地路径为空，无法删除')
+      }
       
       const result = await window.api.sftp.deleteLocalFile(task.root.localPath)
       

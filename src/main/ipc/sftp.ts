@@ -350,6 +350,24 @@ export function registerSFTPIpcHandlers(): void {
   })
 
   /**
+   * 获取本地文件/文件夹状态信息
+   */
+  ipcMain.handle('sftp:stat-local', async (_event, localPath: string) => {
+    try {
+      const stat = await fs.promises.stat(localPath)
+      return {
+        success: true,
+        data: {
+          isDirectory: stat.isDirectory(),
+          size: stat.size
+        }
+      }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  /**
    * 删除本地文件或文件夹（支持递归删除文件夹）
    */
   ipcMain.handle('sftp:delete-local', async (_event, localPath: string) => {

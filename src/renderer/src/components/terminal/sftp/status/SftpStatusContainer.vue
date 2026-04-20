@@ -44,6 +44,19 @@
           <span>全部折叠</span>
         </button>
         
+        <!-- 取消选中任务按钮 -->
+        <button 
+          class="toolbar-btn cancel-btn" 
+          @click="handleCancelSelectedTasks"
+          :disabled="!hasSelectedCancellableTasks"
+          title="取消选中的任务"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>取消选中</span>
+        </button>
+        
         <!-- 状态筛选下拉菜单 -->
         <div class="filter-dropdown" ref="filterDropdownRef">
           <button 
@@ -118,6 +131,7 @@
           v-for="task in filteredTasks"
           :key="task.id"
           :task-root="task.root"
+          :task-id="task.id"
           @update:node-expanded="handleNodeExpanded"
         />
         
@@ -168,7 +182,8 @@ const props = withDefaults(defineProps<Props>(), {
  * 这样解构出来的属性仍然是 ref，会随 Store 更新而更新
  */
 const { 
-  transferTasks       // ← 使用完整的任务列表，在组件内根据过滤器筛选
+  transferTasks,       // ← 使用完整的任务列表，在组件内根据过滤器筛选
+  selectedTaskIds      // 选中的任务 ID 集合
 } = storeToRefs(sftpTransferStore)
 
 /**
@@ -475,6 +490,35 @@ function collapseAllNodes(): void {
   sftpTransferStore.setAllNodesExpanded(false)
 }
 
+/**
+ * 是否有选中的可取消任务（pending 或 transferring 状态）
+ */
+const hasSelectedCancellableTasks = computed((): boolean => {
+  if (selectedTaskIds.value.size === 0) return false
+  
+  // 检查选中的任务中是否有可取消的任务
+  for (const taskId of selectedTaskIds.value) {
+    const task = transferTasks.value.find(t => t.id === taskId)
+    if (task && (task.status === 'pending' || task.status === 'transferring')) {
+      return true
+    }
+  }
+  
+  return false
+})
+
+/**
+ * 处理取消选中的任务
+ */
+function handleCancelSelectedTasks(): void {
+  if (!hasSelectedCancellableTasks.value) return
+  
+  // 调用 Store 方法取消选中的任务
+  sftpTransferStore.cancelSelectedTasks()
+  
+  console.log('[SftpStatusContainer] 🚫 已取消选中的任务')
+}
+
 
 </script>
 
@@ -606,6 +650,18 @@ function collapseAllNodes(): void {
   background: var(--hover-bg, #e8e8e8);
   border-color: var(--primary-color, #409eff);
   color: var(--primary-color, #409eff);
+}
+
+/* 取消按钮特殊样式 */
+.cancel-btn:hover:not(:disabled) {
+  background: #fee;
+  border-color: #f56c6c;
+  color: #f56c6c;
+}
+
+.cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 @keyframes pulse {

@@ -7,7 +7,7 @@
 <template>
   <div class="sftp-task-status">
     <!-- 任务表头 -->
-    <SftpStatusHeader />
+    <SftpStatusHeader :task-id="taskId" :is-selected="isSelectedComputed" @toggle-selection="handleToggleSelection" />
 
     <!-- 传输树节点（从根节点开始渲染） -->
     <div class="tree-content">
@@ -22,9 +22,17 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import type { TransferNode } from '@shared/types/sftp'
 import SftpTransferTreeNode from './SftpTransferTreeNode.vue'
 import SftpStatusHeader from './SftpStatusHeader.vue'
+import { useSftpTransferStore } from '@/stores/sftpTransfer'
+
+/**
+ * 使用 SFTP 传输任务 Store
+ */
+const sftpTransferStore = useSftpTransferStore()
 
 /**
  * Props 定义
@@ -32,10 +40,25 @@ import SftpStatusHeader from './SftpStatusHeader.vue'
 interface Props {
   /** 传输任务根节点 */
   taskRoot: TransferNode
+  /** 任务 ID */
+  taskId: string
 }
 
-defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  taskId: ''
+})
 
+/**
+ * 从 Store 获取选中任务 ID 集合
+ */
+const { selectedTaskIds } = storeToRefs(sftpTransferStore)
+
+/**
+ * 当前任务是否被选中（使用 computed 保持响应式）
+ */
+const isSelectedComputed = computed((): boolean => {
+  return !!props.taskId && selectedTaskIds.value.has(props.taskId)
+})
 
 /**
  * 定义组件事件
@@ -50,6 +73,15 @@ const emit = defineEmits<{
  */
 function handleNodeExpanded(nodeId: string, expanded: boolean): void {
   emit('update:node-expanded', nodeId, expanded)
+}
+
+/**
+ * 处理复选框选中状态变化
+ */
+function handleToggleSelection(): void {
+  if (props.taskId) {
+    sftpTransferStore.toggleTaskSelection(props.taskId)
+  }
 }
 </script>
 

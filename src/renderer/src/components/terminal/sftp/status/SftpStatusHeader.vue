@@ -8,6 +8,16 @@
   <div class="sftp-transfer-tree">
     <!-- 表头 -->
     <div class="tree-header">
+      <!-- 复选框列 -->
+      <div class="header-column checkbox-column">
+        <input 
+          type="checkbox" 
+          :checked="isSelected"
+          @change="handleToggle"
+          :disabled="!taskId"
+          title="选择任务"
+        />
+      </div>
       <div class="header-column name-column">名称</div>
       <div class="header-column status-column">状态</div>
       <div class="header-column progress-column">进度</div>
@@ -25,6 +35,35 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * Props 定义
+ */
+interface Props {
+  /** 任务 ID */
+  taskId?: string
+  /** 是否被选中 */
+  isSelected: boolean
+}
+
+withDefaults(defineProps<Props>(), {
+  taskId: '',
+  isSelected: false
+})
+
+/**
+ * 定义组件事件
+ */
+const emit = defineEmits<{
+  /** 切换选中状态事件 */
+  (e: 'toggle-selection'): void
+}>()
+
+/**
+ * 处理复选框状态变化
+ */
+function handleToggle(): void {
+  emit('toggle-selection')
+}
 
 
 
@@ -58,6 +97,29 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 复选框列 */
+.checkbox-column {
+  width: 40px;
+  min-width: 40px;
+  flex-shrink: 0;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkbox-column input[type="checkbox"] {
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+  accent-color: var(--primary-color, #409eff);
+}
+
+.checkbox-column input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .name-column {

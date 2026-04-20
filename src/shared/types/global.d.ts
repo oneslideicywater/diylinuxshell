@@ -78,6 +78,7 @@ export interface CustomAPI {
     getLocalFiles: (localPath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
     getHomeDir: () => Promise<{ success: boolean; data?: string; error?: string }>
     deleteLocalFile: (localPath: string) => Promise<{ success: boolean; error?: string }>
+    statLocal: (localPath: string) => Promise<{ success: boolean; data?: { isDirectory: boolean; size: number }; error?: string }>
     onDeleteLocalProgress: (callback: (data: { currentPath: string }) => void) => () => void
     createLocalFolder: (parentPath: string, folderName: string) => Promise<{ success: boolean; error?: string }>
     ensureDir: (dirPath: string) => Promise<{ success: boolean; error?: string }>
