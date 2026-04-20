@@ -498,11 +498,8 @@ const handleDeleteGroupFromGroupHeader = async (group: SessionGroup) => {
 /**
  * 显示层级限制提示
  */
-const showLevelLimitAlert = (message: string) => {
-  confirmDialogTitle.value = '层级限制提示'
-  confirmDialogMessage.value = message
-  confirmDialogIsWarning.value = true
-  confirmDialogVisible.value = true
+const showLevelLimitAlert = (message: string): void => {
+  showAlert(message, '层级限制提示', true)
 }
 
 /**
@@ -642,10 +639,13 @@ const handleEdit = (session: Session) => {
  * 删除会话
  */
 const handleDelete = async (session: Session) => {
-  if (confirm(`确定要删除会话 "${session.name}" 吗？`)) {
-    await window.api.session.delete(session.id)
-    sessionStore.removeSession(session.id)
-  }
+  const confirmed = await showConfirmDialog(
+    '确认删除',
+    `确定要删除会话 "${session.name}" 吗？`
+  )
+  if (!confirmed) return
+  await window.api.session.delete(session.id)
+  sessionStore.removeSession(session.id)
 }
 
 /**

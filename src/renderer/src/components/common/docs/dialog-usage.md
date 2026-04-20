@@ -184,3 +184,5 @@ if (!confirmed) return // 用户点击了取消
 | 2026-04-20 | SftpTransfer 集成 ConfirmDialog，替代 2 处 `window.confirm()` |
 | 2026-04-20 | script/remote.ts 6 处 alert → throw Error |
 | 2026-04-20 | script/local.ts 3 处 alert → throw Error |
+| 2026-04-20 | SessionSidebarContainer: `confirm()` → ConfirmDialog（删除会话）|
+| 2026-04-20 | SessionSidebarContainer: showLevelLimitAlert 改用 AlertDialog（语义修正）|
