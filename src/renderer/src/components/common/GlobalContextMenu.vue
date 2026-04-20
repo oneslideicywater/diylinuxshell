@@ -70,7 +70,9 @@ const menuStyle = computed(() => {
 })
 
 const visibleItems = computed(() => {
-  return contextMenuStore.items.filter(item => item.visible !== false)
+  return contextMenuStore.items.filter(item => 
+    item.visible === undefined || item.visible === true
+  )
 })
 
 /**

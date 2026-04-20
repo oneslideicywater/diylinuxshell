@@ -80,8 +80,9 @@
 | 会话管理模块 | Phase 1 | [Phase 1 PRD](./plan/phase1/prd.md) |
 | 终端管理模块 | Phase 1 | [Phase 1 PRD](./plan/phase1/prd.md) |
 | SFTP 传输模块 | Phase 2 | [Phase 2 SFTP PRD](./plan/phase2/sftp/prd.md) |
-| 命令片段模块 | Phase 4 | [Phase 4 PRD](./plan/phase4/prd.md) |
 | 设置模块 | Phase 2 | [Phase 2 PRD](./plan/phase2/prd.md) |
+| AI 助理模块 | Phase 3 | [Phase 3 AI 助理 PRD](./plan/phase3/ai-assistant/prd.md) |
+| 命令片段模块 | Phase 4 | [Phase 4 PRD](./plan/phase4/prd.md) |
 
 ---
 
@@ -172,12 +173,19 @@
 - [ ] SFTP 文件传输功能正常
 - [ ] 配置能够正确保存和加载
 - [ ] 在终端中使用 vi/vim 命令编辑文件无异常
+- [ ] AI 助理能够正确分析终端输出并提供服务器状态摘要
+- [ ] AI 助理能够理解自然语言并执行对应的文件操作
+- [ ] AI 助理能够通过对话快速创建会话配置
+- [ ] AI 助理能够执行组合式任务并返回完整结果
+- [ ] AI 助理的敏感信息过滤机制正常工作
 
 ### 8.2 流程验收
 
 - [ ] 新建会话 → 保存 → 连接 → 执行命令 → 断开，流程闭环
 - [ ] 文件选择 → 上传/下载 → 进度显示 → 完成，流程闭环
 - [ ] 命令片段创建 → 插入 → 执行，流程闭环
+- [ ] AI 对话 → 意图识别 → 操作执行 → 结果反馈，流程闭环
+- [ ] 终端输出捕获 → 内容分析 → 智能建议展示，流程闭环
 
 ### 8.3 异常验收
 
@@ -233,13 +241,20 @@
 
 ### 10.2 后续迭代规划
 
-**Phase 3（V1.2）**：
+**Phase 3（V1.3）**：
+- AI 助理模块
+- 终端输出智能分析
+- 自然语言交互
+- 智能文件操作
+- 组合式任务执行
+
+**Phase 4（V1.2）**：
 - 终端分屏功能
 - 日志记录功能
 - 历史记录功能
 - 导入导出功能
 
-**Phase 4（V2.0）**：
+**Phase 5（V2.0）**：
 - 命令片段管理
 - 跳板机连接
 - 批量操作
@@ -250,5 +265,6 @@
 - [Phase 1 实现计划](./plan/phase1/plan.md)
 - [Phase 2 实现计划](./plan/phase2/plan.md)
 - [Phase 2 SFTP 详细文档](./plan/phase2/sftp/prd.md)
+- [Phase 3 AI 助理详细文档](./plan/phase3/ai-assistant/prd.md)
 - [Phase 4 命令片段详细文档](./plan/phase4/prd.md)
 - [技术架构文档](./ARCHITECTURE.md)

@@ -19,6 +19,7 @@
 
 import type { TransferTask, TransferNode } from '@shared/types/sftp'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
+import { formatTime, createTransferNode, createTransferTask } from './utils'
 
 /**
  * 递归扫描远程文件夹并构建传输节点树（用于删除）
@@ -31,7 +32,7 @@ import { useSftpTransferStore } from '@/stores/sftpTransfer'
  * @param sftpConnectionId SFTP 连接标识符（已在 TerminalTab 初始化时建立）
  * @returns 根节点和文件统计信息
  */
-async function scanRemoteFolderForDelete(
+export async function scanRemoteFolderForDelete(
   remotePath: string,
   sftpConnectionId: string
 ): Promise<{ rootNode: TransferNode; totalFiles: number; totalBytes: number }> {
@@ -265,7 +266,7 @@ async function deleteSingleItem(
  * @param sftpConnectionId SFTP 连接标识符（已在 TerminalTab 初始化时建立）
  * @param taskId 任务 ID（用于 Store 更新）
  */
-async function deleteFolderContent(
+export async function deleteFolderContent(
   node: TransferNode, 
   sftpConnectionId: string,
   taskId: string
@@ -323,129 +324,235 @@ async function deleteFolderContent(
 }
 
 /**
- * 格式化时间（秒 -> HH:MM:SS）
- * @param seconds 秒数
- * @returns 格式化的时间字符串
+ * 批量删除本地文件/文件夹（支持混合选择）
+ * 
+ * ✅ 新架构：每个选中的文件/文件夹创建独立的 TransferTask
+ * - 选择 N 个项目 → 创建 N 个 TransferTask
+ * - 每个任务独立管理进度、状态、取消操作
+ * - 符合用户期望的"多任务"模式（与 uploadBatch/downloadBatch 对称）
+ * 
+ * @param paths - 本地文件/文件夹路径数组
+ * @param sftpConnectionId - SFTP 连接标识符（用于任务隔离）
  */
-function formatTime(seconds: number): string {
-  if (seconds < 0) return '00:00:00'
+export async function deleteLocalBatch(
+  paths: string[],
+  sftpConnectionId: string
+): Promise<{ success: number; failed: number }> {
+  const sftpTransferStore = useSftpTransferStore()
   
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
+  console.log('[delete-local] 开始批量删除:', paths.length, '个文件/文件夹')
   
-  return [h, m, s].map(v => v.toString().padStart(2, '0')).join(':')
+  const createdTasks: TransferTask[] = []
+  
+  for (const filePath of paths) {
+    try {
+      const fileName = filePath.split(/[/\\]/).pop() || filePath
+      
+      let isDirectory = false
+      
+      try {
+        const stat = await window.api.sftp.statLocal(filePath)
+        isDirectory = stat.success && stat.data?.isDirectory
+      } catch (statError: any) {
+        console.warn(`[delete-local] 无法判断路径类型: ${filePath}`, statError.message)
+      }
+      
+      const startTime = Date.now()
+      
+      const node = createTransferNode({
+        name: fileName,
+        isDirectory: isDirectory,
+        type: 'delete',
+        localPath: filePath
+      })
+      
+      node.startTime = startTime
+      
+      const task = createTransferTask({
+        type: 'delete',
+        root: node,
+        sftpConnectionId: sftpConnectionId
+      })
+      
+      sftpTransferStore.addTask(task)
+      createdTasks.push(task)
+      
+      console.log(`[delete-local] ✅ 已创建删除任务 #${createdTasks.length}: ${fileName}`)
+      
+    } catch (error: any) {
+      console.error(`[delete-local] 处理本地路径失败: ${filePath}`, error)
+    }
+  }
+  
+  console.log(`[delete-local] 📊 共创建 ${createdTasks.length} 个本地删除任务`)
+  
+  for (let i = 0; i < createdTasks.length; i++) {
+    const task = createdTasks[i]
+    
+    console.log(`[delete-local] 开始删除任务 ${i + 1}/${createdTasks.length}: ${task.root.name}`)
+    
+    sftpTransferStore.updateTaskRoot(task.id, {
+      startTime: Date.now()
+    })
+    
+    try {
+      sftpTransferStore.updateTaskStatus(task.id, 'transferring')
+      sftpTransferStore.updateNodeStatus(task.id, task.root.id, {
+        status: 'transferring',
+        startTime: Date.now()
+      })
+      
+      const result = await window.api.sftp.deleteLocalFile(task.root.localPath)
+      
+      if (!result.success) {
+        throw new Error(result.error || '删除失败')
+      }
+      
+      sftpTransferStore.updateNodeStatus(task.id, task.root.id, {
+        status: 'completed',
+        progress: 100
+      })
+      
+      task.status = 'completed'
+      sftpTransferStore.updateTaskStatus(task.id, 'completed')
+      
+      console.log(`[delete-local] ✅ 任务 ${i + 1} 完成: ${task.root.name}`)
+      
+    } catch (error: any) {
+      console.error(`[delete-local] ❌ 任务 ${i + 1} 失败: ${task.root.name}`, error)
+      
+      task.status = 'error'
+      sftpTransferStore.updateTaskStatus(task.id, 'error')
+    }
+  }
+
+  const successCount = createdTasks.filter(t => t.status === 'completed').length
+  const failCount = createdTasks.filter(t => t.status === 'error').length
+  
+  console.log(`[delete-local] 🎉 批量本地文件删除完成！成功: ${successCount}, 失败: ${failCount}, 总计: ${createdTasks.length}`)
+  
+  return { success: successCount, failed: failCount }
 }
 
 /**
- * 删除单个文件/文件夹（导出函数，安全架构 v4）
+ * 批量删除远程文件/文件夹（支持混合选择）
  * 
- * 设计原则：
- * - 不再接收 session 对象（避免在渲染进程传递敏感信息）
- * - 直接使用 sftpConnectionId（SFTP 连接已在 TerminalTab 初始化时建立）
- * - 可选接收 sessionId（用于通过 SessionStore 获取会话名称等非敏感信息显示）
+ * ✅ 新架构：每个选中的文件/文件夹创建独立的 TransferTask
+ * - 选择 N 个项目 → 创建 N 个 TransferTask
+ * - 每个任务独立管理进度、状态、取消操作
+ * - 符合用户期望的"多任务"模式（与 uploadBatch/downloadBatch 对称）
  * 
- * @param remotePath - 远程文件/文件夹路径
- * @param sftpConnectionId - SFTP 连接标识符（必填，对应已建立的连接）
- * @param sessionId - 会话 ID（可选，用于 UI 显示会话信息）
+ * @param paths - 远程文件/文件夹路径数组
+ * @param sftpConnectionId - SFTP 连接标识符（必填）
+ * @param sessionId - 会话 ID（可选，用于 UI 显示）
  */
-export async function deleteFileOrFolder(
-  remotePath: string,
+export async function deleteRemoteBatch(
+  paths: string[],
   sftpConnectionId: string,
   sessionId?: string
-): Promise<void> {
+): Promise<{ success: number; failed: number }> {
   const sftpTransferStore = useSftpTransferStore()
   
-  console.log('[delete] 开始删除:', remotePath, '连接ID:', sftpConnectionId)
+  console.log('[delete-remote] 开始批量删除:', paths.length, '个文件/文件夹')
+  console.log('[delete-remote] 连接ID:', sftpConnectionId)
   
-  if (!sftpConnectionId) {
-    throw new Error('SFTP 连接标识符不能为空（连接未建立）')
-  }
+  const createdTasks: TransferTask[] = []
   
-  if (!remotePath) {
-    throw new Error('远程路径不能为空')
-  }
-  
-  try {
-    // 获取文件名/文件夹名
-    const itemName = remotePath.split('/').pop() || 'item'
-    
-    // 判断是文件还是文件夹（通过查询远程路径类型，使用已建立的 sftpConnectionId）
-    const listResult = await window.api.sftp.listDir(
-      sftpConnectionId, 
-      remotePath.includes('/') ? remotePath.substring(0, remotePath.lastIndexOf('/')) : '/'
-    )
-    
-    const selectedItem = listResult.success && listResult.data ? listResult.data.find(
-      (item: any) => item.path === remotePath || item.name === itemName
-    ) : null
-    
-    let rootNode: TransferNode
-    
-    if (selectedItem && (selectedItem.type === 'd' || selectedItem.isDirectory)) {
-      // 文件夹：扫描子项构建树形结构（使用 sftpConnectionId）
-      console.log('[delete] 检测到文件夹，使用文件夹删除模式')
-      const scanResult = await scanRemoteFolderForDelete(remotePath, sftpConnectionId)
-      rootNode = scanResult.rootNode
+  for (const remotePath of paths) {
+    try {
+      const itemName = remotePath.split('/').pop() || 'item'
       
-      console.log(`[delete] 文件夹扫描完成: ${scanResult.totalFiles} 个文件`)
-    } else {
-      // 单文件：直接创建单节点
-      console.log('[delete] 检测到文件，使用单文件删除模式')
+      let taskRootNode: TransferNode
       
-      rootNode = {
-        id: `node-${Date.now()}`,
-        name: itemName,
-        isDirectory: false,
-        type: 'delete',
-        status: 'pending',
-        progress: 0,
-        size: 0, // 删除操作不需要精确的文件大小
-        localPath: '',
-        remotePath: remotePath,
-        speed: 0,
-        remaining: '',
-        elapsed: ''
+      // 判断是文件还是文件夹（通过查询远程路径类型）
+      const listResult = await window.api.sftp.listDir(
+        sftpConnectionId, 
+        remotePath.includes('/') ? remotePath.substring(0, remotePath.lastIndexOf('/')) : '/'
+      )
+      
+      const selectedItem = listResult.success && listResult.data ? listResult.data.find(
+        (item: any) => item.path === remotePath || item.name === itemName
+      ) : null
+      
+      if (selectedItem && (selectedItem.type === 'd' || selectedItem.isDirectory)) {
+        // 文件夹：扫描子项构建树形结构
+        console.log(`[delete-remote] 扫描远程文件夹: ${remotePath}`)
+        
+        const folderResult = await scanRemoteFolderForDelete(remotePath, sftpConnectionId)
+        taskRootNode = folderResult.rootNode
+        
+        console.log(`[delete-remote] 远程文件夹扫描完成: ${folderResult.totalFiles} 个文件`)
+      } else {
+        // 单文件：直接创建单节点
+        taskRootNode = createTransferNode({
+          name: itemName,
+          isDirectory: false,
+          type: 'delete',
+          remotePath: remotePath
+        })
       }
+      
+      const task = createTransferTask({
+        type: 'delete',
+        root: taskRootNode,
+        sftpConnectionId: sftpConnectionId,
+        sessionId: sessionId,
+        totalBytes: taskRootNode.size || 0
+      })
+      
+      sftpTransferStore.addTask(task)
+      createdTasks.push(task)
+      
+      console.log(`[delete-remote] ✅ 已创建删除任务 #${createdTasks.length}: ${taskRootNode.name}`)
+      
+    } catch (error: any) {
+      console.error(`[delete-remote] 处理远程路径失败: ${remotePath}`, error)
     }
+  }
+  
+  console.log(`[delete-remote] 📊 共创建 ${createdTasks.length} 个远程删除任务`)
+  
+  for (let i = 0; i < createdTasks.length; i++) {
+    const task = createdTasks[i]
     
-    // 创建删除任务（安全架构 v4：直接使用 sftpConnectionId）
-    const task: TransferTask = {
-      id: `task-delete-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      type: 'delete',
-      status: 'pending',
-      root: rootNode,
-      sftpConnectionId: sftpConnectionId,  // ✅ 直接使用传入的连接标识符
-      sessionId: sessionId,                // ✅ 可选：用于显示会话信息
-      totalBytes: rootNode.size || 0,
-      transferredBytes: 0,
-      createdAt: Date.now(),
-      remainingTime: 0,
-      elapsedTime: 0
-    }
+    console.log(`[delete-remote] 开始删除任务 ${i + 1}/${createdTasks.length}: ${task.root.name}`)
     
-    // 添加任务到 Store（自动触发 UI 更新）
-    sftpTransferStore.addTask(task)
-    console.log(`[delete] ✅ 删除任务已创建: ${task.id}`)
-    
-    // 开始执行删除（传递 sftpConnectionId）
-    await deleteFolderContent(rootNode, sftpConnectionId, task.id)
-    
-    // 标记任务完成
-    const completedAt = Date.now()
-    const elapsedTime = Math.round((completedAt - task.createdAt) / 1000)
-    
-    sftpTransferStore.updateTask(task.id, {
-      status: 'completed' as any,
-      completedAt,
-      elapsedTime,
-      transferredBytes: task.totalBytes
+    sftpTransferStore.updateTaskRoot(task.id, {
+      startTime: Date.now()
     })
     
-    console.log('[delete] ✅ 删除完成！')
-    
-  } catch (error: any) {
-    console.error('[delete] ❌ 删除失败:', error)
-    throw error
+    try {
+      await deleteFolderContent(task.root, sftpConnectionId, task.id)
+      
+      const completedAt = Date.now()
+      const elapsedTime = Math.round((completedAt - task.createdAt) / 1000)
+      
+      task.status = 'completed'
+      task.completedAt = completedAt
+      task.elapsedTime = elapsedTime
+      task.transferredBytes = task.totalBytes
+      
+      sftpTransferStore.updateTask(task.id, {
+        status: 'completed',
+        completedAt,
+        elapsedTime,
+        transferredBytes: task.totalBytes
+      })
+      
+      console.log(`[delete-remote] ✅ 任务 ${i + 1} 完成: ${task.root.name}`)
+      
+    } catch (error: any) {
+      console.error(`[delete-remote] ❌ 任务 ${i + 1} 失败: ${task.root.name}`, error)
+      
+      task.status = 'error'
+      sftpTransferStore.updateTaskStatus(task.id, 'error')
+    }
   }
+
+  const successCount = createdTasks.filter(t => t.status === 'completed').length
+  const failCount = createdTasks.filter(t => t.status === 'error').length
+  
+  console.log(`[delete-remote] 🎉 批量远程文件删除完成！成功: ${successCount}, 失败: ${failCount}, 总计: ${createdTasks.length}`)
+  
+  return { success: successCount, failed: failCount }
 }

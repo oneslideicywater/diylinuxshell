@@ -123,11 +123,11 @@ const handleContextMenu = (event: MouseEvent) => {
 
   /* 构建菜单项列表 */
   const menuItems = [
-    { action: 'add-session', title: '添加会话', description: '添加会话到当前分组' },
-    { action: 'create-subgroup', title: '新建子分组', description: '在当前分组内创建子分组', visible: props.canCreateSubGroup },
-    { action: 'edit-group', title: '编辑分组', description: '双击分组名称，可修改分组名' },
-    { action: 'delete-group', title: '删除分组', description: '删除分组将会话全部删除，操作不可逆' },
-    { action: 'inspect', title: '审查元素', description: '打开开发者工具并审查当前元素' }
+    { action: 'add-session', title: '添加会话', icon: 'add', description: '添加会话到当前分组' },
+    { action: 'create-subgroup', title: '新建子分组', icon: 'create-folder', description: '在当前分组内创建子分组', visible: props.canCreateSubGroup },
+    { action: 'edit-group', title: '编辑分组', icon: 'edit', description: '双击分组名称，可修改分组名' },
+    { action: 'delete-group', title: '删除分组', icon: 'delete', description: '删除分组将会话全部删除，操作不可逆' },
+    { action: 'inspect', title: '审查元素', icon: 'inspect', description: '打开开发者工具并审查当前元素' }
   ]
 
   /* 通过 Store 显示右键菜单（注册所有权 + 菜单项 + 回调） */

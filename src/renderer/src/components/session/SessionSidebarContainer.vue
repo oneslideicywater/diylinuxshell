@@ -72,17 +72,7 @@
         <!-- 空白占位区域，用于捕获右键点击 -->
         <div class="session-list-spacer" @contextmenu.prevent="handleListContextMenu"></div>
       </div>
-
-      <!-- 列表右键菜单（新建分组） -->
-      <div v-show="listContextMenuVisible" class="context-menu" :style="listContextMenuStyle" @click.stop>
-        <div class="menu-item" @click="handleCreateGroup" title="创建会话分组，归类管理远程主机连接">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          </svg>
-          <span>新建分组</span>
-        </div>
-      </div>
-    </div>
+  </div>
 
     <!-- 分组表单对话框 -->
     <SessionGroupForm :visible="groupFormVisible" :group="editingGroup" @close="handleCloseGroupForm"
@@ -101,6 +91,16 @@
     <ErrorDialog :visible="errorDialogVisible" :title="errorDialogTitle" :message="errorDialogMessage"
       :session-id="errorDialogSessionId" :show-retry="true" :show-edit="true" @close="handleCloseErrorDialog"
       @retry="handleRetryConnect" @edit="handleEditFromError" />
+
+    <!-- 统一提示对话框（替代 alert） -->
+    <AlertDialog
+      :visible="alertDialogVisible"
+      :title="alertDialogConfig.title"
+      :message="alertDialogConfig.message"
+      :is-error="alertDialogConfig.isError"
+      @confirm="handleAlertDialogClose"
+      @close="handleAlertDialogClose"
+    />
   </div>
 </template>
 
@@ -109,11 +109,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useSessionStore } from '@/stores/session'
 import { useTerminalStore } from '@/stores/terminal'
 import { useErrorDialogStore } from '@/stores/errorDialog'
+import { useContextMenuStore, type ContextMenuItem } from '@/stores/contextMenu'
 import SessionItem from './SessionItem.vue'
 import SessionGroupForm from './SessionGroupForm.vue'
 import SessionForm from './SessionForm.vue'
 import ErrorDialog from '@/components/common/ErrorDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import AlertDialog from '@/components/common/AlertDialog.vue'
 import SessionGroupTree from './SessionGroupTree.vue'
 import GroupHeader from './GroupHeader.vue'
 import { useSessionGroup } from './script/useSessionGroup'
@@ -132,6 +134,25 @@ const errorDialogVisible = computed(() => errorDialogStore.visible)
 const errorDialogTitle = computed(() => errorDialogStore.title)
 const errorDialogMessage = computed(() => errorDialogStore.message)
 const errorDialogSessionId = computed(() => errorDialogStore.sessionId)
+
+/** 统一提示对话框状态（替代 alert） */
+const alertDialogVisible = ref(false)
+const alertDialogConfig = ref({ title: '提示', message: '', isError: false })
+
+function showAlert(message: string, title = '提示', isError = false): void {
+  alertDialogConfig.value = { title, message, isError }
+  alertDialogVisible.value = true
+}
+
+function handleAlertDialogClose(): void {
+  alertDialogVisible.value = false
+}
+
+/* 全局右键菜单 Store */
+const contextMenuStore = useContextMenuStore()
+
+/* 列表右键菜单唯一标识 */
+const listMenuOwnerId = 'session-sidebar-list'
 
 // 展开的分组
 const expandedGroups = ref<Set<string>>(new Set())
@@ -173,10 +194,6 @@ const editingGroup = ref<SessionGroup | null>(null)
 // 会话表单相关状态
 const sessionFormVisible = ref(false)
 const editingSession = ref<Session | null>(null)
-
-// 列表右键菜单状态
-const listContextMenuVisible = ref(false)
-const listContextMenuStyle = ref({})
 
 // 确认对话框状态
 const confirmDialogVisible = ref(false)
@@ -329,8 +346,7 @@ const handleCreateSubGroup = async (parentGroup: SessionGroup) => {
  * 用于在打开新菜单或点击外部时清除所有已打开的菜单状态
  */
 const closeAllContextMenus = () => {
-  // 关闭列表右键菜单
-  listContextMenuVisible.value = false
+  contextMenuStore.hideContextMenu()
 }
 
 /**
@@ -366,28 +382,38 @@ const handleAddSessionFromItem = (groupId?: string, _session?: Session): void =>
 
 /**
  * 处理列表右键菜单（新建分组）
+ * 通过全局 Store 管理菜单状态
  */
 const handleListContextMenu = (event: MouseEvent) => {
-  // 阻止默认浏览器右键菜单
   event.preventDefault()
   event.stopPropagation()
 
-  // 关闭其他菜单
-  listContextMenuVisible.value = false
+  let x = event.clientX
+  let y = event.clientY
 
-  // 显示列表右键菜单
-  listContextMenuVisible.value = true
-
-  // 计算菜单位置
-  const x = event.clientX
-  const y = event.clientY
-
-  listContextMenuStyle.value = {
-    position: 'fixed',
-    left: `${x}px`,
-    top: `${y}px`,
-    zIndex: 1000
+  /* 边界检测：防止菜单超出窗口 */
+  const menuWidth = 160
+  const menuHeight = 40
+  if (x + menuWidth > window.innerWidth) {
+    x = window.innerWidth - menuWidth - 10
   }
+  if (y + menuHeight > window.innerHeight) {
+    y = window.innerHeight - menuHeight - 10
+  }
+
+  /* 构建菜单项列表 */
+  const menuItems: ContextMenuItem[] = [
+    { action: 'create-group', title: '新建分组', icon: 'create-folder', description: '创建会话分组，归类管理远程主机连接' }
+  ]
+
+  /* 通过 Store 显示右键菜单（注册所有权 + 菜单项 + 回调） */
+  contextMenuStore.showContextMenu(listMenuOwnerId, { x, y }, menuItems, (action: string) => {
+    switch (action) {
+      case 'create-group':
+        handleCreateGroup()
+        break
+    }
+  })
 }
 
 /**
@@ -396,7 +422,6 @@ const handleListContextMenu = (event: MouseEvent) => {
 const handleCreateGroup = () => {
   editingGroup.value = null
   groupFormVisible.value = true
-  listContextMenuVisible.value = false
 }
 
 /**
@@ -466,7 +491,7 @@ const handleDeleteGroupFromGroupHeader = async (group: SessionGroup) => {
     sessionStore.removeSessionGroup(group.id)
   } catch (error) {
     console.error('Failed to delete group:', error)
-    alert('删除分组失败')
+    showAlert('删除分组失败', '错误', true)
   }
 }
 
@@ -536,7 +561,7 @@ const handleSubmitGroupForm = async (data: { name: string; parentId?: string; de
   } catch (error) {
     console.error('Failed to save group:', error)
     const errorMessage = error instanceof Error ? error.message : '保存分组失败'
-    alert(errorMessage)
+    showAlert(errorMessage, '错误', true)
   }
 }
 
@@ -558,7 +583,7 @@ const handleSubmitSessionForm = async (data: Session) => {
   } catch (error) {
     console.error('Failed to save session:', error)
     const errorMessage = error instanceof Error ? error.message : '保存会话失败'
-    alert(errorMessage)
+    showAlert(errorMessage, '错误', true)
   }
 }
 

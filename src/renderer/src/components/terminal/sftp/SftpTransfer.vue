@@ -70,12 +70,11 @@
           ref="localPanelRef"
           v-model:local-path="localState.localPath.value"
           v-model:local-files="localState.localFiles.value"
-          v-model:selected-local="localState.selectedLocal.value"
           :upload-tasks="uploadTasks"
+          :connection-id="currentSftpConnectionId"
           @local-dblclick="handleLocalDblClick"
-          @upload-file="uploadFile"
-          @upload-folder="uploadFolder"
-          @delete-local="handleDeleteLocal"
+          @upload-batch="handleUploadBatch"
+          @delete-batch="handleDeleteLocalBatch"
         />
 
         <!-- 远程文件浏览器 -->
@@ -83,14 +82,14 @@
           ref="remotePanelRef"
           v-model:remote-path="remoteState.remotePath.value"
           v-model:remote-files="remoteState.remoteFiles.value"
-          v-model:selected-remote="remoteState.selectedRemote.value"
           :session-id="props.sessionId"
           :download-tasks="downloadTasks"
           :connection-id="currentSftpConnectionId"
+          :connected="sftpConnected"
           @remote-dblclick="handleRemoteDblClick"
-          @download-local="downloadLocal"
+          @download-batch="handleDownloadBatch"
           @create-folder="confirmNewFolder"
-          @delete-remote="handleDeleteRemote"
+          @delete-batch="handleDeleteRemoteBatch"
           
         />
       </div>
@@ -102,6 +101,27 @@
         :connection-id="currentSftpConnectionId"
       />
     </div>
+
+    <!-- 统一确认对话框（替代 window.confirm） -->
+    <ConfirmDialog
+      :visible="confirmDialogVisible"
+      :title="confirmDialogConfig.title"
+      :message="confirmDialogConfig.message"
+      :is-warning="confirmDialogConfig.isWarning"
+      @confirm="handleConfirmDialogConfirm"
+      @cancel="handleConfirmDialogCancel"
+      @close="handleConfirmDialogCancel"
+    />
+
+    <!-- 统一提示对话框（替代 alert） -->
+    <AlertDialog
+      :visible="alertDialogVisible"
+      :title="alertDialogConfig.title"
+      :message="alertDialogConfig.message"
+      :is-error="alertDialogConfig.isError"
+      @confirm="handleAlertDialogClose"
+      @close="handleAlertDialogClose"
+    />
   </div>
 </template>
 
@@ -112,17 +132,18 @@ import type { TransferTask } from '@shared/types/sftp'
 import SftpStatusContainer from './status/SftpStatusContainer.vue'
 import SftpLocal from './SftpLocal.vue'
 import SftpRemote from './SftpRemote.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import AlertDialog from '@/components/common/AlertDialog.vue'
 import { useSessionStore } from '@/stores/session'
+import { useTerminalStore } from '@/stores/terminal'
 
 
-import { uploadFolder as uploadFolderToServer, uploadFile as uploadSingleFileLocal } from './script/upload'
-import { downloadFile, downloadFolder } from './script/download'
-import { deleteFileOrFolder } from './script/delete'
+import { uploadBatch } from './script/upload'
+import { downloadBatch } from './script/download'
 
 import {
   createLocalFileState,
   initLocalDefaultDir,
-  deleteLocalFile,
   type LocalFileState
 } from './script/local'
 
@@ -169,6 +190,7 @@ const props = withDefaults(defineProps<Props>(), {
  * 用于根据 sessionId 获取会话信息（非敏感部分）
  */
 const sessionStore = useSessionStore()
+const terminalStore = useTerminalStore()
 
 /**
  * 计算属性：当前会话对象（从 SessionStore 动态获取）
@@ -234,6 +256,28 @@ const isMaximized = ref(false)
 const sftpConnected = ref(false)
 
 /**
+ * 监听终端 Store 中的标签页状态变化，同步 sftpConnected
+ * 解决：TerminalTab 右键菜单断开后，SftpTransfer 本地状态未更新的问题
+ */
+watch(
+  () => {
+    const connId = props.sftpConnectionId
+    if (!connId) return null
+    const tab = terminalStore.getTabById(connId)
+    return tab?.status ?? null
+  },
+  (newStatus) => {
+    if (newStatus === null) return
+    const shouldBeConnected = newStatus === 'connected' || newStatus === 'connecting'
+    if (sftpConnected.value !== shouldBeConnected) {
+      console.log(`[SftpTransfer] Store状态同步: ${sftpConnected.value} → ${shouldBeConnected} (store=${newStatus})`)
+      sftpConnected.value = shouldBeConnected
+    }
+  },
+  { immediate: true }
+)
+
+/**
  * 当前 SFTP 连接标识符
  * 优先使用 props.sftpConnectionId（每个标签独立），否则回退到 session.id
  */
@@ -257,6 +301,59 @@ const showNewFolderDialog = ref(false)
 const newFolderName = ref('')
 const fileContextMenuPath = ref('')
 
+/** 统一确认对话框状态（替代 window.confirm） */
+const confirmDialogVisible = ref(false)
+const confirmDialogConfig = ref({ title: '', message: '', isWarning: true })
+let confirmDialogResolve: ((confirmed: boolean) => void) | null = null
+
+/**
+ * 显示统一确认对话框，返回 Promise（用户点击确定 resolve(true)，取消 resolve(false)）
+ * @param title - 对话框标题
+ * @param message - 对话框内容
+ * @param isWarning - 是否警告样式（红色按钮）
+ */
+function showConfirmDialog(title: string, message: string, isWarning = true): Promise<boolean> {
+  return new Promise((resolve) => {
+    confirmDialogResolve = resolve
+    confirmDialogConfig.value = { title, message, isWarning }
+    confirmDialogVisible.value = true
+  })
+}
+
+/** 用户点击确定 */
+function handleConfirmDialogConfirm(): void {
+  confirmDialogVisible.value = false
+  confirmDialogResolve?.(true)
+  confirmDialogResolve = null
+}
+
+/** 用户点击取消或关闭 */
+function handleConfirmDialogCancel(): void {
+  confirmDialogVisible.value = false
+  confirmDialogResolve?.(false)
+  confirmDialogResolve = null
+}
+
+/** 统一提示对话框状态（替代 alert） */
+const alertDialogVisible = ref(false)
+const alertDialogConfig = ref({ title: '提示', message: '', isError: false })
+
+/**
+ * 显示统一提示对话框（替代 alert，异步非阻塞）
+ * @param message - 提示内容
+ * @param title - 标题（默认"提示"）
+ * @param isError - 是否错误样式（红色按钮）
+ */
+function showAlert(message: string, title = '提示', isError = false): void {
+  alertDialogConfig.value = { title, message, isError }
+  alertDialogVisible.value = true
+}
+
+/** 用户关闭提示对话框 */
+function handleAlertDialogClose(): void {
+  alertDialogVisible.value = false
+}
+
 /**
  * 关闭 SFTP 窗口
  * 嵌入式模式下只触发关闭事件，不断开连接（保持连接供下次切换使用）
@@ -274,6 +371,7 @@ async function close(): Promise<void> {
       }
     }
     sftpConnected.value = false
+    terminalStore.updateTabStatus(props.sftpConnectionId, 'disconnected')
   }
   
   /* 嵌入式模式：只触发关闭事件，让父组件切换回 SSH 模式 */
@@ -302,127 +400,6 @@ function toggleMaximize(): void {
 
 
 /**
- * 上传文件
- * @param filePath 文件路径，必须提供（来自本地目录栏选中的文件）
- */
-async function uploadFile(filePath?: string): Promise<void> {
-  console.log('[SftpTransfer] uploadFile called with filePath:', filePath)
-  // 如果提供了文件路径，更新 selectedLocal
-  if (filePath) {
-    console.log('[SftpTransfer] Setting selectedLocal to:', filePath)
-    localState.localPath.value = filePath
-  }
-  
-  const currentFilePath = localState.localPath.value
-  if (!currentFilePath) {
-    console.error('[SftpTransfer] 未提供文件路径')
-    alert('请先选择要上传的文件')
-    return
-  }
-
-  try {
-    // 调用单文件上传函数（安全架构 v4：使用 sftpConnectionId，不再传递 session 对象）
-    await uploadSingleFileLocal(
-      currentFilePath,
-      props.sftpConnectionId,        // ✅ SFTP 连接标识符（已在 TerminalTab 初始化时建立）
-      props.sessionId,               // ✅ 可选：用于 UI 显示会话信息
-      remoteState.remotePath.value   // 远程目标路径
-    )
-    
-    console.log('[SftpTransfer] 文件上传完成')
-    
-    // 刷新远程文件列表
-    await remotePanelRef.value?.loadFiles()
-    
-  } catch (error: any) {
-    console.error('[SftpTransfer] 文件上传失败:', error)
-    alert(`上传文件失败：${error.message}`)
-  }
-}
-
-/**
- * 下载文件/文件夹到本地
- * @param path 远程文件/文件夹路径（来自右键菜单选中）
- * 
- * PRD 要求：
- * - 严禁弹出文件选择对话框
- * - 下载到当前本地目录
- * - 使用统一树形组件显示进度
- */
-async function downloadLocal(path: string): Promise<void> {
-  console.log('[SftpTransfer] downloadLocal called with path:', path)
-
-  if (!path) {
-    console.error('[SftpTransfer] 未提供下载路径')
-    alert('请先选择要下载的远程文件/文件夹')
-    return
-  }
-
-  if (!currentSession.value) {
-    console.error('[SftpTransfer] 会话不存在')
-    alert('SSH 会话未连接')
-    return
-  }
-
-  try {
-    // 获取当前本地目录作为下载目标路径（PRD：严禁弹出文件选择框）
-    const localPath = localState.localPath.value
-    
-    if (!localPath) {
-      throw new Error('当前本地目录为空，无法确定下载目标位置')
-    }
-
-    console.log(`[SftpTransfer] 开始下载: ${path}`)
-    console.log(`[SftpTransfer] 目标本地目录: ${localPath}`)
-
-    // 判断是文件还是文件夹（通过查询远程路径类型）
-    // 注意：这里需要判断是否为文件夹，可以尝试列出目录或根据上下文判断
-    // 简化处理：先尝试作为文件夹下载，如果失败则作为文件下载
-    
-    // 检查选中的远程项是否为文件夹
-    const selectedItem = remoteState.remoteFiles.value.find(
-      (item: any) => item.path === path || item.name === path.split('/').pop()
-    )
-    
-    if (selectedItem && (selectedItem.type === 'd' || selectedItem.isDirectory)) {
-      // 文件夹下载（安全架构 v4：使用 sftpConnectionId）
-      console.log('[SftpTransfer] 检测到文件夹，使用文件夹下载模式')
-      await downloadFolder(
-        path,
-        props.sftpConnectionId,  // ✅ SFTP 连接标识符
-        props.sessionId,         // ✅ 可选：用于 UI 显示
-        localPath
-      )
-    } else {
-      // 单文件下载（安全架构 v4：使用 sftpConnectionId）
-      console.log('[SftpTransfer] 检测到文件，使用单文件下载模式')
-      await downloadFile(
-        path,
-        props.sftpConnectionId,  // ✅ SFTP 连接标识符
-        props.sessionId,         // ✅ 可选：用于 UI 显示
-        localPath
-      )
-    }
-    
-    // 下载完成后刷新本地文件列表（PRD 要求）
-    console.log('[SftpTransfer] 刷新本地文件列表...')
-    await refreshLocalFiles()
-    
-    console.log('[SftpTransfer] ✅ 下载完成！')
-    
-  } catch (error: any) {
-    console.error('[SftpTransfer] ❌ 下载失败:', error)
-    
-    // 显示错误信息给用户（PRD 要求）
-    const errorMessage = error.message || '下载过程中发生未知错误'
-    alert(`下载失败: ${errorMessage}`)
-    
-    // 可以选择重新抛出错误让上层处理
-    // throw error
-  }
-}
-
-/**
  * 刷新本地和远程文件列表
  */
 async function refresh(): Promise<void> {
@@ -446,61 +423,71 @@ async function refresh(): Promise<void> {
 }
 
 /**
- * 刷新本地文件列表（下载完成后调用）
- */
-async function refreshLocalFiles(): Promise<void> {
-  console.log('[SftpTransfer] 刷新本地文件列表')
-  
-  try {
-    if (localPanelRef.value) {
-      await localPanelRef.value.loadFiles()
-    }
-    console.log('[SftpTransfer] ✅ 本地文件列表刷新完成')
-  } catch (error: any) {
-    console.error('[SftpTransfer] 刷新本地文件列表失败:', error)
-  }
-}
-
-/**
  * 上传文件夹（递归）
  * @param folderPath 文件夹路径，必须提供（来自本地目录栏选中的文件夹）
  */
-async function uploadFolder(folderPath: string): Promise<void> {
-  console.log('[SftpTransfer] uploadFolder called with folderPath:', folderPath)
-  
-  // 如果没有提供文件夹路径，尝试使用选中的本地路径
-  if (!folderPath && localState.localPath.value) {
-    console.log('[SftpTransfer] No folderPath provided, using localPath:', localState.localPath.value)
-    folderPath = localState.localPath.value
-  }
+/**
+ * 批量上传处理函数（支持混合选择文件和文件夹）
+ * @param paths 选中的文件/文件夹路径数组（来自 SftpLocal 组件的多选）
+ */
+async function handleUploadBatch(paths: string[]): Promise<void> {
+  console.log('[SftpTransfer] handleUploadBatch called with', paths.length, 'items:', paths)
 
-  if (!folderPath) {
-    console.error('[SftpTransfer] 未提供文件夹路径')
-    alert('请先选择要上传的文件夹')
+  if (!paths || paths.length === 0) {
+    console.error('[SftpTransfer] 未提供批量上传路径')
+    showAlert('请先选择要上传的文件/文件夹')
     return
   }
 
   try {
-    // 调用新的上传函数（使用 Pinia Store 管理）
-    await uploadFolderToServer(
-      folderPath,
+    // 调用批量上传函数（安全架构 v4：使用 sftpConnectionId）
+    await uploadBatch(
+      paths,
       props.sftpConnectionId,
       props.sessionId,
       remoteState.remotePath.value
     )
-    
-    console.log('[SftpTransfer] 文件夹上传完成')
-    
+
+    console.log('[SftpTransfer] ✅ 批量上传完成')
+
     // 刷新远程文件列表
     await remotePanelRef.value?.loadFiles()
-    
+
   } catch (error: any) {
-    console.error('[SftpTransfer] 文件夹上传失败:', error)
-    alert(`上传文件夹失败：${error.message}`)
+    console.error('[SftpTransfer] ❌ 批量上传失败:', error)
+    showAlert(`批量上传失败：${error.message}`, '错误', true)
   }
 }
 
+/**
+ * 处理批量下载（支持混合选择文件和文件夹）
+ * @param paths - 远程文件/文件夹路径数组（来自 SftpRemote 组件的多选）
+ */
+async function handleDownloadBatch(paths: string[]): Promise<void> {
+  console.log('[SftpTransfer] handleDownloadBatch called with', paths.length, 'items:', paths)
 
+  if (!paths || paths.length === 0) {
+    console.error('[SftpTransfer] 未提供批量下载路径')
+    showAlert('请先选择要下载的文件/文件夹')
+    return
+  }
+
+  try {
+    await downloadBatch(
+      paths,
+      props.sftpConnectionId,
+      props.sessionId,
+      localState.localPath.value
+    )
+
+    console.log('[SftpTransfer] ✅ 批量下载完成')
+
+    await remotePanelRef.value?.loadFiles()
+  } catch (error: any) {
+    console.error('[SftpTransfer] ❌ 批量下载失败:', error)
+    showAlert(`批量下载失败: ${error.message}`, '错误', true)
+  }
+}
 
 /**
  * 取消新建文件夹
@@ -527,7 +514,7 @@ async function confirmNewFolder(folderName?: string | Event): Promise<void> {
   // 检查 SFTP 连接是否可用
   if (!props.sftpConnectionId) {
     console.error('[SftpTransfer] SFTP 连接标识符不存在')
-    alert('SFTP 连接未建立，无法创建远程文件夹')
+    showAlert('SFTP 连接未建立，无法创建远程文件夹')
     return
   }
   
@@ -554,7 +541,7 @@ async function confirmNewFolder(folderName?: string | Event): Promise<void> {
     
   } catch (error: any) {
     console.error('[SftpTransfer] ❌ 创建远程文件夹失败:', error)
-    alert(`创建远程文件夹失败: ${error.message || '未知错误'}`)
+    showAlert(`创建远程文件夹失败: ${error.message || '未知错误'}`, '错误', true)
   }
 }
 
@@ -574,139 +561,105 @@ function handleRemoteDblClick(): void {
 }
 
 /**
- * 处理删除本地文件
+ * 处理批量删除本地文件/文件夹（支持混合选择）
  * 
- * PRD 要求：
- * - 删除前显示确认对话框
- * - 使用 TransferTask 统一管理删除任务（与上传/下载一致）
- * - 删除完成后刷新本地文件列表
+ * ✅ 新架构：每个选中的文件/文件夹创建独立的 TransferTask
+ * - 选择 N 个项目 → 创建 N 个 TransferTask
+ * - 每个任务独立管理进度、状态、取消操作
+ * - 符合用户期望的"多任务"模式（与 uploadBatch/downloadBatch 对称）
  * 
- * @param path 本地文件/文件夹路径（来自右键菜单选中）
+ * @param paths - 本地文件/文件夹路径数组（来自 SftpLocal 组件的多选）
  */
-async function handleDeleteLocal(path: string): Promise<void> {
-  console.log('[SftpTransfer] handleDeleteLocal called with path:', path)
-  
-  if (!path) {
-    console.error('[SftpTransfer] 未提供删除路径')
-    alert('请先选择要删除的本地文件/文件夹')
+async function handleDeleteLocalBatch(paths: string[]): Promise<void> {
+  console.log('[SftpTransfer] handleDeleteLocalBatch called with', paths.length, 'items:', paths)
+
+  if (!paths || paths.length === 0) {
+    console.error('[SftpTransfer] 未提供批量删除路径')
+    showAlert('请先选择要删除的本地文件/文件夹')
     return
   }
-  
-  // 获取文件名/文件夹名，用于确认对话框显示
-  const fileName = path.split(/[/\\]/).pop() || path
-  
-  // 检查是否为目录（简单判断：路径末尾是否有分隔符或通过其他方式）
-  // 这里假设 localState.selectedLocal 包含选中项的信息
-  const isDirectory = false // TODO: 根据实际情况判断是否为文件夹
-  
-  // 显示确认对话框（PRD 要求）
-  const confirmed = window.confirm(
-    `确定要删除以下文件/文件夹吗？\n\n📄 ${fileName}\n\n此操作不可撤销。`
-  )
-  
+
+  // 构建确认对话框信息（显示所有待删除项）
+  const fileNames = paths.map(p => p.split(/[/\\]/).pop() || p)
+  const confirmMessage = `确定要删除以下 ${paths.length} 个文件/文件夹吗？\n\n${fileNames.map((name, i) => `${i + 1}. 📄 ${name}`).join('\n')}\n\n此操作不可撤销。`
+
+  const confirmed = await showConfirmDialog('确认删除', confirmMessage)
   if (!confirmed) {
-    console.log('[SftpTransfer] 用户取消删除操作')
+    console.log('[SftpTransfer] 用户取消批量删除操作')
     return
   }
-  
+
   try {
-    // 调用重构后的 deleteLocalFile 函数（使用 TransferTask + Store）
-    await deleteLocalFile(
-      path,
-      fileName,
-      isDirectory,
-      currentSftpConnectionId.value, // SFTP 连接标识符（用于任务隔离）
-      async () => {
-        // 刷新本地文件列表的回调函数
-        if (localPanelRef.value?.loadFiles) {
-          await localPanelRef.value.loadFiles()
-        }
-      }
-    )
+    console.log('[delete-local] 开始批量删除:', paths.length, '个文件/文件夹')
     
-    console.log('[SftpTransfer] ✅ 本地文件删除完成')
+    const { deleteLocalBatch } = await import('./script/delete')
     
+    await deleteLocalBatch(paths, currentSftpConnectionId.value)
+
+    if (localPanelRef.value?.loadFiles) {
+      await localPanelRef.value.loadFiles()
+    }
+    
+    console.log(`[SftpTransfer] 🎉 批量本地文件删除完成！`)
+
   } catch (error: any) {
-    console.error('[SftpTransfer] 删除本地文件失败:', error)
-    alert(`删除失败：${error.message}`)
+    console.error('[SftpTransfer] 批量删除本地文件失败:', error)
+    showAlert(`批量删除失败：${error.message}`, '错误', true)
   }
 }
 
 /**
- * 处理删除远程文件/文件夹
- * PRD 要求：
- * - 删除前显示确认对话框（显示待删除项列表）
- * - 使用统一树形组件显示删除进度
- * - 删除完成后刷新远程文件列表
- * @param path 远程文件/文件夹路径（来自右键菜单选中）
+ * 处理批量删除远程文件/文件夹（支持混合选择）
+ * 
+ * ✅ 新架构：每个选中的文件/文件夹创建独立的 TransferTask
+ * - 选择 N 个项目 → 创建 N 个 TransferTask
+ * - 每个任务独立管理进度、状态、取消操作
+ * - 符合用户期望的"多任务"模式（与 uploadBatch/downloadBatch 对称）
+ * 
+ * @param paths - 远程文件/文件夹路径数组（来自 SftpRemote 组件的多选）
  */
-async function handleDeleteRemote(path: string): Promise<void> {
-  console.log('[SftpTransfer] handleDeleteRemote called with path:', path)
+async function handleDeleteRemoteBatch(paths: string[]): Promise<void> {
+  console.log('[SftpTransfer] handleDeleteRemoteBatch called with', paths.length, 'items:', paths)
 
-  if (!path) {
-    console.error('[SftpTransfer] 未提供删除路径')
-    alert('请先选择要删除的远程文件/文件夹')
+  if (!paths || paths.length === 0) {
+    console.error('[SftpTransfer] 未提供批量删除路径')
+    showAlert('请先选择要删除的远程文件/文件夹')
     return
   }
 
-  // ✅ 安全架构 v4：检查 sftpConnectionId 是否存在（而非 session 对象）
   if (!props.sftpConnectionId) {
     console.error('[SftpTransfer] SFTP 连接标识符不存在')
-    alert('SFTP 连接未建立')
+    showAlert('SFTP 连接未建立，无法执行删除操作')
+    return
+  }
+
+  // 构建确认对话框信息（显示所有待删除项）
+  const fileNames = paths.map(p => p.split('/').pop() || p)
+  const confirmMessage = `确定要删除以下 ${paths.length} 个文件/文件夹吗？\n\n${fileNames.map((name, i) => `${i + 1}. 📄 ${name}`).join('\n')}\n\n此操作不可撤销。`
+
+  const confirmed = await showConfirmDialog('确认删除', confirmMessage)
+  if (!confirmed) {
+    console.log('[SftpTransfer] 用户取消批量删除操作')
     return
   }
 
   try {
-    // 获取文件名/文件夹名，用于确认对话框显示
-    const itemName = path.split('/').pop() || path
+    console.log('[delete-remote] 开始批量删除:', paths.length, '个文件/文件夹')
     
-    // 显示确认对话框（PRD 要求）
-    const confirmed = window.confirm(
-      `确定要删除以下文件/文件夹吗？\n\n📄 ${itemName}\n\n此操作不可撤销。`
-    )
+    const { deleteRemoteBatch } = await import('./script/delete')
     
-    if (!confirmed) {
-      console.log('[SftpTransfer] 用户取消删除操作')
-      return
-    }
-    
-    console.log(`[SftpTransfer] 开始删除: ${path}`)
+    await deleteRemoteBatch(paths, props.sftpConnectionId, props.sessionId)
 
-    // 执行删除操作（安全架构 v4：使用 sftpConnectionId，不再传递 session 对象）
-    await deleteFileOrFolder(
-      path,
-      props.sftpConnectionId,  // ✅ SFTP 连接标识符
-      props.sessionId          // ✅ 可选：用于 UI 显示
-    )
-    
-    // 删除完成后刷新远程文件列表（PRD 要求）
-    console.log('[SftpTransfer] 刷新远程文件列表...')
-    await refreshRemoteFiles()
-    
-    console.log('[SftpTransfer] ✅ 删除完成！')
-    
-  } catch (error: any) {
-    console.error('[SftpTransfer] ❌ 删除失败:', error)
-    
-    // 显示错误信息给用户（PRD 要求）
-    const errorMessage = error.message || '删除过程中发生未知错误'
-    alert(`删除失败: ${errorMessage}`)
-  }
-}
-
-/**
- * 刷新远程文件列表（删除完成后调用）
- */
-async function refreshRemoteFiles(): Promise<void> {
-  console.log('[SftpTransfer] 刷新远程文件列表')
-  
-  try {
-    if (remotePanelRef.value) {
+    // 删除完成后刷新远程文件列表
+    if (remotePanelRef.value?.loadFiles) {
       await remotePanelRef.value.loadFiles()
     }
-    console.log('[SftpTransfer] ✅ 远程文件列表刷新完成')
+    
+    console.log(`[SftpTransfer] 🎉 批量远程文件删除完成！`)
+
   } catch (error: any) {
-    console.error('[SftpTransfer] 刷新远程文件列表失败:', error)
+    console.error('[SftpTransfer] 批量删除远程文件失败:', error)
+    showAlert(`批量删除失败：${error.message}`, '错误', true)
   }
 }
 
@@ -814,7 +767,7 @@ watch(() => props.sftpWindowVisible, async (newVal) => {
         // 检查必要参数
         if (!connectionId || !sessionId) {
           console.error('[SFTP] 缺少连接参数:', { connectionId, sessionId })
-          alert('会话信息无效')
+          showAlert('会话信息无效', '错误', true)
           sftpConnected.value = false
           return
         }
@@ -822,7 +775,7 @@ watch(() => props.sftpWindowVisible, async (newVal) => {
         // 检查 API 是否存在
         if (!window.api?.sftp) {
           console.error('SFTP API not available')
-          alert('SFTP 功能不可用')
+          showAlert('SFTP 功能不可用', '错误', true)
           sftpConnected.value = false
           return
         }
@@ -832,16 +785,17 @@ watch(() => props.sftpWindowVisible, async (newVal) => {
         
         if (!result.success) {
           console.error('SFTP 连接失败:', result.error)
-          alert(`SFTP 连接失败：${result.error}`)
+          showAlert(`SFTP 连接失败：${result.error}`, '错误', true)
           sftpConnected.value = false
           return
         }
         
         console.log('[SFTP] 连接成功, connectionId:', connectionId)
         sftpConnected.value = true
+        terminalStore.updateTabStatus(props.sftpConnectionId, 'connected')
       } catch (error: any) {
         console.error('SFTP 连接失败:', error)
-        alert(`SFTP 连接失败：${error.message}`)
+        showAlert(`SFTP 连接失败：${error.message}`, '错误', true)
         sftpConnected.value = false
         return
       }

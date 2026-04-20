@@ -34,13 +34,22 @@
       @drop.prevent="handleDrop"
       :class="{ 'is-dragging': isDraggingOver }"
     >
+      <!-- 已断连状态提示 -->
+      <div v-if="!props.connected" class="disconnected-overlay">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" class="disconnected-icon">
+          <path d="M8.5 7.5l15 15m0-15l-15 15M22 4v8m0 0l4-3M22 12l4 3M10 20v8m0 0l-4 3M10 28l-4-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="disconnected-text">SFTP 连接已断开</span>
+        <span class="disconnected-hint">请右键标签页选择「重连会话」</span>
+      </div>
+      <template v-else>
       <div
         v-for="item in remoteFiles"
         :key="item.path"
         :data-path="item.path"
         class="file-item"
-        :class="{ selected: selectedRemote === item.path }"
-        @click="handleClick(item.path)"
+        :class="{ selected: selectedRemotes.includes(item.path) }"
+        @click="handleClick(item.path, $event)"
       >
         <svg v-if="item.isDirectory" width="16" height="16" viewBox="0 0 16 16" fill="none" class="file-icon is-folder">
           <path d="M14 13.5C14 14.3284 13.3284 15 12.5 15H3.5C2.67157 15 2 14.3284 2 13.5V5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V13.5Z" stroke="currentColor" stroke-width="1.5"/>
@@ -52,6 +61,7 @@
         <span class="file-name">{{ item.name }}</span>
         <span class="file-size">{{ formatSize(item.size) }}</span>
       </div>
+    </template>
     </div>
     
     <!-- 远程文件右键菜单（通过 Store 管理全局唯一性） -->
@@ -83,16 +93,28 @@
         </div>
       </div>
     </div>
+
+    <!-- 统一提示对话框（替代 alert） -->
+    <AlertDialog
+      :visible="alertDialogVisible"
+      :title="alertDialogConfig.title"
+      :message="alertDialogConfig.message"
+      :is-error="alertDialogConfig.isError"
+      @confirm="handleAlertDialogClose"
+      @close="handleAlertDialogClose"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import type { TransferTask } from '@shared/types/sftp'
 
 import { formatSize } from '@/utils/fs-utils'
 import { useContextMenuStore } from '@/stores/contextMenu'
-import { loadRemoteFiles, remoteUpRemote, handleRemoteDblClick, getSelectedRemoteFile, type RemoteFileState } from './script/remote'
+import { useSftpSelectionStore } from '@/stores/sftpSelection'
+import { loadRemoteFiles, remoteUpRemote, handleRemoteDblClick, type RemoteFileState } from './script/remote'
+import AlertDialog from '@/components/common/AlertDialog.vue'
 
 /**
  * Props 定义（安全改进 v3 - 完全移除 session 依赖）
@@ -108,8 +130,6 @@ interface Props {
   remotePath: string
   /** 远程文件列表 */
   remoteFiles: any[]
-  /** 选中的远程文件路径 */
-  selectedRemote: string
   /**
    * 会话 ID（用于从 SessionStore 获取会话信息）
    * 仅用于显示名称、主机等非敏感信息
@@ -123,12 +143,15 @@ interface Props {
    * 必须与建立连接时使用的 ID 一致
    */
   connectionId?: string
+  /** SFTP 连接状态，false 时显示断连提示 */
+  connected?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   sessionId: '',
   downloadTasks: () => [],
-  connectionId: ''
+  connectionId: '',
+  connected: true
 })
 
 /**
@@ -137,18 +160,25 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   /** 路径变化事件 */
   'update:remotePath': [value: string]
-  /** 选中文件变化事件 */
-  'update:selectedRemote': [value: string]
   /** 文件列表变化事件 */
   'update:remoteFiles': [value: any[]]
   /** 远程文件双击事件 */
   'remote-dblclick': []
-  /** 下载文件事件 */
-  'download-local': [path: string]
+  /**
+   * 下载事件（统一接口：支持单文件/单文件夹/多文件混合选择）
+   * - 单文件时：paths.length = 1
+   * - 单文件夹时：paths.length = 1
+   * - 多文件/文件夹时：paths.length > 1
+   */
+  'download-batch': [paths: string[]]
   /** 创建远程文件夹事件 */
   'create-folder': [folderName: string]
-  /** 删除远程文件事件 */
-  'delete-remote': [path: string]
+  /**
+   * 删除远程文件事件（统一接口：支持单文件/多文件批量删除）
+   * - 单文件时：paths.length = 1
+   * - 多文件时：paths.length > 1
+   */
+  'delete-batch': [paths: string[]]
 }>()
 
 /**
@@ -156,9 +186,25 @@ const emit = defineEmits<{
  */
 const remotePath = ref(props.remotePath)
 const remoteFiles = ref(props.remoteFiles)
-const selectedRemote = ref(props.selectedRemote)
-
 const remoteFileCount = ref(0)
+
+/**
+ * SFTP 选择状态 Store（按连接 ID 隔离）
+ * 统一管理选中文件列表（单文件/多文件共用）
+ * 注意：与 SftpLocal 共用同一个 Store，但通过 connectionId 隔离
+ */
+const sftpSelectionStore = useSftpSelectionStore()
+
+/**
+ * 当前连接的选中远程文件列表（从 Store 读取）
+ * - 单文件操作时：数组长度 = 1
+ * - 多文件操作时：数组长度 > 1
+ * - 未选中时：空数组
+ */
+const selectedRemotes = computed<string[]>({
+  get: () => sftpSelectionStore.getSelectedFiles(`remote-${props.connectionId}`),
+  set: (value) => sftpSelectionStore.setSelectedFiles(`remote-${props.connectionId}`, value)
+})
 
 /**
  * 拖拽状态
@@ -176,6 +222,19 @@ const folderName = ref('')
 const folderNameError = ref('')
 const folderNameInput = ref<HTMLInputElement | null>(null)
 
+/** 统一提示对话框状态（替代 alert） */
+const alertDialogVisible = ref(false)
+const alertDialogConfig = ref({ title: '提示', message: '', isError: false })
+
+function showAlert(message: string, title = '提示', isError = false): void {
+  alertDialogConfig.value = { title, message, isError }
+  alertDialogVisible.value = true
+}
+
+function handleAlertDialogClose(): void {
+  alertDialogVisible.value = false
+}
+
 /**
  * 监听 props 变化
  */
@@ -189,10 +248,6 @@ watch(() => props.remoteFiles, (newVal) => {
   remoteFiles.value = Array.isArray(newVal) ? newVal : []
 })
 
-watch(() => props.selectedRemote, (newVal) => {
-  selectedRemote.value = newVal
-})
-
 /**
  * 监听内部状态变化，同步到父组件
  */
@@ -202,10 +257,6 @@ watch(remotePath, (newVal) => {
 
 watch(remoteFiles, (newVal) => {
   emit('update:remoteFiles', newVal)
-})
-
-watch(selectedRemote, (newVal) => {
-  emit('update:selectedRemote', newVal)
 })
 
 /**
@@ -219,7 +270,6 @@ watch(selectedRemote, (newVal) => {
 const getRemoteState = (): RemoteFileState => ({
   remotePath,
   remoteFiles,
-  selectedRemote,
   remoteFileCount,
   connectionId: props.connectionId || ''
 })
@@ -268,10 +318,25 @@ function handleUp(): void {
 }
 
 /**
- * 处理文件点击
+ * 处理文件点击（支持 Ctrl/Cmd/Shift 多选）
+ * 统一使用 selectedRemotes 数组（单文件长度=1，多文件长度>1）
  */
-function handleClick(path: string): void {
-  selectedRemote.value = path
+function handleClick(path: string, event?: MouseEvent): void {
+  if (event && (event.ctrlKey || event.metaKey)) {
+    // Ctrl/Cmd 点击：切换选中状态（使用 Store 方法）
+    sftpSelectionStore.toggleFileSelection(`remote-${props.connectionId}`, path)
+  } else if (event && event.shiftKey) {
+    // Shift 点击：范围选择（使用 Store 方法）
+    sftpSelectionStore.rangeSelect(
+      `remote-${props.connectionId}`,
+      path,
+      remoteFiles.value,
+      (item: any) => item.path
+    )
+  } else {
+    // 普通点击：清空多选，单选当前项
+    sftpSelectionStore.setSelectedFiles(`remote-${props.connectionId}`, [path])
+  }
 }
 
 /**
@@ -297,8 +362,16 @@ function handleContextMenu(event: MouseEvent): void {
     const path = fileItem.dataset.path
     const file = remoteFiles.value.find(f => f.path === path)
     if (!file) return
-    selectedRemote.value = file.path
+    
     clickedFile = file
+    
+    const remoteConnectionId = `remote-${props.connectionId}`
+    const currentSelection = sftpSelectionStore.getSelectedFiles(remoteConnectionId)
+    const isAlreadySelected = currentSelection.includes(file.path)
+    
+    if (currentSelection.length === 0 || !isAlreadySelected) {
+      sftpSelectionStore.setSelectedFiles(remoteConnectionId, [file.path])
+    }
   }
 
   const x = event.clientX
@@ -308,23 +381,36 @@ function handleContextMenu(event: MouseEvent): void {
     {
       action: 'download',
       title: '下载',
-      description: '将选中的远程文件/文件夹下载到本地目录',
-      visible: !!clickedFile
+      icon: 'download',
+      description: selectedRemotes.value.length > 1 
+        ? `下载选中的 ${selectedRemotes.value.length} 个文件/文件夹到本地目录`
+        : '将选中的远程文件/文件夹下载到本地目录',
+      visible: !!clickedFile || selectedRemotes.value.length > 1
     },
-    { action: 'createFolder', title: '新建文件夹', description: '在当前远程目录下创建新文件夹' },
-    { action: 'refresh', title: '刷新', description: '重新加载当前浏览目录' },
+    { action: 'createFolder', title: '新建文件夹', icon: 'create-folder', description: '在当前远程目录下创建新文件夹' },
+    { action: 'refresh', title: '刷新', icon: 'refresh', description: '重新加载当前浏览目录' },
     {
       action: 'deleteRemote',
       title: '删除',
+      icon: 'delete',
       description: '删除选中的远程文件或文件夹',
       visible: !!clickedFile
     }
   ]
 
-  contextMenuStore.showContextMenu(menuOwnerId, { x, y }, menuItems, (action: string) => {
+  /**
+ * 获取当前选中的路径列表（优先使用多选，否则使用点击的文件）
+ */
+function getSelectedOrClickedPath(clickedFile: any): string[] {
+  return selectedRemotes.value.length > 0 
+    ? [...selectedRemotes.value] 
+    : (clickedFile ? [clickedFile.path] : [])
+}
+
+contextMenuStore.showContextMenu(menuOwnerId, { x, y }, menuItems, (action: string) => {
     switch (action) {
       case 'download':
-        emit('download-local', clickedFile.path)
+        emit('download-batch', getSelectedOrClickedPath(clickedFile))
         break
       case 'createFolder':
         showCreateFolderDialog()
@@ -333,7 +419,7 @@ function handleContextMenu(event: MouseEvent): void {
         handleRefresh()
         break
       case 'deleteRemote':
-        emit('delete-remote', clickedFile.path)
+        emit('delete-batch', getSelectedOrClickedPath(clickedFile))
         break
     }
   })
@@ -379,7 +465,7 @@ async function handleDrop(event: DragEvent): Promise<void> {
   
   if (filePaths.length === 0) {
     console.warn('[SftpRemote] 拖拽的文件无法获取路径')
-    alert('无法获取拖拽文件的路径')
+    showAlert('无法获取拖拽文件的路径', '警告')
     return
   }
   
@@ -475,7 +561,8 @@ async function confirmCreateFolder(): Promise<void> {
 // 导出函数供父组件调用
 defineExpose({
   loadFiles,
-  getSelectedFile: () => getSelectedRemoteFile(getRemoteState(), selectedRemote)
+  /** 获取当前所有选中的远程文件/文件夹路径（用于批量操作） */
+  getSelectedFiles: () => [...selectedRemotes.value]
 })
 
 // 注意：初始化加载由父组件调用 loadFiles 触发
@@ -555,6 +642,34 @@ defineExpose({
 .file-list.is-dragging {
   background: var(--drag-over-bg, rgba(64, 158, 255, 0.1));
   border: 2px dashed var(--primary-color, #409eff);
+}
+
+/* 已断连状态 */
+.disconnected-overlay {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+  gap: 12px;
+  color: var(--text-color-secondary, #999999);
+}
+
+.disconnected-icon {
+  color: var(--error-color, #f56c6c);
+  opacity: 0.6;
+}
+
+.disconnected-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color-secondary, #999999);
+}
+
+.disconnected-hint {
+  font-size: 12px;
+  color: var(--text-color-muted, #bbbbbb);
 }
 
 .file-item {

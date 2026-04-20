@@ -35,7 +35,7 @@
         :data-path="item.path"
         :data-is-directory="item.isDirectory"
         class="file-item"
-        :class="{ selected: selectedLocal === item.path }"
+        :class="{ selected: selectedLocals.includes(item.path) }"
         @click="handleClick(item.path, $event)"
       >
         <svg v-if="item.isDirectory" width="16" height="16" viewBox="0 0 16 16" fill="none" class="file-icon is-folder">
@@ -83,11 +83,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import type { TransferTask } from '@shared/types/sftp'
 
 import { formatSize } from '@/utils/fs-utils'
 import { useContextMenuStore } from '@/stores/contextMenu'
+import { useSftpSelectionStore } from '@/stores/sftpSelection'
 import { loadLocalFiles, handleLocalDblClick, localUp, type LocalFileState } from './script/local'
 
 /**
@@ -98,14 +99,15 @@ interface Props {
   localPath: string
   /** 本地文件列表 */
   localFiles: any[]
-  /** 选中的本地文件路径 */
-  selectedLocal: string
   /** 上传任务列表 */
   uploadTasks?: TransferTask[]
+  /** SFTP 连接标识符（用于 Store 隔离） */
+  connectionId?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  uploadTasks: () => []
+  uploadTasks: () => [],
+  connectionId: ''
 })
 
 /**
@@ -114,18 +116,23 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   /** 路径变化事件 */
   'update:localPath': [value: string]
-  /** 选中文件变化事件 */
-  'update:selectedLocal': [value: string]
   /** 文件列表变化事件 */
   'update:localFiles': [value: any[]]
   /** 本地文件双击事件 */
   'local-dblclick': []
-  /** 上传文件事件 */
-  'upload-file': [path: string]
-  /** 上传文件夹事件 */
-  'upload-folder': [path: string]
-  /** 删除本地文件事件 */
-  'delete-local': [path: string]
+  /**
+   * 上传事件（统一接口：支持单文件/单文件夹/多文件混合选择）
+   * - 单文件时：paths.length = 1
+   * - 单文件夹时：paths.length = 1
+   * - 多文件/文件夹时：paths.length > 1
+   */
+  'upload-batch': [paths: string[]]
+  /**
+   * 删除本地文件事件（统一接口：支持单文件/多文件批量删除）
+   * - 单文件时：paths.length = 1
+   * - 多文件时：paths.length > 1
+   */
+  'delete-batch': [paths: string[]]
 }>()
 
 /**
@@ -133,8 +140,24 @@ const emit = defineEmits<{
  */
 const localPath = ref(props.localPath)
 const localFiles = ref(props.localFiles)
-const selectedLocal = ref(props.selectedLocal)
 const localFileCount = ref(0)
+
+/**
+ * SFTP 选择状态 Store（按连接 ID 隔离）
+ * 统一管理选中文件列表（单文件/多文件共用）
+ */
+const sftpSelectionStore = useSftpSelectionStore()
+
+/**
+ * 当前连接的选中文件列表（从 Store 读取）
+ * - 单文件操作时：数组长度 = 1
+ * - 多文件操作时：数组长度 > 1
+ * - 未选中时：空数组
+ */
+const selectedLocals = computed<string[]>({
+  get: () => sftpSelectionStore.getSelectedFiles(props.connectionId),
+  set: (value) => sftpSelectionStore.setSelectedFiles(props.connectionId, value)
+})
 
 /**
  * 创建本地文件状态对象供函数调用
@@ -142,8 +165,7 @@ const localFileCount = ref(0)
 const getLocalState = (): LocalFileState => ({
   localPath,
   localFiles,
-  localFileCount,
-  selectedLocal
+  localFileCount
 })
 
 /**
@@ -172,10 +194,6 @@ watch(() => props.localFiles, (newVal) => {
   localFiles.value = newVal
 })
 
-watch(() => props.selectedLocal, (newVal) => {
-  selectedLocal.value = newVal
-})
-
 /**
  * 监听内部状态变化，同步到父组件
  */
@@ -185,10 +203,6 @@ watch(localPath, (newVal) => {
 
 watch(localFiles, (newVal) => {
   emit('update:localFiles', newVal)
-})
-
-watch(selectedLocal, (newVal) => {
-  emit('update:selectedLocal', newVal)
 })
 
 /**
@@ -221,31 +235,23 @@ function handleUp(): void {
 
 /**
  * 处理文件点击（支持 Ctrl/Cmd/Shift 多选）
+ * 统一使用 selectedLocals 数组（单文件长度=1，多文件长度>1）
  */
 function handleClick(path: string, event?: MouseEvent): void {
   if (event && (event.ctrlKey || event.metaKey)) {
-    // Ctrl/Cmd 点击：切换选中状态
-    if (selectedLocal.value === path) {
-      selectedLocal.value = ''
-    } else {
-      selectedLocal.value = path
-    }
+    // Ctrl/Cmd 点击：切换选中状态（使用 Store 方法）
+    sftpSelectionStore.toggleFileSelection(props.connectionId, path)
   } else if (event && event.shiftKey) {
-    // Shift 点击：范围选择（简化处理，选中从上一个到当前）
-    const currentIndex = localFiles.value.findIndex(f => f.path === path)
-    const lastIndex = localFiles.value.findIndex(f => f.path === selectedLocal.value)
-    
-    if (lastIndex !== -1 && currentIndex !== -1) {
-      // 找到范围内的所有文件
-
-      // 选中范围内的所有文件（这里简化为选中最后一个）
-      selectedLocal.value = path
-    } else {
-      selectedLocal.value = path
-    }
+    // Shift 点击：范围选择（使用 Store 方法）
+    sftpSelectionStore.rangeSelect(
+      props.connectionId,
+      path,
+      localFiles.value,
+      (item: any) => item.path
+    )
   } else {
-    // 普通点击：单选
-    selectedLocal.value = path
+    // 普通点击：清空多选，单选当前项
+    sftpSelectionStore.setSelectedFiles(props.connectionId, [path])
   }
 }
 
@@ -272,31 +278,51 @@ function handleContextMenu(event: MouseEvent): void {
     const path = fileItem.dataset.path
     const file = localFiles.value.find(f => f.path === path)
     if (!file) return
-    selectedLocal.value = file.path
+    
     clickedFile = file
+    
+    const currentSelection = sftpSelectionStore.getSelectedFiles(props.connectionId)
+    const isAlreadySelected = currentSelection.includes(file.path)
+    
+    if (currentSelection.length === 0 || !isAlreadySelected) {
+      sftpSelectionStore.setSelectedFiles(props.connectionId, [file.path])
+    }
   }
 
   const x = event.clientX
   const y = event.clientY
 
   const menuItems = [
-    { action: 'createFolder', title: '新建文件夹', description: '在当前本地目录创建新文件夹' },
-    { action: 'refresh', title: '刷新', description: '重新加载当前浏览目录' },
+    { action: 'createFolder', title: '新建文件夹', icon: 'create-folder', description: '在当前本地目录创建新文件夹' },
+    { action: 'refresh', title: '刷新', icon: 'refresh', description: '重新加载当前浏览目录' },
     {
       action: 'upload',
       title: '上传',
-      description: '将选中的本地文件/文件夹上传到远程目录',
-      visible: !!clickedFile
+      icon: 'upload',
+      description: selectedLocals.value.length > 1 
+        ? `上传选中的 ${selectedLocals.value.length} 个文件/文件夹到远程目录`
+        : '将选中的本地文件/文件夹上传到远程目录',
+      visible: !!clickedFile || selectedLocals.value.length > 1
     },
     {
       action: 'deleteLocal',
       title: '删除',
+      icon: 'delete',
       description: '删除选中的本地文件或文件夹',
       visible: !!clickedFile
     }
   ]
 
-  contextMenuStore.showContextMenu(menuOwnerId, { x, y }, menuItems, (action: string) => {
+  /**
+ * 获取当前选中的路径列表（优先使用多选，否则使用点击的文件）
+ */
+function getSelectedOrClickedPath(clickedFile: any): string[] {
+  return selectedLocals.value.length > 0 
+    ? [...selectedLocals.value] 
+    : (clickedFile ? [clickedFile.path] : [])
+}
+
+contextMenuStore.showContextMenu(menuOwnerId, { x, y }, menuItems, (action: string) => {
     switch (action) {
       case 'createFolder':
         showCreateFolderDialog()
@@ -305,14 +331,10 @@ function handleContextMenu(event: MouseEvent): void {
         handleRefresh()
         break
       case 'upload':
-        if (clickedFile?.isDirectory) {
-          emit('upload-folder', clickedFile.path)
-        } else {
-          emit('upload-file', clickedFile.path)
-        }
+        emit('upload-batch', getSelectedOrClickedPath(clickedFile))
         break
       case 'deleteLocal':
-        emit('delete-local', clickedFile.path)
+        emit('delete-batch', getSelectedOrClickedPath(clickedFile))
         break
     }
   })
@@ -424,7 +446,8 @@ async function confirmCreateFolder(): Promise<void> {
 // 导出函数供父组件调用
 defineExpose({
   loadFiles,
-  getSelectedFile: () => selectedLocal.value
+  /** 获取当前所有选中的文件/文件夹路径（用于批量操作） */
+  getSelectedFiles: () => [...selectedLocals.value]
 })
 
 // 注意：初始化加载由父组件调用 loadFiles 触发

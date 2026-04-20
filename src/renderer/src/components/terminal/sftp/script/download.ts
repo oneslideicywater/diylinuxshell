@@ -11,6 +11,7 @@
 
 import type { TransferTask, TransferNode } from '@shared/types/sftp'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
+import { formatTime, formatSize, createTransferNode, createTransferTask } from './utils'
 
 /**
  * 递归扫描远程文件夹并构建传输节点树
@@ -113,20 +114,14 @@ async function scanRemoteFolderRecursive(
         }
       } else {
         // 创建文件节点
-        const fileNode: TransferNode = {
-          id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        const fileNode = createTransferNode({
           name: entry.name,
           isDirectory: false,
           type: 'download',
-          status: 'pending',
-          progress: 0,
-          size: entry.size || 0,
           localPath: fullLocalPath,
           remotePath: fullRemotePath,
-          speed: 0,
-          remaining: '',
-          elapsed: ''
-        }
+          size: entry.size || 0
+        })
         
         if (currentNode.children) {
           currentNode.children.push(fileNode)
@@ -417,21 +412,6 @@ async function downloadFolderContent(
 }
 
 /**
- * 格式化时间（秒 -> HH:MM:SS）
- * @param seconds 秒数
- * @returns 格式化的时间字符串
- */
-function formatTime(seconds: number): string {
-  if (seconds < 0) return '00:00:00'
-  
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  const s = seconds % 60
-  
-  return [h, m, s].map(v => v.toString().padStart(2, '0')).join(':')
-}
-
-/**
  * 下载单个文件（导出函数，安全架构 v4）
  * 
  * 设计原则：
@@ -470,35 +450,21 @@ export async function downloadFile(
       : (localPath?.value || '')
     
     // 创建文件节点（type 为 'download'）
-    const fileNode: TransferNode = {
-      id: `node-${Date.now()}`,
+    const fileNode = createTransferNode({
       name: fileName,
       isDirectory: false,
       type: 'download',
-      status: 'pending',
-      progress: 0,
-      size: 0, // 稍后通过进度回调更新
       localPath: `${localBasePath}/${fileName}`,
-      remotePath: remotePath,
-      speed: 0,
-      remaining: '',
-      elapsed: ''
-    }
+      remotePath: remotePath
+    })
     
     // 创建传输任务并添加到 Store（安全架构 v4：直接使用 sftpConnectionId）
-    const task: TransferTask = {
-      id: `task-${Date.now()}`,
-      type: 'download', // 关键：标记为下载任务
-      status: 'pending',
+    const task = createTransferTask({
+      type: 'download',
       root: fileNode,
-      sftpConnectionId: sftpConnectionId,  // ✅ 直接使用传入的连接标识符
-      sessionId: sessionId,                // ✅ 可选：用于显示会话信息
-      totalBytes: 0,
-      transferredBytes: 0,
-      remainingTime: 0,
-      elapsedTime: 0,
-      createdAt: Date.now()
-    }
+      sftpConnectionId: sftpConnectionId,
+      sessionId: sessionId
+    })
     
     // 添加到 Store（返回 reactive 对象）
     sftpTransferStore.addTask(task)
@@ -575,19 +541,13 @@ export async function downloadFolder(
     console.log(`[download] 扫描完成：${scanResult.totalFiles} 个文件，总计 ${(scanResult.totalBytes / 1024 / 1024).toFixed(2)} MB`)
     
     // 创建传输任务（安全架构 v4：直接使用 sftpConnectionId）
-    const task: TransferTask = {
-      id: `task-${Date.now()}`,
-      type: 'download', // 关键：标记为下载任务
-      status: 'pending',
+    const task = createTransferTask({
+      type: 'download',
       root: scanResult.rootNode,
-      sftpConnectionId: sftpConnectionId,  // ✅ 直接使用传入的连接标识符
-      sessionId: sessionId,                // ✅ 可选：用于显示会话信息
-      totalBytes: scanResult.totalBytes,
-      transferredBytes: 0,
-      remainingTime: 0,
-      elapsedTime: 0,
-      createdAt: Date.now()
-    }
+      sftpConnectionId: sftpConnectionId,
+      sessionId: sessionId,
+      totalBytes: scanResult.totalBytes
+    })
     
     // 添加到 Store
     sftpTransferStore.addTask(task)
@@ -609,6 +569,162 @@ export async function downloadFolder(
     
   } catch (error: any) {
     console.error('[download] ❌ 文件夹下载失败:', error)
+    throw error
+  }
+}
+
+/**
+ * 批量下载主函数（支持混合选择文件和文件夹）
+ * 
+ * ✅ 新架构：每个选中的文件/文件夹创建独立的 TransferTask
+ * - 选择 N 个项目 → 创建 N 个 TransferTask
+ * - 每个任务独立管理进度、状态、取消操作
+ * - 符合用户期望的"多任务"模式（与 uploadBatch 对称）
+ */
+export async function downloadBatch(
+  paths: string[],
+  sftpConnectionId: string,
+  sessionId?: string,
+  localPath?: string | { value: string }
+): Promise<void> {
+  const sftpTransferStore = useSftpTransferStore()
+  
+  console.log('[download] 开始批量下载:', paths.length, '个文件/文件夹')
+  console.log('[download] 连接ID:', sftpConnectionId)
+  
+  if (!sftpConnectionId) {
+    throw new Error('SFTP 连接标识符不能为空（连接未建立）')
+  }
+  
+  if (!paths || paths.length === 0) {
+    throw new Error('下载路径列表不能为空')
+  }
+
+  try {
+    const localBasePath = typeof localPath === 'string' 
+      ? localPath 
+      : (localPath?.value || '')
+    
+    console.log('[download] 本地目标路径:', localBasePath)
+    
+    const createdTasks: TransferTask[] = []
+    
+    for (const remoteFilePath of paths) {
+      try {
+        const fileName = remoteFilePath.split('/').pop() || 'file'
+        
+        let taskRootNode: TransferNode
+        let taskTotalBytes = 0
+        
+        const listResult = await window.api.sftp.listDir(sftpConnectionId, remoteFilePath.replace(/\/[^/]+$/, '/') || '/')
+        
+        if (listResult.success && listResult.data) {
+          const entry = listResult.data.find((item: any) => item.name === fileName)
+          
+          if (entry && (entry.type === 'd' || entry.isDirectory)) {
+            console.log(`[download] 扫描远程文件夹: ${remoteFilePath}`)
+            const folderResult = await scanRemoteFolderRecursive(remoteFilePath, localBasePath, sftpConnectionId)
+            
+            taskRootNode = folderResult.rootNode
+            taskTotalBytes = folderResult.totalBytes
+            
+            console.log(`[download] 远程文件夹扫描完成: ${folderResult.totalFiles} 个文件, ${formatSize(taskTotalBytes)}`)
+          } else {
+            const fileSize = entry?.size || 0
+            
+            taskRootNode = {
+              id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              name: fileName,
+              isDirectory: false,
+              type: 'download',
+              status: 'pending',
+              progress: 0,
+              size: fileSize,
+              localPath: `${localBasePath}/${fileName}`,
+              remotePath: remoteFilePath,
+              speed: 0,
+              remaining: '',
+              elapsed: ''
+            }
+            
+            taskTotalBytes = fileSize
+          }
+        } else {
+          const fileNode: TransferNode = {
+            id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            name: fileName,
+            isDirectory: false,
+            type: 'download',
+            status: 'pending',
+            progress: 0,
+            size: 0,
+            localPath: `${localBasePath}/${fileName}`,
+            remotePath: remoteFilePath,
+            speed: 0,
+            remaining: '',
+            elapsed: ''
+          }
+          
+          taskRootNode = fileNode
+          taskTotalBytes = 0
+        }
+        
+        const task = createTransferTask({
+          type: 'download',
+          root: taskRootNode,
+          sftpConnectionId: sftpConnectionId,
+          sessionId: sessionId,
+          totalBytes: taskTotalBytes
+        })
+        
+        sftpTransferStore.addTask(task)
+        createdTasks.push(task)
+        
+        console.log(`[download] ✅ 已创建下载任务 #${createdTasks.length}: ${taskRootNode.name} (${formatSize(taskTotalBytes)})`)
+        
+      } catch (error: any) {
+        console.error(`[download] 处理远程路径失败: ${remoteFilePath}`, error)
+      }
+    }
+    
+    console.log(`[download] 📊 共创建 ${createdTasks.length} 个下载任务`)
+    
+    for (let i = 0; i < createdTasks.length; i++) {
+      const task = createdTasks[i]
+      
+      console.log(`[download] 开始下载任务 ${i + 1}/${createdTasks.length}: ${task.root.name}`)
+      
+      sftpTransferStore.updateTaskRoot(task.id, {
+        startTime: Date.now()
+      })
+      
+      try {
+        await downloadFolderContent(task.root, sftpConnectionId, task.id)
+        
+        task.status = 'completed'
+        task.completedAt = Date.now()
+        task.elapsedTime = Math.round((task.completedAt - task.createdAt) / 1000)
+        task.transferredBytes = task.totalBytes
+        
+        sftpTransferStore.updateTaskStatus(task.id, 'completed')
+        
+        console.log(`[download] ✅ 任务 ${i + 1} 完成: ${task.root.name}`)
+        
+      } catch (error: any) {
+        console.error(`[download] ❌ 任务 ${i + 1} 失败: ${task.root.name}`, error)
+        
+        task.status = 'error'
+        sftpTransferStore.updateTaskStatus(task.id, 'error')
+      }
+    }
+    
+    const successCount = createdTasks.filter(t => t.status === 'completed').length
+    const failCount = createdTasks.filter(t => t.status === 'error').length
+    
+    console.log(`[download] 🎉 批量下载完成！成功: ${successCount}, 失败: ${failCount}, 总计: ${createdTasks.length}`)
+    
+  } catch (error: any) {
+    console.error('[download] ❌ 批量下载失败:', error)
     throw error
   }
 }

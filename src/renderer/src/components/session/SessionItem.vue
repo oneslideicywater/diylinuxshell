@@ -167,12 +167,12 @@ const handleContextMenu = (event: MouseEvent): void => {
 
   /* 构建菜单项列表 */
   const menuItems: ContextMenuItem[] = [
-    { action: 'add-session', title: '添加会话', description: '添加会话到当前分组' },
-    { action: 'connect', title: '连接', description: '连接到当前会话' },
-    { action: 'edit', title: '编辑', description: '编辑当前会话配置' },
-    { action: 'duplicate', title: '复制会话', description: '复制当前会话' },
-    { action: 'delete', title: '删除', description: '删除当前会话' },
-    { action: 'inspect', title: '审查元素', description: '打开开发者工具并审查当前元素' }
+    { action: 'add-session', title: '添加会话', icon: 'add', description: '添加会话到当前分组' },
+    { action: 'connect', title: '连接', icon: 'connect', description: '连接到当前会话' },
+    { action: 'edit', title: '编辑', icon: 'edit', description: '编辑当前会话配置' },
+    { action: 'duplicate', title: '复制会话', icon: 'duplicate', description: '复制当前会话' },
+    { action: 'delete', title: '删除', icon: 'delete', description: '删除当前会话' },
+    { action: 'inspect', title: '审查元素', icon: 'inspect', description: '打开开发者工具并审查当前元素' }
   ]
 
   /* 通过 Store 显示右键菜单（注册所有权 + 菜单项 + 回调） */

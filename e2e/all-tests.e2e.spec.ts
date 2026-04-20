@@ -333,4 +333,24 @@ test.describe('Terminal - 终端功能', () => {
   test('Vim 编辑器支持', async () => {
     // 测试在 terminal/vim.e2e.spec.ts 中定义
   })
+
+  test('SFTP 标签页连接状态显示断开选项', async () => {
+    // 测试在 terminal/sftp-disconnect-reconnect.e2e.spec.ts 中定义
+  })
+
+  test('点击断开后 SftpRemote 显示已断连状态', async () => {
+    // 测试在 terminal/sftp-disconnect-reconnect.e2e.spec.ts 中定义
+  })
+
+  test('断开后显示重连会话选项', async () => {
+    // 测试在 terminal/sftp-disconnect-reconnect.e2e.spec.ts 中定义
+  })
+
+  test('点击重连后恢复连接状态', async () => {
+    // 测试在 terminal/sftp-disconnect-reconnect.e2e.spec.ts 中定义
+  })
+
+  test('完整流程：连接→断开→重连 状态流转正确', async () => {
+    // 测试在 terminal/sftp-disconnect-reconnect.e2e.spec.ts 中定义
+  })
 })

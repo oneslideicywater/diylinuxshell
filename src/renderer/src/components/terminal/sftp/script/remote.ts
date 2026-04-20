@@ -19,8 +19,6 @@ export interface RemoteFileState {
   remotePath: Ref<string>
   /** 远程文件列表 */
   remoteFiles: Ref<any[]>
-  /** 选中的远程文件路径 */
-  selectedRemote: Ref<string>
   /** 远程文件数量 */
   remoteFileCount: Ref<number>
   /**
@@ -40,7 +38,6 @@ export function createRemoteFileState(connectionId: string = ''): RemoteFileStat
   return {
     remotePath: ref('/'),
     remoteFiles: ref<any[]>([]),
-    selectedRemote: ref<string>(''),
     remoteFileCount: ref(0),
     connectionId
   }
@@ -122,30 +119,23 @@ export async function remoteUpRemote(
  * @param folderName - 文件夹名称
  */
 export async function remoteMkdir(state: RemoteFileState, folderName: string): Promise<void> {
-  try {
-    // 安全检查 connectionId
-    if (!state.connectionId) {
-      alert('SFTP 连接不存在，无法创建文件夹')
-      return
-    }
-    
-    const fullPath = state.remotePath.value === '/' 
-      ? `/${folderName}` 
-      : `${state.remotePath.value}/${folderName}`
-    
-    // 使用 connectionId 调用 SFTP API
-    const result = await window.api.sftp.mkdir(state.connectionId, fullPath)
-    
-    if (result.success) {
-      console.log('[remote] ✅ 文件夹创建成功:', fullPath)
-      // 创建成功后重新加载文件列表
-      await loadRemoteFiles(state)
-    } else {
-      alert(`创建文件夹失败：${result.error}`)
-    }
-  } catch (error: any) {
-    console.error('[remote] 创建文件夹异常:', error)
-    alert(`创建文件夹失败：${error.message}`)
+  // 安全检查 connectionId
+  if (!state.connectionId) {
+    throw new Error('SFTP 连接不存在，无法创建文件夹')
+  }
+
+  const fullPath = state.remotePath.value === '/'
+    ? `/${folderName}`
+    : `${state.remotePath.value}/${folderName}`
+
+  // 使用 connectionId 调用 SFTP API
+  const result = await window.api.sftp.mkdir(state.connectionId, fullPath)
+
+  if (result.success) {
+    console.log('[remote] ✅ 文件夹创建成功:', fullPath)
+    await loadRemoteFiles(state)
+  } else {
+    throw new Error(`创建文件夹失败：${result.error}`)
   }
 }
 
@@ -155,24 +145,18 @@ export async function remoteMkdir(state: RemoteFileState, folderName: string): P
  * @param path - 要删除的路径
  */
 export async function remoteDeleteFile(state: RemoteFileState, path: string): Promise<void> {
-  try {
-    // 安全检查 connectionId
-    if (!state.connectionId) {
-      alert('SFTP 连接不存在，无法删除文件')
-      return
-    }
-    
-    // 使用 connectionId 调用 SFTP API
-    const result = await window.api.sftp.delete(state.connectionId, path)
-    
-    if (result.success) {
-      // 删除成功后重新加载文件列表
-      await loadRemoteFiles(state)
-    } else {
-      alert(`删除失败：${result.error}`)
-    }
-  } catch (error: any) {
-    alert(`删除失败：${error.message}`)
+  // 安全检查 connectionId
+  if (!state.connectionId) {
+    throw new Error('SFTP 连接不存在，无法删除文件')
+  }
+
+  // 使用 connectionId 调用 SFTP API
+  const result = await window.api.sftp.delete(state.connectionId, path)
+
+  if (result.success) {
+    await loadRemoteFiles(state)
+  } else {
+    throw new Error(`删除失败：${result.error}`)
   }
 }
 

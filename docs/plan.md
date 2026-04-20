@@ -13,9 +13,10 @@
 | Phase 0 | 项目初始化 | 搭建项目骨架、配置开发环境、配置打包、配置测试框架 | 1天 |
 | Phase 1 | V1.0 MVP | 基础SSH连接、会话管理、多标签页、密码认证、核心测试 | 1周 |
 | Phase 2 | V1.1 | 密钥认证、会话分组、SFTP 传输、主题配置、功能测试 | 1周 |
-| Phase 3 | V1.2 | 终端分屏、日志记录、历史记录、导入导出、功能测试 | 1周 |
-| Phase 4 | V2.0 | 跳板机、批量操作、脚本执行、功能测试 | 2周 |
-| Phase 5 | 发布部署 | 多平台打包、CI/CD、代码签名、全量测试、发布 | 3天 |
+| Phase 3 | V1.3 AI 助理 | AI 对话交互、终端输出分析、智能文件操作、组合式任务、功能测试 | 2周 |
+| Phase 4 | V1.2 高级功能 | 终端分屏、日志记录、历史记录、导入导出、功能测试 | 1周 |
+| Phase 5 | V2.0 专业功能 | 跳板机、批量操作、脚本执行、功能测试 | 2周 |
+| Phase 6 | 发布部署 | 多平台打包、CI/CD、代码签名、全量测试、发布 | 3天 |
 
 ---
 
@@ -233,27 +234,349 @@ Phase 2 实现顺序:
 - [ ] 命令片段功能正常工作
 - [ ] 主题切换功能正常
 
----
+### Phase 3: V1.3 AI 助理模块
 
-### Phase 3: V1.2 高级功能
-
-#### 3.3.1 任务清单
+#### 3.3 任务清单
 
 | 序号 | 任务 | 产出物 | 依赖 |
 |------|------|--------|------|
-| 3.1 | 实现终端分屏 | SplitPane.vue | Phase 2 |
-| 3.2 | 实现日志记录服务 | logger.ts | Phase 1 |
-| 3.3 | 实现终端日志记录 | XTerminal.vue 扩展 | 3.2 |
-| 3.4 | 实现命令历史记录 | store.ts 扩展 | Phase 1 |
-| 3.5 | 实现历史记录UI | HistoryPanel.vue | 3.4 |
-| 3.6 | 实现会话导入导出 | SessionExport.vue | Phase 1 |
-| 3.7 | 实现配置备份恢复 | Settings.vue 扩展 | Phase 2 |
-| 3.8 | 编写日志服务单元测试 | logger.test.ts | 3.2 |
-| 3.9 | 编写历史记录单元测试 | history.test.ts | 3.4 |
-| 3.10 | 编写分屏E2E测试 | split-pane.e2e.spec.ts | 3.1 |
-| 3.11 | 编写导入导出E2E测试 | import-export.e2e.spec.ts | 3.6 |
+| 3.1 | 实现 AI 服务基础架构 | src/main/services/ai-service.ts | Phase 2 |
+| 3.2 | 实现 LLM API 客户端 | src/main/services/llm-client.ts | 3.1 |
+| 3.3 | 实现对话上下文管理 | src/main/services/context-manager.ts | 3.1 |
+| 3.4 | 实现敏感信息过滤器 | src/main/services/sensitive-filter.ts | 3.1 |
+| 3.5 | 实现 AI IPC 处理器 | src/main/ipc/ai-assistant.ts | 3.2, 3.3, 3.4 |
+| 3.6 | 实现终端输出捕获服务 | src/main/services/terminal-capture.ts | Phase 1 |
+| 3.7 | 实现输出分析引擎 | src/main/services/output-analyzer.ts | 3.6 |
+| 3.8 | 实现意图识别服务 | src/main/services/intent-recognizer.ts | 3.2 |
+| 3.9 | 实现任务执行引擎 | src/main/services/task-engine.ts | 3.8 |
+| 3.10 | 创建渲染进程 AI API 封装 | src/renderer/src/api/ai-assistant.ts | 3.5 |
+| 3.11 | 实现 AI Store 状态管理 | src/renderer/src/stores/ai-assistant.ts | 3.10 |
+| 3.12 | 实现 AI 对话组件 | components/ai/AIChatPanel.vue | 3.11 |
+| 3.13 | 实现消息气泡组件 | components/ai/MessageBubble.vue | 3.12 |
+| 3.14 | 实现输入框组件 | components/ai/AIInputBox.vue | 3.12 |
+| 3.15 | 实现 Markdown 渲染组件 | components/ai/MarkdownRenderer.vue | 3.13 |
+| 3.16 | 集成终端输出分析到 XTerminal | XTerminal.vue 扩展 | 3.6, 3.7 |
+| 3.17 | 实现 AI 设置页面 | components/ai/AISettings.vue | 3.2 |
+| 3.18 | 实现 API Key 配置管理 | AISettings.vue 扩展 | 3.17 |
+| 3.19 | 编写 AI 服务单元测试 | ai-service.test.ts | 3.1 |
+| 3.20 | 编写 LLM 客户端单元测试 | llm-client.test.ts | 3.2 |
+| 3.21 | 编写意图识别单元测试 | intent-recognizer.test.ts | 3.8 |
+| 3.22 | 编写敏感信息过滤测试 | sensitive-filter.test.ts | 3.4 |
+| 3.23 | 编写任务执行引擎测试 | task-engine.test.ts | 3.9 |
+| 3.24 | 编写 AI 对话 E2E 测试 | ai-chat.e2e.spec.ts | 3.12-3.15 |
+| 3.25 | 编写终端分析 E2E 测试 | terminal-analysis.e2e.spec.ts | 3.16 |
+| 3.26 | 编写智能文件操作 E2E 测试 | ai-file-operation.e2e.spec.ts | 3.9 |
+| 3.27 | 编写组合式任务 E2E 测试 | ai-composite-task.e2e.spec.ts | 3.9 |
 
-#### 3.3.2 验收标准
+#### 3.4 模块实现顺序
+
+```
+Phase 3 实现顺序:
+
+1. 基础架构层（AI 核心服务）
+   ├── 3.1 AI 服务基础架构（接口定义、错误处理）
+   ├── 3.2 LLM API 客户端（OpenAI/本地模型适配）
+   ├── 3.3 对话上下文管理（历史记录、会话窗口）
+   └── 3.4 敏感信息过滤器（密码、密钥脱敏）
+
+2. 功能实现层（业务逻辑）
+   ├── 3.5 AI IPC 处理器（主进程通信接口）
+   ├── 3.6 终端输出捕获服务（实时数据采集）
+   ├── 3.7 输出分析引擎（服务器状态解析）
+   ├── 3.8 意图识别服务（自然语言理解）
+   └── 3.9 任务执行引擎（多步骤任务编排）
+
+3. 前端展示层（UI 组件）
+   ├── 3.10-3.11 API 层和状态管理
+   ├── 3.12-3.15 AI 对话界面组件
+   ├── 3.16 终端集成（分析结果展示）
+   └── 3.17-3.18 设置页面（API Key 管理）
+
+4. 测试验证层
+   └── 3.19-3.27 单元测试、集成测试、E2E 测试
+```
+
+#### 3.5 详细设计说明
+
+**AI 服务架构**
+
+```typescript
+// AI 服务核心接口
+interface IAIService {
+  // 对话交互
+  chat(message: string, sessionId: string): AsyncIterable<AIResponse>;
+  
+  // 终端输出分析
+  analyzeTerminalOutput(output: string): Promise<AnalysisResult>;
+  
+  // 意图识别
+  recognizeIntent(input: string): Promise<IntentResult>;
+  
+  // 任务执行
+  executeTask(task: CompositeTask): AsyncIterable<TaskProgress>;
+}
+
+// LLM 客户端配置
+interface LLMConfig {
+  provider: 'openai' | 'anthropic' | 'local';
+  apiKey: string;
+  model: string;
+  maxTokens: number;
+  temperature: number;
+}
+
+// 对话上下文
+interface ConversationContext {
+  sessionId: string;
+  messages: ChatMessage[];
+  systemPrompt: string;
+  currentSessionId?: string;  // 当前关联的 SSH 会话
+  tokenCount: number;
+}
+```
+
+**意图类型定义**
+
+```typescript
+enum IntentType {
+  // 终端分析类
+  ANALYZE_SERVER_STATUS = 'analyze_server_status',
+  ANALYZE_OUTPUT = 'analyze_output',
+  
+  // 文件操作类
+  FILE_DOWNLOAD = 'file_download',
+  FILE_UPLOAD = 'file_upload',
+  FILE_LIST = 'file_list',
+  FILE_EDIT = 'file_edit',
+  
+  // 会话管理类
+  CREATE_SESSION = 'create_session',
+  LIST_SESSIONS = 'list_sessions',
+  
+  // 任务执行类
+  EXECUTE_COMMAND = 'execute_command',
+  RUN_COMPOSITE_TASK = 'run_composite_task',
+  
+  // 通用问答
+  GENERAL_QUESTION = 'general_question'
+}
+
+// 组合式任务定义
+interface CompositeTask {
+  id: string;
+  name: string;
+  description: string;
+  steps: TaskStep[];
+  template?: boolean;  // 是否为模板任务
+}
+
+interface TaskStep {
+  id: string;
+  type: 'command' | 'file_operation' | 'analysis' | 'user_confirm';
+  description: string;
+  config: CommandStepConfig | FileOperationConfig | AnalysisConfig;
+  dependsOn?: string[];  // 依赖的前置步骤
+}
+```
+
+**终端输出分析流程**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    终端输出分析流程                          │
+│                                                              │
+│  1. 数据捕获                                                  │
+│     TerminalCapture 监听终端输出流                             │
+│              │                                                │
+│              ▼                                                │
+│  2. 数据预处理                                                 │
+│     ├─ 过滤 ANSI 转义序列                                     │
+│     ├─ 提取关键命令输出                                       │
+│     └─ 缓存最近的 N 行输出                                    │
+│              │                                                │
+│              ▼                                                │
+│  3. 智能分析                                                   │
+│     OutputAnalyzer 调用 LLM 分析                               │
+│     ├─ 识别服务器资源信息 (CPU/内存/磁盘)                      │
+│     ├─ 识别运行状态 (服务/进程)                                │
+│     ├─ 识别错误和警告                                         │
+│     └─ 生成结构化摘要                                         │
+│              │                                                │
+│              ▼                                                │
+│  4. 结果展示                                                   │
+│     通过 IPC 发送到渲染进程                                   │
+│     AIChatPanel 展示分析结果                                  │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**组合式任务执行流程**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                  组合式任务执行流程                           │
+│                                                              │
+│  用户输入："帮我做一次系统巡检"                               │
+│              │                                                │
+│              ▼                                                │
+│  1. 意图识别                                                   │
+│     IntentRecognizer 识别为 RUN_COMPOSITE_TASK                │
+│              │                                                │
+│              ▼                                                │
+│  2. 任务匹配/生成                                              │
+│     匹配预置模板：系统巡检模板                                │
+│     或动态生成任务步骤                                        │
+│              │                                                │
+│              ▼                                                │
+│  3. 任务拆解                                                   │
+│     Step 1: 执行 uptime, free -h, df -h                      │
+│     Step 2: 分析系统资源使用情况                              │
+│     Step 3: 检查主要服务状态 (systemctl status)               │
+│     Step 4: 生成巡检报告                                     │
+│              │                                                │
+│              ▼                                                │
+│  4. 逐步执行                                                   │
+│     TaskEngine 按依赖关系执行                                 │
+│     ├─ 发送命令到终端                                        │
+│     ├─ 捕获输出                                              │
+│     ├─ 实时反馈进度                                          │
+│     └─ 需确认时暂停等待用户                                  │
+│              │                                                │
+│              ▼                                                │
+│  5. 结果汇总                                                   │
+│     生成完整报告，展示给用户                                  │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 3.6 技术要点
+
+**LLM API 集成**
+
+```typescript
+// 流式响应处理
+async function* streamChat(
+  messages: ChatMessage[],
+  config: LLMConfig
+): AsyncIterable<string> {
+  const response = await fetch(config.apiEndpoint, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${config.apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: config.model,
+      messages,
+      stream: true,
+      temperature: config.temperature
+    })
+  });
+  
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    
+    const chunk = decoder.decode(value);
+    // 解析 SSE 格式数据
+    for (const line of chunk.split('\n')) {
+      if (line.startsWith('data: ')) {
+        const data = JSON.parse(line.slice(6));
+        yield data.choices[0].delta.content || '';
+      }
+    }
+  }
+}
+```
+
+**敏感信息过滤**
+
+```typescript
+class SensitiveFilter {
+  private patterns = [
+    /password[:\s]+['"]?[\w@#$%^&*]+['"]?/gi,
+    /api[_-]?key[:\s]+['"][\w-]+['"]/gi,
+    /-----BEGIN (?:RSA |EC |DSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |DSA )?PRIVATE KEY-----/gi
+  ];
+  
+  filter(content: string): string {
+    let filtered = content;
+    for (const pattern of this.patterns) {
+      filtered = filtered.replace(pattern, '[已隐藏敏感信息]');
+    }
+    return filtered;
+  }
+}
+```
+
+**上下文窗口管理**
+
+```typescript
+class ContextManager {
+  private maxTokens: number = 8000;
+  
+  trimToFit(context: ConversationContext): ConversationContext {
+    while (this.estimateTokens(context.messages) > this.maxTokens) {
+      // 保留系统提示，移除最早的消息
+      context.messages = [
+        context.messages[0],
+        ...context.messages.slice(2)
+      ];
+    }
+    return context;
+  }
+  
+  private estimateTokens(messages: ChatMessage[]): number {
+    // 粗略估算 token 数（约 4 字符/token）
+    return JSON.stringify(messages).length / 4;
+  }
+}
+```
+
+#### 3.7 验收标准
+
+- [ ] AI 助理能够通过对话框与用户进行自然语言交互
+- [ ] 支持流式输出，响应及时无明显延迟
+- [ ] 能够正确识别用户意图（文件操作、会话管理、信息查询等）
+- [ ] 能够实时捕获并分析终端输出内容
+- [ ] 分析结果准确，能够正确提取服务器状态信息
+- [ ] 敏感信息过滤机制正常工作，密码、API Key 等不会被发送到 LLM
+- [ ] 能够根据自然语言指令执行 SFTP 文件操作（上传/下载/列表）
+- [ ] 文件操作前需要用户确认，防止误操作
+- [ ] 能够通过对话快速创建 SSH 会话配置
+- [ ] 组合式任务能够正确拆解并按步骤执行
+- [ ] 任务执行过程有进度反馈
+- [ ] 支持多轮对话，能够记住上下文
+- [ ] 上下文窗口管理正常，超长对话自动裁剪历史
+- [ ] 支持 OpenAI API 及兼容接口配置
+- [ ] API Key 安全存储，加密保存
+- [ ] 网络异常时有合理的错误提示
+- [ ] LLM 服务不可用时降级处理，不影响其他功能使用
+
+---
+
+### Phase 4: V1.2 高级功能
+
+#### 4.1 任务清单
+
+| 序号 | 任务 | 产出物 | 依赖 |
+|------|------|--------|------|
+| 4.1 | 实现终端分屏 | SplitPane.vue | Phase 2 |
+| 4.2 | 实现日志记录服务 | logger.ts | Phase 1 |
+| 4.3 | 实现终端日志记录 | XTerminal.vue 扩展 | 4.2 |
+| 4.4 | 实现命令历史记录 | store.ts 扩展 | Phase 1 |
+| 4.5 | 实现历史记录UI | HistoryPanel.vue | 4.4 |
+| 4.6 | 实现会话导入导出 | SessionExport.vue | Phase 1 |
+| 4.7 | 实现配置备份恢复 | Settings.vue 扩展 | Phase 2 |
+| 4.8 | 编写日志服务单元测试 | logger.test.ts | 4.2 |
+| 4.9 | 编写历史记录单元测试 | history.test.ts | 4.4 |
+| 4.10 | 编写分屏E2E测试 | split-pane.e2e.spec.ts | 4.1 |
+| 4.11 | 编写导入导出E2E测试 | import-export.e2e.spec.ts | 4.6 |
+
+#### 4.2 验收标准
 
 - [ ] 终端分屏功能正常
 - [ ] 日志能够正确记录和查看
@@ -262,25 +585,25 @@ Phase 2 实现顺序:
 
 ---
 
-### Phase 4: V2.0 专业功能
+### Phase 5: V2.0 专业功能
 
-#### 3.4.1 任务清单
+#### 5.1 任务清单
 
 | 序号 | 任务 | 产出物 | 依赖 |
 |------|------|--------|------|
-| 4.1 | 实现SFTP服务 | sftp-manager.ts | Phase 1 |
-| 4.2 | 实现SFTP文件浏览器 | SftpBrowser.vue | 4.1 |
-| 4.3 | 实现文件上传下载 | FileTransfer.vue | 4.1 |
-| 4.4 | 实现跳板机连接 | ssh-manager.ts 扩展 | Phase 1 |
-| 4.5 | 实现批量操作 | BatchOperation.vue | Phase 1 |
-| 4.6 | 实现脚本执行 | ScriptRunner.vue | Phase 1 |
-| 4.7 | 编写SFTP管理器单元测试 | sftp-manager.test.ts | 4.1 |
-| 4.8 | 编写SFTP集成测试 | sftp.integration.test.ts | 4.1 |
-| 4.9 | 编写跳板机连接集成测试 | jump-host.integration.test.ts | 4.4 |
-| 4.10 | 编写文件传输E2E测试 | file-transfer.e2e.spec.ts | 4.3 |
-| 4.11 | 编写批量操作E2E测试 | batch-operation.e2e.spec.ts | 4.5 |
+| 5.1 | 实现SFTP服务 | sftp-manager.ts | Phase 1 |
+| 5.2 | 实现SFTP文件浏览器 | SftpBrowser.vue | 5.1 |
+| 5.3 | 实现文件上传下载 | FileTransfer.vue | 5.1 |
+| 5.4 | 实现跳板机连接 | ssh-manager.ts 扩展 | Phase 1 |
+| 5.5 | 实现批量操作 | BatchOperation.vue | Phase 1 |
+| 5.6 | 实现脚本执行 | ScriptRunner.vue | Phase 1 |
+| 5.7 | 编写SFTP管理器单元测试 | sftp-manager.test.ts | 5.1 |
+| 5.8 | 编写SFTP集成测试 | sftp.integration.test.ts | 5.1 |
+| 5.9 | 编写跳板机连接集成测试 | jump-host.integration.test.ts | 5.4 |
+| 5.10 | 编写文件传输E2E测试 | file-transfer.e2e.spec.ts | 5.3 |
+| 5.11 | 编写批量操作E2E测试 | batch-operation.e2e.spec.ts | 5.5 |
 
-#### 3.4.2 验收标准
+#### 5.2 验收标准
 
 - [ ] SFTP文件传输功能正常
 - [ ] 跳板机连接功能正常
@@ -301,11 +624,20 @@ Phase 2 实现顺序:
 | ipc/terminal.ts | 终端相关IPC处理 | 1 |
 | ipc/config.ts | 配置相关IPC处理 | 2 |
 | ipc/command.ts | 命令片段IPC处理 | 2 |
+| ipc/ai-assistant.ts | AI 助理IPC处理 | 3 |
 | services/store.ts | electron-store数据存储服务 | 1 |
 | services/ssh-manager.ts | SSH连接管理器 | 1 |
 | services/crypto.ts | 加密服务 | 1 |
 | services/logger.ts | 日志服务 | 3 |
 | services/sftp-manager.ts | SFTP管理器 | 4 |
+| services/ai-service.ts | AI 服务基础架构 | 3 |
+| services/llm-client.ts | LLM API 客户端 | 3 |
+| services/context-manager.ts | 对话上下文管理 | 3 |
+| services/sensitive-filter.ts | 敏感信息过滤器 | 3 |
+| services/terminal-capture.ts | 终端输出捕获服务 | 3 |
+| services/output-analyzer.ts | 输出分析引擎 | 3 |
+| services/intent-recognizer.ts | 意图识别服务 | 3 |
+| services/task-engine.ts | 任务执行引擎 | 3 |
 
 ### 4.2 渲染进程文件 (src/renderer/src/)
 
@@ -329,14 +661,21 @@ Phase 2 实现顺序:
 | components/settings/SettingsDialog.vue | 设置对话框 | 2 |
 | components/sftp/SftpBrowser.vue | SFTP浏览器 | 4 |
 | components/sftp/FileTransfer.vue | 文件传输 | 4 |
+| components/ai/AIChatPanel.vue | AI 对话面板 | 3 |
+| components/ai/MessageBubble.vue | 消息气泡组件 | 3 |
+| components/ai/AIInputBox.vue | AI 输入框组件 | 3 |
+| components/ai/MarkdownRenderer.vue | Markdown 渲染组件 | 3 |
+| components/ai/AISettings.vue | AI 设置页面 | 3 |
 | stores/session.ts | 会话状态管理 | 1 |
 | stores/terminal.ts | 终端状态管理 | 1 |
 | stores/config.ts | 配置状态管理 | 2 |
 | stores/command.ts | 命令片段状态 | 2 |
+| stores/ai-assistant.ts | AI 助理状态管理 | 3 |
 | api/session.ts | 会话API | 1 |
 | api/terminal.ts | 终端API | 1 |
 | api/config.ts | 配置API | 2 |
 | api/command.ts | 命令片段API | 2 |
+| api/ai-assistant.ts | AI 助理API | 3 |
 | styles/variables.css | CSS变量 | 1 |
 | styles/global.css | 全局样式 | 1 |
 | styles/themes/dark.css | 暗色主题 | 2 |
@@ -350,6 +689,7 @@ Phase 2 实现顺序:
 | types/terminal.ts | 终端类型定义 | 0 |
 | types/config.ts | 配置类型定义 | 0 |
 | types/command.ts | 命令片段类型定义 | 2 |
+| types/ai-assistant.ts | AI 助理类型定义 | 3 |
 | constants/ipc-channels.ts | IPC通道常量 | 0 |
 
 ### 4.4 打包与CI/CD文件

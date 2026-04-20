@@ -350,6 +350,43 @@ export function registerSFTPIpcHandlers(): void {
   })
 
   /**
+   * 删除本地文件或文件夹（支持递归删除文件夹）
+   */
+  ipcMain.handle('sftp:delete-local', async (_event, localPath: string) => {
+    try {
+      const window = BrowserWindow.fromWebContents(_event.sender)
+      
+      const stat = await fs.promises.stat(localPath)
+      
+      if (stat.isDirectory()) {
+        // 文件夹：递归删除所有内容后删除文件夹本身
+        await fs.promises.rm(localPath, { recursive: true, force: true })
+        
+        if (window) {
+          window.webContents.send('sftp:delete-local-progress', {
+            currentPath: localPath,
+            completed: true
+          })
+        }
+      } else {
+        // 单文件：直接删除
+        await fs.promises.unlink(localPath)
+        
+        if (window) {
+          window.webContents.send('sftp:delete-local-progress', {
+            currentPath: localPath,
+            completed: true
+          })
+        }
+      }
+      
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  /**
    * 确保本地目录存在（递归创建）
    */
   ipcMain.handle('sftp:ensure-dir', async (_event, dirPath: string) => {

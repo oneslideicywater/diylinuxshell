@@ -9,10 +9,14 @@ export interface ContextMenuItem {
   action: string
   /** 菜单项标题 */
   title: string
+  /** 菜单项图标名称（对应 contextMenuIcons 注册表中的 key） */
+  icon?: string
   /** 菜单项描述（副标题） */
   description?: string
   /** 是否显示（条件渲染） */
   visible?: boolean
+  /** 是否为危险操作（红色文字样式） */
+  danger?: boolean
 }
 
 /**
