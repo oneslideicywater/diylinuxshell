@@ -195,27 +195,25 @@ const handleMouseLeave = () => {
   opacity: 0;
 }
 
-/* 深色主题适配 */
-@media (prefers-color-scheme: dark) {
-  .tooltip {
-    background: rgba(255, 255, 255, 0.95);
-    color: #333333;
-  }
-  
-  .tooltip-top::after {
-    border-top-color: rgba(255, 255, 255, 0.95);
-  }
-  
-  .tooltip-bottom::after {
-    border-bottom-color: rgba(255, 255, 255, 0.95);
-  }
-  
-  .tooltip-left::after {
-    border-left-color: rgba(255, 255, 255, 0.95);
-  }
-  
-  .tooltip-right::after {
-    border-right-color: rgba(255, 255, 255, 0.95);
-  }
+/* 浅色主题适配 */
+[data-theme="light"] .tooltip {
+  background: rgba(255, 255, 255, 0.95);
+  color: #333333;
+}
+
+[data-theme="light"] .tooltip-top::after {
+  border-top-color: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="light"] .tooltip-bottom::after {
+  border-bottom-color: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="light"] .tooltip-left::after {
+  border-left-color: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="light"] .tooltip-right::after {
+  border-right-color: rgba(255, 255, 255, 0.95);
 }
 </style>

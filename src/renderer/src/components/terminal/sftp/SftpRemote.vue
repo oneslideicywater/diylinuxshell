@@ -1,6 +1,12 @@
 /**
  * SFTP 远程文件浏览器组件
  * 提供远程文件的浏览、导航、选择等功能
+ * 
+ * 重构说明（v2 - Pinia Store 架构）：
+ * - 移除 props/emit 双向绑定，改用 Pinia Store 统一管理状态
+ * - 所有状态（remotePath, remoteFiles, remoteFileCount）存储在 useSftpBrowserStore 中
+ * - 通过 connectionId 隔离不同 SFTP 连接的状态
+ * - 解决了 v-model:value 反模式和双重状态管理问题
  * @module components/session/SftpRemote
  */
 
@@ -13,7 +19,7 @@
           <circle cx="7" cy="7" r="1.5" fill="currentColor"/>
         </svg>
         <input
-          v-model="remotePath"
+          v-model="remotePathValue"
           type="text"
           class="path-input"
           @keyup.enter="handlePathEnter"
@@ -107,40 +113,31 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, nextTick, computed, watch } from 'vue'
 import type { TransferTask } from '@shared/types/sftp'
 
 import { formatSize } from '@/utils/fs-utils'
 import { useContextMenuStore } from '@/stores/contextMenu'
 import { useSftpSelectionStore } from '@/stores/sftpSelection'
-import { loadRemoteFiles, remoteUpRemote, handleRemoteDblClick, type RemoteFileState } from './script/remote'
+import { useSftpBrowserStore } from '@/stores/sftpBrowser'
 import AlertDialog from '@/components/common/AlertDialog.vue'
 
 /**
- * Props 定义（安全改进 v3 - 完全移除 session 依赖）
+ * Props 定义（v2 简化版）
  * 
- * 设计原则：
- * - 只接收必要的标识符：sessionId + connectionId
- * - 组件内部通过 SessionStore 自行获取会话信息（非敏感部分）
- * - 所有 SFTP API 调用都使用 connectionId
- * - 符合最小权限原则，不传递任何会话对象
+ * 改进说明：
+ * - 移除 remotePath/remoteFiles props（不再需要 v-model 双向绑定）
+ * - 只保留必要的标识符：connectionId + downloadTasks + connected
+ * - 所有状态通过 useSftpBrowserStore 按 connectionId 获取
  */
 interface Props {
-  /** 当前远程路径 */
-  remotePath: string
-  /** 远程文件列表 */
-  remoteFiles: any[]
-  /**
-   * 会话 ID（用于从 SessionStore 获取会话信息）
-   * 仅用于显示名称、主机等非敏感信息
-   */
+  /** 会话 ID（用于显示会话信息） */
   sessionId: string
   /** 下载任务数组 */
   downloadTasks: TransferTask[]
   /**
    * SFTP 连接标识符（每个标签独立）
    * 对应主进程 sftpPool.getConnection(connectionId) 的 key
-   * 必须与建立连接时使用的 ID 一致
    */
   connectionId?: string
   /** SFTP 连接状态，false 时显示断连提示 */
@@ -155,51 +152,109 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 /**
- * 计算属性：当前会话对象（从 SessionStore 动态获取）
+ * Emits 定义（v2 简化版）
+ * 
+ * 只保留事件通知，不再需要状态同步的 emit
  */
 const emit = defineEmits<{
-  /** 路径变化事件 */
-  'update:remotePath': [value: string]
-  /** 文件列表变化事件 */
-  'update:remoteFiles': [value: any[]]
   /** 远程文件双击事件 */
   'remote-dblclick': []
   /**
    * 下载事件（统一接口：支持单文件/单文件夹/多文件混合选择）
-   * - 单文件时：paths.length = 1
-   * - 单文件夹时：paths.length = 1
-   * - 多文件/文件夹时：paths.length > 1
    */
   'download-batch': [paths: string[]]
   /** 创建远程文件夹事件 */
   'create-folder': [folderName: string]
   /**
    * 删除远程文件事件（统一接口：支持单文件/多文件批量删除）
-   * - 单文件时：paths.length = 1
-   * - 多文件时：paths.length > 1
    */
   'delete-batch': [paths: string[]]
 }>()
 
 /**
- * 内部状态
+ * ====================
+ * Store 实例（核心改进）
+ * ====================
  */
-const remotePath = ref(props.remotePath)
-const remoteFiles = ref(props.remoteFiles)
-const remoteFileCount = ref(0)
+
+/**
+ * SFTP 文件浏览器状态 Store（按连接 ID 隔离，同时管理 Local 和 Remote）
+ * 替代原来的 createRemoteFileState() + 内部 ref 副本
+ */
+const sftpBrowserStore = useSftpBrowserStore()
 
 /**
  * SFTP 选择状态 Store（按连接 ID 隔离）
  * 统一管理选中文件列表（单文件/多文件共用）
- * 注意：与 SftpLocal 共用同一个 Store，但通过 connectionId 隔离
  */
 const sftpSelectionStore = useSftpSelectionStore()
 
 /**
- * 当前连接的选中远程文件列表（从 Store 读取）
- * - 单文件操作时：数组长度 = 1
- * - 多文件操作时：数组长度 > 1
- * - 未选中时：空数组
+ * 当前连接的远程路径（从 Store 直接读取，响应式）
+ * 直接访问 state 避免嵌套 computed 导致的响应式失效问题
+ */
+const remotePath = computed(() => {
+  const state = sftpBrowserStore.getState(props.connectionId)
+  return state?.remote?.remotePath || '/'
+})
+
+/**
+ * 远程路径输入框的双向绑定值
+ * 
+ * 性能优化：
+ * - 使用本地 ref 立即响应用户输入（无卡顿）
+ * - 防抖 300ms 后同步到 Store（避免频繁触发响应式更新）
+ * - 解决 :model-value 非受控组件不更新显示的问题
+ */
+const remotePathInput = ref('/')
+let remotePathTimer: ReturnType<typeof setTimeout> | null = null
+
+const remotePathValue = computed<string>({
+  get: () => remotePathInput.value,
+  set: (value: string) => {
+    remotePathInput.value = value
+    
+    if (remotePathTimer) {
+      clearTimeout(remotePathTimer)
+    }
+    
+    remotePathTimer = setTimeout(() => {
+      if (props.connectionId) {
+        sftpBrowserStore.setRemotePath(props.connectionId, value)
+      }
+      remotePathTimer = null
+    }, 300)
+  }
+})
+
+watch(() => props.connectionId, (newId) => {
+  if (newId) {
+    const state = sftpBrowserStore.getState(newId)
+    remotePathInput.value = state?.remote?.remotePath || '/'
+  }
+}, { immediate: true })
+
+watch(() => {
+  const state = sftpBrowserStore.getState(props.connectionId)
+  return state?.remote?.remotePath || '/'
+}, (newPath) => {
+  if (!remotePathTimer) {
+    remotePathInput.value = newPath
+  }
+})
+
+/**
+ * 当前连接的远程文件列表（从 Store 直接读取，响应式）
+ * 直接访问 state 避免嵌套 computed 导致的响应式失效问题
+ */
+const remoteFiles = computed(() => {
+  const state = sftpBrowserStore.getState(props.connectionId)
+  return state?.remote?.remoteFiles || []
+})
+
+/**
+ * 当前连接的选中远程文件列表（从 SelectionStore 读取）
+ * 使用 `remote-${connectionId}` 作为 key 与 Local 区分
  */
 const selectedRemotes = computed<string[]>({
   get: () => sftpSelectionStore.getSelectedFiles(`remote-${props.connectionId}`),
@@ -210,7 +265,10 @@ const selectedRemotes = computed<string[]>({
  * 拖拽状态
  */
 const isDraggingOver = ref(false)
-/* 右键菜单 Store（全局唯一管理） */
+
+/**
+ * 右键菜单状态
+ */
 const contextMenuStore = useContextMenuStore()
 const menuOwnerId = 'sftp-remote'
 
@@ -236,97 +294,39 @@ function handleAlertDialogClose(): void {
 }
 
 /**
- * 监听 props 变化
- */
-watch(() => props.remotePath, (newVal) => {
-  remotePath.value = newVal
-})
-
-// 监听 props 变化，同步到本地 ref（带类型保护）
-watch(() => props.remoteFiles, (newVal) => {
-  // 确保 newVal 是数组类型
-  remoteFiles.value = Array.isArray(newVal) ? newVal : []
-})
-
-/**
- * 监听内部状态变化，同步到父组件
- */
-watch(remotePath, (newVal) => {
-  emit('update:remotePath', newVal)
-})
-
-watch(remoteFiles, (newVal) => {
-  emit('update:remoteFiles', newVal)
-})
-
-/**
- * 创建远程文件状态对象供函数调用
- * 
- * 安全改进（v3）：
- * - 只返回 connectionId（SFTP 连接池标识符）
- * - 不再返回 session 对象
- * - 符合最小权限原则，只传递必要的连接信息
- */
-const getRemoteState = (): RemoteFileState => ({
-  remotePath,
-  remoteFiles,
-  remoteFileCount,
-  connectionId: props.connectionId || ''
-})
-
-/**
- * 加载远程文件列表
- * 
- * 安全改进（v3）：
- * - 优先检查 connectionId（SFTP 连接标识符）
- * - 不再依赖 session prop，改用 SessionStore 获取会话信息
+ * 加载远程文件列表（委托给 Store）
  */
 async function loadFiles(): Promise<void> {
-  // 检查 SFTP 连接标识符是否存在
-  if (!props.connectionId) {
-    console.warn('[SftpRemote] connectionId 不存在，跳过加载远程文件')
-    return
-  }
-  
-  try {
-    await loadRemoteFiles(getRemoteState())
-  } catch (error: any) {
-    console.error('[SftpRemote] 加载远程文件失败:', error)
-    // 不抛出异常，避免中断 Vue 更新周期
-  }
+  if (!props.connectionId) return
+  await sftpBrowserStore.loadRemoteFiles(props.connectionId)
 }
 
 /**
  * 处理路径输入回车
  */
-function handlePathEnter(): void {
-  loadFiles()
+async function handlePathEnter(): Promise<void> {
+  await loadFiles()
 }
 
 /**
  * 处理上级目录点击
  */
-function handleUp(): void {
-  remoteUpRemote(getRemoteState(), {
-    posix: {
-      dirname: (path: string) => {
-        const idx = path.lastIndexOf('/')
-        return idx > 0 ? path.substring(0, idx) : '/'
-      }
-    }
+async function handleUp(): Promise<void> {
+  if (!props.connectionId) return
+  
+  await sftpBrowserStore.navigateRemoteUp(props.connectionId, (path: string) => {
+    const idx = path.lastIndexOf('/')
+    return idx > 0 ? path.substring(0, idx) : '/'
   })
 }
 
 /**
  * 处理文件点击（支持 Ctrl/Cmd/Shift 多选）
- * 统一使用 selectedRemotes 数组（单文件长度=1，多文件长度>1）
  */
 function handleClick(path: string, event?: MouseEvent): void {
   if (event && (event.ctrlKey || event.metaKey)) {
-    // Ctrl/Cmd 点击：切换选中状态（使用 Store 方法）
     sftpSelectionStore.toggleFileSelection(`remote-${props.connectionId}`, path)
   } else if (event && event.shiftKey) {
-    // Shift 点击：范围选择（使用 Store 方法）
     sftpSelectionStore.rangeSelect(
       `remote-${props.connectionId}`,
       path,
@@ -334,23 +334,21 @@ function handleClick(path: string, event?: MouseEvent): void {
       (item: any) => item.path
     )
   } else {
-    // 普通点击：清空多选，单选当前项
     sftpSelectionStore.setSelectedFiles(`remote-${props.connectionId}`, [path])
   }
 }
 
 /**
- * 处理文件双击
+ * 处理文件双击（委托给 Store）
  */
 function handleDblClick(event: MouseEvent): void {
-  handleRemoteDblClick(event, getRemoteState())
+  if (!props.connectionId) return
+  sftpBrowserStore.handleRemoteDblClick(props.connectionId, event)
   emit('remote-dblclick')
 }
 
 /**
  * 处理右键菜单
- * 通过全局 Store 管理菜单状态，确保全局唯一性
- * 菜单位置跟随鼠标右击的实际位置
  */
 function handleContextMenu(event: MouseEvent): void {
   const target = event.target as HTMLElement
@@ -468,8 +466,6 @@ async function handleDrop(event: DragEvent): Promise<void> {
     showAlert('无法获取拖拽文件的路径', '警告')
     return
   }
-  
-
 }
 
 /**
@@ -483,7 +479,6 @@ async function handleRefresh(): Promise<void> {
     console.log('[SftpRemote] ✅ 远程目录刷新成功')
   } catch (error: any) {
     console.error('[SftpRemote] ❌ 刷新远程目录失败:', error)
-    // 不显示错误提示，静默失败即可（刷新失败不影响用户体验）
   }
 }
 
@@ -564,8 +559,6 @@ defineExpose({
   /** 获取当前所有选中的远程文件/文件夹路径（用于批量操作） */
   getSelectedFiles: () => [...selectedRemotes.value]
 })
-
-// 注意：初始化加载由父组件调用 loadFiles 触发
 </script>
 
 <style scoped>
@@ -604,6 +597,9 @@ defineExpose({
   border: none;
   outline: none;
   font-size: 13px;
+  line-height: 20px;
+  height: 20px;
+  min-width: 0;
   background: transparent;
   color: var(--text-color, #333333);
 }
@@ -637,6 +633,7 @@ defineExpose({
   overflow-y: auto;
   padding: 4px;
   transition: background 0.2s;
+  user-select: none;
 }
 
 .file-list.is-dragging {

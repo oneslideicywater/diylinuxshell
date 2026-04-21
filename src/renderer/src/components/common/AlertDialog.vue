@@ -42,7 +42,7 @@ interface Props {
   isError?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   isError: false
 })
 
@@ -81,7 +81,7 @@ const handleConfirm = () => {
 }
 
 .alert-dialog {
-  background: #ffffff;
+  background: var(--card-bg, #2d2d2d);
   border-radius: 8px;
   min-width: 400px;
   max-width: 500px;
@@ -106,14 +106,14 @@ const handleConfirm = () => {
 
 .dialog-header {
   padding: 16px 20px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color, #3c3c3c);
 }
 
 .dialog-title {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #333333;
+  color: var(--text-color, #cccccc);
 }
 
 .dialog-content {
@@ -124,13 +124,13 @@ const handleConfirm = () => {
   margin: 0;
   font-size: 14px;
   line-height: 1.6;
-  color: #666666;
+  color: var(--text-secondary, #808080);
   white-space: pre-wrap;
 }
 
 .dialog-footer {
   padding: 16px 20px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color, #3c3c3c);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
@@ -146,12 +146,12 @@ const handleConfirm = () => {
 }
 
 .btn-confirm {
-  background: #1a73e8;
+  background: var(--primary-color, #0e639c);
   color: #ffffff;
 }
 
 .btn-confirm:hover {
-  background: #1557b0;
+  background: var(--primary-hover, #1177bb);
 }
 
 .btn-danger {
@@ -162,25 +162,24 @@ const handleConfirm = () => {
   background: #b52b1f;
 }
 
-@media (prefers-color-scheme: dark) {
-  .alert-dialog {
-    background: #2d2d2d;
-  }
+/* 浅色主题适配 */
+[data-theme="light"] .alert-dialog {
+  background: #ffffff;
+}
 
-  .dialog-header {
-    border-bottom-color: #404040;
-  }
+[data-theme="light"] .dialog-header {
+  border-bottom-color: #e0e0e0;
+}
 
-  .dialog-title {
-    color: #ffffff;
-  }
+[data-theme="light"] .dialog-title {
+  color: #333333;
+}
 
-  .dialog-content {
-    color: #cccccc;
-  }
+[data-theme="light"] .dialog-content {
+  color: #666666;
+}
 
-  .dialog-footer {
-    border-top-color: #404040;
-  }
+[data-theme="light"] .dialog-footer {
+  border-top-color: #e0e0e0;
 }
 </style>

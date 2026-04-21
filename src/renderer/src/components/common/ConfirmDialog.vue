@@ -113,7 +113,7 @@ watch(() => props.visible, (newVal) => {
 }
 
 .confirm-dialog {
-  background: #ffffff;
+  background: var(--card-bg, #2d2d2d);
   border-radius: 8px;
   min-width: 400px;
   max-width: 500px;
@@ -139,14 +139,14 @@ watch(() => props.visible, (newVal) => {
 
 .dialog-header {
   padding: 16px 20px;
-  border-bottom: 1px solid #e0e0e0;
+  border-bottom: 1px solid var(--border-color, #3c3c3c);
 }
 
 .dialog-title {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: #333333;
+  color: var(--text-color, #cccccc);
 }
 
 .dialog-content {
@@ -157,13 +157,13 @@ watch(() => props.visible, (newVal) => {
   margin: 0;
   font-size: 14px;
   line-height: 1.6;
-  color: #666666;
+  color: var(--text-secondary, #808080);
   white-space: pre-wrap;
 }
 
 .dialog-footer {
   padding: 16px 20px;
-  border-top: 1px solid #e0e0e0;
+  border-top: 1px solid var(--border-color, #3c3c3c);
   display: flex;
   justify-content: flex-end;
   gap: 12px;
@@ -179,21 +179,21 @@ watch(() => props.visible, (newVal) => {
 }
 
 .btn-cancel {
-  background: #f5f5f5;
-  color: #666666;
+  background: var(--hover-bg, #2a2a2a);
+  color: var(--text-secondary, #808080);
 }
 
 .btn-cancel:hover {
-  background: #e8e8e8;
+  background: #4a4a4a;
 }
 
 .btn-confirm {
-  background: #1a73e8;
+  background: var(--primary-color, #0e639c);
   color: #ffffff;
 }
 
 .btn-confirm:hover {
-  background: #1557b0;
+  background: var(--primary-hover, #1177bb);
 }
 
 .btn-danger {
@@ -204,35 +204,33 @@ watch(() => props.visible, (newVal) => {
   background: #b52b1f;
 }
 
-/* 深色主题适配 */
-@media (prefers-color-scheme: dark) {
-  .confirm-dialog {
-    background: #2d2d2d;
-  }
-  
-  .dialog-header {
-    border-bottom-color: #404040;
-  }
-  
-  .dialog-title {
-    color: #ffffff;
-  }
-  
-  .dialog-content {
-    color: #cccccc;
-  }
-  
-  .dialog-footer {
-    border-top-color: #404040;
-  }
-  
-  .btn-cancel {
-    background: #404040;
-    color: #cccccc;
-  }
-  
-  .btn-cancel:hover {
-    background: #4a4a4a;
-  }
+/* 浅色主题适配 */
+[data-theme="light"] .confirm-dialog {
+  background: #ffffff;
+}
+
+[data-theme="light"] .dialog-header {
+  border-bottom-color: #e0e0e0;
+}
+
+[data-theme="light"] .dialog-title {
+  color: #333333;
+}
+
+[data-theme="light"] .dialog-content {
+  color: #666666;
+}
+
+[data-theme="light"] .dialog-footer {
+  border-top-color: #e0e0e0;
+}
+
+[data-theme="light"] .btn-cancel {
+  background: #f5f5f5;
+  color: #666666;
+}
+
+[data-theme="light"] .btn-cancel:hover {
+  background: #e8e8e8;
 }
 </style>

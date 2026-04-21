@@ -332,6 +332,20 @@ export function registerSFTPIpcHandlers(): void {
   })
 
   /**
+   * 获取当前操作系统平台
+   */
+  ipcMain.handle('sftp:getPlatform', async () => {
+    return { success: true, data: process.platform }
+  })
+
+  /**
+   * 获取路径的父目录（使用 Node.js path.dirname，屏蔽系统差异）
+   */
+  ipcMain.handle('sftp:dirname', async (_event, filePath: string) => {
+    return { success: true, data: path.dirname(filePath) }
+  })
+
+  /**
    * 选择本地文件
    */
   ipcMain.handle('sftp:selectLocalFile', async (_event, options: { selectFolder?: boolean }) => {

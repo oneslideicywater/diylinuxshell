@@ -68,8 +68,6 @@
         <!-- 本地文件浏览器 -->
         <SftpLocal
           ref="localPanelRef"
-          v-model:local-path="localState.localPath.value"
-          v-model:local-files="localState.localFiles.value"
           :upload-tasks="uploadTasks"
           :connection-id="currentSftpConnectionId"
           @local-dblclick="handleLocalDblClick"
@@ -80,8 +78,6 @@
         <!-- 远程文件浏览器 -->
         <SftpRemote
           ref="remotePanelRef"
-          v-model:remote-path="remoteState.remotePath.value"
-          v-model:remote-files="remoteState.remoteFiles.value"
           :session-id="props.sessionId"
           :download-tasks="downloadTasks"
           :connection-id="currentSftpConnectionId"
@@ -96,8 +92,8 @@
 
       <!-- 状态栏 -->
       <SftpStatusContainer
-        :local-file-count="localState.localFileCount.value"
-        :remote-file-count="remoteState.remoteFileCount.value"
+        :local-file-count="sftpBrowserStore.getLocalFileCount(currentSftpConnectionId).value"
+        :remote-file-count="sftpBrowserStore.getRemoteFileCount(currentSftpConnectionId).value"
         :connection-id="currentSftpConnectionId"
       />
     </div>
@@ -141,17 +137,7 @@ import { useTerminalStore } from '@/stores/terminal'
 import { uploadBatch } from './script/upload'
 import { downloadBatch } from './script/download'
 
-import {
-  createLocalFileState,
-  initLocalDefaultDir,
-  type LocalFileState
-} from './script/local'
-
-import {
-  createRemoteFileState,
-  initRemoteDefaultDir,
-  type RemoteFileState
-} from './script/remote'
+import { useSftpBrowserStore } from '@/stores/sftpBrowser'
 
 
 
@@ -215,18 +201,10 @@ const emit = defineEmits<{
  */
 
 /**
- * 本地文件浏览状态（使用 local.ts 中的工厂函数初始化）
+ * SFTP 文件浏览器状态 Store（按连接 ID 隔离，同时管理 Local 和 Remote）
+ * 替代原来的 useSftpLocalStore + createRemoteFileState()
  */
-const localState: LocalFileState = createLocalFileState()
-
-/**
- * 远程文件浏览状态（使用 remote.ts 中的工厂函数初始化）
- * 
- * 安全改进（v2）：
- * - 传递 connectionId 而不是 session 对象
- * - 初始值为空字符串，会在 watch 连接成功后通过 API 使用正确的 connectionId
- */
-const remoteState: RemoteFileState = createRemoteFileState(props.sftpConnectionId || '')
+const sftpBrowserStore = useSftpBrowserStore()
 
 /**
  * 子组件引用
@@ -445,7 +423,7 @@ async function handleUploadBatch(paths: string[]): Promise<void> {
       paths,
       props.sftpConnectionId,
       props.sessionId,
-      remoteState.remotePath.value
+      sftpBrowserStore.getRemotePath(props.sftpConnectionId).value
     )
 
     console.log('[SftpTransfer] ✅ 批量上传完成')
@@ -477,7 +455,7 @@ async function handleDownloadBatch(paths: string[]): Promise<void> {
       paths,
       props.sftpConnectionId,
       props.sessionId,
-      localState.localPath.value
+      sftpBrowserStore.getState(props.sftpConnectionId || currentSftpConnectionId.value).local.localPath
     )
 
     console.log('[SftpTransfer] ✅ 批量下载完成')
@@ -520,7 +498,7 @@ async function confirmNewFolder(folderName?: string | Event): Promise<void> {
   
   try {
     // ✅ 统一在当前浏览的远程目录创建新文件夹
-    const remoteFolderPath = `${remoteState.remotePath.value}/${nameToUse}`.replace(/\/+/g, '/')
+    const remoteFolderPath = `${sftpBrowserStore.getRemotePath(props.sftpConnectionId).value}/${nameToUse}`.replace(/\/+/g, '/')
     console.log('[SftpTransfer] 创建远程文件夹:', remoteFolderPath)
     
     // 调用 SFTP API 创建远程目录
@@ -703,10 +681,12 @@ onMounted(async () => {
   }
   
   // 初始化本地默认目录（用户 home 目录）
-  await initLocalDefaultDir(localState)
+  if (props.sftpConnectionId) {
+    await sftpBrowserStore.initLocalDefaultDir(props.sftpConnectionId)
+  }
   
   // 初始化远程默认目录（SSH 登录用户的默认工作目录）
-  initRemoteDefaultDir(remoteState)
+  sftpBrowserStore.initRemoteDefaultDir(props.sftpConnectionId)
   
   // 注意：文件列表加载移到 watch 中，等待子组件准备好后再调用
 })

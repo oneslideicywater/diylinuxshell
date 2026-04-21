@@ -1,6 +1,12 @@
 /**
  * SFTP 本地文件浏览器组件
  * 提供本地文件的浏览、导航、选择等功能
+ * 
+ * 重构说明（v2 - Pinia Store 架构）：
+ * - 移除 props/emit 双向绑定，改用 Pinia Store 统一管理状态
+ * - 所有状态（localPath, localFiles, localFileCount）存储在 useSftpBrowserStore 中
+ * - 通过 connectionId 隔离不同 SFTP 连接的状态
+ * - 解决了 v-model:value 反模式和双重状态管理问题
  * @module components/session/SftpLocal
  */
 
@@ -12,7 +18,7 @@
           <path d="M1 11V4l3-3h9v10H1z" stroke="currentColor" stroke-width="1.5"/>
         </svg>
         <input
-          v-model="localPath"
+          v-model="localPathValue"
           type="text"
           class="path-input"
           @keyup.enter="handlePathEnter"
@@ -79,26 +85,39 @@
         </div>
       </div>
     </div>
+
+    <!-- 统一提示对话框（替代 alert） -->
+    <AlertDialog
+      :visible="alertDialogVisible"
+      :title="alertDialogConfig.title"
+      :message="alertDialogConfig.message"
+      :is-error="alertDialogConfig.isError"
+      @confirm="handleAlertDialogClose"
+      @close="handleAlertDialogClose"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, nextTick, computed, watch } from 'vue'
 import type { TransferTask } from '@shared/types/sftp'
 
 import { formatSize } from '@/utils/fs-utils'
 import { useContextMenuStore } from '@/stores/contextMenu'
 import { useSftpSelectionStore } from '@/stores/sftpSelection'
-import { loadLocalFiles, handleLocalDblClick, localUp, type LocalFileState } from './script/local'
+import { useSftpBrowserStore } from '@/stores/sftpBrowser'
+import { DRIVES_PATH } from './script/local'
+import AlertDialog from '@/components/common/AlertDialog.vue'
 
 /**
- * Props 定义
+ * Props 定义（v2 简化版）
+ * 
+ * 改进说明：
+ * - 移除 localPath/localFiles props（不再需要 v-model 双向绑定）
+ * - 只保留必要的标识符：connectionId + uploadTasks
+ * - 所有状态通过 useSftpBrowserStore 按 connectionId 获取
  */
 interface Props {
-  /** 当前本地路径 */
-  localPath: string
-  /** 本地文件列表 */
-  localFiles: any[]
   /** 上传任务列表 */
   uploadTasks?: TransferTask[]
   /** SFTP 连接标识符（用于 Store 隔离） */
@@ -111,36 +130,34 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 /**
- * Emits 定义
+ * Emits 定义（v2 简化版）
+ * 
+ * 只保留事件通知，不再需要状态同步的 emit
  */
 const emit = defineEmits<{
-  /** 路径变化事件 */
-  'update:localPath': [value: string]
-  /** 文件列表变化事件 */
-  'update:localFiles': [value: any[]]
   /** 本地文件双击事件 */
   'local-dblclick': []
   /**
    * 上传事件（统一接口：支持单文件/单文件夹/多文件混合选择）
-   * - 单文件时：paths.length = 1
-   * - 单文件夹时：paths.length = 1
-   * - 多文件/文件夹时：paths.length > 1
    */
   'upload-batch': [paths: string[]]
   /**
    * 删除本地文件事件（统一接口：支持单文件/多文件批量删除）
-   * - 单文件时：paths.length = 1
-   * - 多文件时：paths.length > 1
    */
   'delete-batch': [paths: string[]]
 }>()
 
 /**
- * 内部状态
+ * ====================
+ * Store 实例（核心改进）
+ * ====================
  */
-const localPath = ref(props.localPath)
-const localFiles = ref(props.localFiles)
-const localFileCount = ref(0)
+
+/**
+ * SFTP 文件浏览器状态 Store（按连接 ID 隔离，同时管理 Local 和 Remote）
+ * 替代原来的 createLocalFileState() + 内部 ref 副本
+ */
+const sftpBrowserStore = useSftpBrowserStore()
 
 /**
  * SFTP 选择状态 Store（按连接 ID 隔离）
@@ -149,7 +166,70 @@ const localFileCount = ref(0)
 const sftpSelectionStore = useSftpSelectionStore()
 
 /**
- * 当前连接的选中文件列表（从 Store 读取）
+ * 当前连接的本地路径（从 Store 直接读取，响应式）
+ * 直接访问 state 避免嵌套 computed 导致的响应式失效问题
+ */
+const localPath = computed(() => {
+  const state = sftpBrowserStore.getState(props.connectionId)
+  return state?.local?.localPath || ''
+})
+
+/**
+ * 本地路径输入框的双向绑定值
+ * 
+ * 性能优化：
+ * - 使用本地 ref 立即响应用户输入（无卡顿）
+ * - 防抖 300ms 后同步到 Store（避免频繁触发响应式更新）
+ * - 解决 :model-value 非受控组件不更新显示的问题
+ */
+const localPathInput = ref('')
+let localPathTimer: ReturnType<typeof setTimeout> | null = null
+
+const localPathValue = computed<string>({
+  get: () => localPathInput.value,
+  set: (value: string) => {
+    localPathInput.value = value
+    
+    if (localPathTimer) {
+      clearTimeout(localPathTimer)
+    }
+    
+    localPathTimer = setTimeout(() => {
+      if (props.connectionId) {
+        sftpBrowserStore.setLocalPath(props.connectionId, value)
+      }
+      localPathTimer = null
+    }, 300)
+  }
+})
+
+watch(() => props.connectionId, (newId) => {
+  if (newId) {
+    const state = sftpBrowserStore.getState(newId)
+    localPathInput.value = state?.local?.localPath || ''
+  }
+}, { immediate: true })
+
+watch(() => {
+  const state = sftpBrowserStore.getState(props.connectionId)
+  return state?.local?.localPath || ''
+}, (newPath) => {
+  if (!localPathTimer) {
+    localPathInput.value = newPath
+  }
+})
+
+/**
+ * 当前连接的本地文件列表（从 Store 直接读取，响应式）
+ * 直接访问 state 避免嵌套 computed 导致的响应式失效问题
+ */
+const localFiles = computed(() => {
+  const state = sftpBrowserStore.getState(props.connectionId)
+  return state?.local?.localFiles || []
+})
+
+/**
+ * 当前连接的选中文件列表（从 SelectionStore 读取）
  * - 单文件操作时：数组长度 = 1
  * - 多文件操作时：数组长度 > 1
  * - 未选中时：空数组
@@ -157,15 +237,6 @@ const sftpSelectionStore = useSftpSelectionStore()
 const selectedLocals = computed<string[]>({
   get: () => sftpSelectionStore.getSelectedFiles(props.connectionId),
   set: (value) => sftpSelectionStore.setSelectedFiles(props.connectionId, value)
-})
-
-/**
- * 创建本地文件状态对象供函数调用
- */
-const getLocalState = (): LocalFileState => ({
-  localPath,
-  localFiles,
-  localFileCount
 })
 
 /**
@@ -183,124 +254,40 @@ const folderName = ref('')
 const folderNameError = ref('')
 const folderNameInput = ref<HTMLInputElement | null>(null)
 
-/**
- * 监听 props 变化
- */
-watch(() => props.localPath, (newVal) => {
-  localPath.value = newVal
-})
+/** 统一提示对话框状态（替代 alert） */
+const alertDialogVisible = ref(false)
+const alertDialogConfig = ref({ title: '提示', message: '', isError: false })
 
-watch(() => props.localFiles, (newVal) => {
-  localFiles.value = newVal
-})
+function showAlert(message: string, title = '提示', isError = false): void {
+  alertDialogConfig.value = { title, message, isError }
+  alertDialogVisible.value = true
+}
 
-/**
- * 监听内部状态变化，同步到父组件
- */
-watch(localPath, (newVal) => {
-  emit('update:localPath', newVal)
-})
-
-watch(localFiles, (newVal) => {
-  emit('update:localFiles', newVal)
-})
+function handleAlertDialogClose(): void {
+  alertDialogVisible.value = false
+}
 
 /**
- * 加载本地文件列表
- * 支持普通目录和盘符列表视图
+ * 加载本地文件列表（委托给 Store）
  */
 async function loadFiles(): Promise<void> {
-  // 盘符列表视图：加载所有盘符
-  if (localPath.value === DRIVES_PATH) {
-    await loadDrives()
-    return
-  }
-  
-  // 普通目录：加载目录内容
-  await loadLocalFiles(getLocalState())
+  await sftpBrowserStore.loadLocalFiles(props.connectionId, DRIVES_PATH)
 }
 
 /**
  * 处理路径输入回车
- * 支持普通路径和盘符列表视图
  */
-function handlePathEnter(): void {
-  const inputPath = localPath.value.trim()
-  
-  // 空路径或特殊标识：加载盘符列表
-  if (!inputPath || inputPath === DRIVES_PATH) {
-    localPath.value = DRIVES_PATH
-    loadDrives()
-    return
-  }
-  
-  // Windows 盘符格式检查（如 C:\、D: 等）
-  if (/^[A-Za-z]:\\?$/.test(inputPath)) {
-    const drivePath = inputPath.endsWith('\\') ? inputPath : `${inputPath}\\`
-    localPath.value = drivePath
-    loadFiles()
-    return
-  }
-  
-  loadFiles()
+async function handlePathEnter(): Promise<void> {
+  await loadFiles()
 }
 
 /**
- * 盘符列表视图的特殊路径标识
- * Windows 平台：从盘符根目录继续向上导航时显示所有盘符
+ * 处理上级目录点击（委托给 Store，Store 内部智能判断平台）
  */
-const DRIVES_PATH = '此电脑'
-
-/**
- * 处理上级目录点击
- * 跨平台兼容：Windows 支持回退到盘符列表，Linux 回退到根目录 /
- */
-function handleUp(): void {
-  const currentPath = localPath.value
+async function handleUp(): Promise<void> {
+  if (!props.connectionId) return
   
-  // 已经在盘符列表视图，无法继续向上
-  if (currentPath === DRIVES_PATH) {
-    return
-  }
-  
-  // Windows 盘符根目录检测（如 C:\、D:\ 等）
-  const isWindowsDriveRoot = /^[A-Za-z]:\\$/.test(currentPath)
-  
-  if (isWindowsDriveRoot) {
-    // 从盘符根目录回退到盘符列表视图
-    localPath.value = DRIVES_PATH
-    loadDrives()
-  } else {
-    // 正常向上级目录导航
-    localUp(getLocalState(), {
-      dirname: (p: string) => {
-        const sep = p.includes('\\') ? '\\' : '/'
-        const idx = p.lastIndexOf(sep)
-        if (idx > 0) {
-          return p.substring(0, idx)
-        }
-        // Linux 根目录 / 返回 / 本身
-        // Windows 盘符根目录在上面已经处理
-        return sep === '/' ? '/' : p.substring(0, 3)
-      }
-    })
-  }
-}
-
-/**
- * 加载系统盘符列表（仅 Windows 有效）
- */
-async function loadDrives(): Promise<void> {
-  try {
-    const result = await window.api.sftp.getDrives()
-    if (result.success && result.data) {
-      localFiles.value = result.data
-      localFileCount.value = localFiles.value.length
-      console.log('[SftpLocal] ✅ 加载盘符列表成功:', localFiles.value.length, '个盘符')
-    }
-  } catch (error: any) {
-    console.error('[SftpLocal] ❌ 加载盘符列表失败:', error)
-  }
+  await sftpBrowserStore.navigateLocalUp(props.connectionId, DRIVES_PATH)
 }
 
 /**
@@ -326,10 +313,11 @@ function handleClick(path: string, event?: MouseEvent): void {
 }
 
 /**
- * 处理文件双击
+ * 处理文件双击（委托给 Store）
  */
 function handleDblClick(event: MouseEvent): void {
-  handleLocalDblClick(event, getLocalState())
+  if (!props.connectionId) return
+  sftpBrowserStore.handleLocalDblClick(props.connectionId, event, DRIVES_PATH)
   emit('local-dblclick')
 }
 
@@ -421,7 +409,7 @@ async function handleRefresh(): Promise<void> {
     console.log('[SftpLocal] ✅ 本地目录刷新成功')
   } catch (error: any) {
     console.error('[SftpLocal] ❌ 刷新本地目录失败:', error)
-    // 不显示错误提示，静默失败即可（刷新失败不影响用户体验）
+    showAlert(error.message || '刷新失败', '错误', true)
   }
 }
 
@@ -478,7 +466,7 @@ function validateFolderName(name: string): string | null {
 }
 
 /**
- * 确认创建文件夹
+ * 确认创建文件夹（委托给 Store）
  */
 async function confirmCreateFolder(): Promise<void> {
   const error = validateFolderName(folderName.value)
@@ -486,27 +474,17 @@ async function confirmCreateFolder(): Promise<void> {
     folderNameError.value = error
     return
   }
-  
+
   try {
-    // ✅ 统一在当前浏览目录创建新文件夹
-    const newFolderPath = `${localPath.value}/${folderName.value.trim()}`.replace(/\\/g, '/')
-    console.log('[SftpLocal] 创建本地文件夹:', newFolderPath)
-    
-    // 调用 API 创建本地目录（递归创建）
-    const result = await window.api.sftp.ensureDir(newFolderPath)
-    
-    if (!result.success) {
-      throw new Error(result.error || '创建文件夹失败')
+    if (!props.connectionId) {
+      throw new Error('connectionId 不存在')
     }
     
-    console.log('[SftpLocal] ✅ 本地文件夹创建成功:', newFolderPath)
+    await sftpBrowserStore.createLocalFolder(props.connectionId, folderName.value.trim(), DRIVES_PATH)
     
-    // 关闭对话框
+    console.log('[SftpLocal] ✅ 本地文件夹创建成功')
+    
     closeCreateFolderDialog()
-    
-    // 刷新文件列表以显示新创建的文件夹
-    await loadFiles()
-    
   } catch (error: any) {
     console.error('[SftpLocal] ❌ 创建本地文件夹失败:', error)
     folderNameError.value = error.message || '创建文件夹失败，请重试'
@@ -559,6 +537,9 @@ defineExpose({
   border: none;
   outline: none;
   font-size: 13px;
+  line-height: 20px;
+  height: 20px;
+  min-width: 0;
   background: transparent;
   color: var(--text-color, #333333);
 }

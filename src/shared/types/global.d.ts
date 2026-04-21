@@ -77,6 +77,8 @@ export interface CustomAPI {
     selectLocalFile: (options: { selectFolder?: boolean }) => Promise<{ success: boolean; path?: string; error?: string }>
     getLocalFiles: (localPath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
     getDrives: () => Promise<{ success: boolean; data?: any[]; error?: string }>
+    getPlatform: () => Promise<{ success: boolean; data?: string; error?: string }>
+    dirname: (filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>
     getHomeDir: () => Promise<{ success: boolean; data?: string; error?: string }>
     deleteLocalFile: (localPath: string) => Promise<{ success: boolean; error?: string }>
     statLocal: (localPath: string) => Promise<{ success: boolean; data?: { isDirectory: boolean; size: number }; error?: string }>

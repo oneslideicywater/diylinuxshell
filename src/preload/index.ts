@@ -269,6 +269,14 @@ const api: CustomAPI = {
     getDrives: (): Promise<{ success: boolean; data?: any[]; error?: string }> =>
       ipcRenderer.invoke('sftp:getDrives'),
     
+    // 获取当前操作系统平台
+    getPlatform: (): Promise<{ success: boolean; data?: string; error?: string }> =>
+      ipcRenderer.invoke('sftp:getPlatform'),
+    
+    // 获取路径的父目录（使用 Node.js path.dirname，屏蔽系统差异）
+    dirname: (filePath: string): Promise<{ success: boolean; data?: string; error?: string }> =>
+      ipcRenderer.invoke('sftp:dirname', filePath),
+    
     // 获取用户主目录
     getHomeDir: (): Promise<{ success: boolean; data?: string; error?: string }> => 
       ipcRenderer.invoke('sftp:getHomeDir'),

@@ -12,21 +12,11 @@
     @click="$emit('click')"
     @contextmenu.prevent="handleContextMenu"
   >
-    <!-- 连接状态指示器 -->
-    <span class="status-indicator" :class="tab.status">
-      <span class="status-dot"></span>
-    </span>
-
-    <!-- 标签类型图标：SFTP 显示文件夹图标 -->
-    <span v-if="tab.type === 'sftp'" class="type-icon sftp-icon" title="SFTP 文件传输">
-      <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-        <path
-          d="M10 1H4a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V5l-2-2zM10 1v4h4"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
+    <!-- 标签类型图标：SFTP 显示文件夹图标，颜色跟随连接状态 -->
+    <span v-if="tab.type === 'sftp'" class="type-icon sftp-icon" :class="tab.status" title="SFTP 文件传输">
+      <svg width="12" height="12" viewBox="0 0 1024 1024" fill="none">
+        <path d="M908.255415 327.14824v498.886615c0 28.900021-23.409017 52.309038-52.309038 52.309038h-687.820504c-28.900021 0-52.309038-23.409017-52.309038-52.309038V240.231426c0-28.900021 23.409017-52.309038 52.309038-52.309038h306.195724c15.244761 0 29.911522 5.996754 40.82128 16.617512l45.445284 44.361532c17.051012 16.617512 39.882029 25.937769 63.724546 25.937769h231.63367c28.900021 0 52.309038 23.409017 52.309038 52.309039z" fill="currentColor" />
+        <path d="M795.545333 385.454032H223.758414c-17.773513 0-32.223524 14.450011-32.223524 32.223524V449.395329h638.112468v-29.767022c0.07225-18.857264-15.244761-34.174275-34.102025-34.174275z" fill="currentColor" opacity="0.3" />
       </svg>
     </span>
     
@@ -279,8 +269,8 @@ const handleEditFromError = (sessionId: string): void => {
   gap: 6px;
   height: 36px;
   padding: 0 8px 0 12px;
-  background-color: var(--tab-bg, var(--bg-color, #f0f0f0));
-  border-right: 1px solid var(--border-color, #e0e0e0);
+  background-color: var(--tab-bg, var(--bg-color, #2d2d2d));
+  border-right: 1px solid var(--border-color, #3c3c3c);
   cursor: pointer;
   min-width: 100px;
   max-width: 200px;
@@ -289,28 +279,27 @@ const handleEditFromError = (sessionId: string): void => {
 }
 
 .terminal-tab:hover {
-  background-color: var(--tab-hover-bg, var(--hover-bg, #e5e5e5));
+  background-color: var(--tab-hover-bg, var(--hover-bg, #3c3c3c));
 }
 
 .terminal-tab.active {
-  background-color: var(--tab-active-bg, var(--bg-color, #ffffff));
+  background-color: var(--tab-active-bg, var(--bg-color, #1e1e1e));
 }
 
 /* SFTP 标签页特殊样式 */
 .terminal-tab.sftp-tab {
-  background: linear-gradient(135deg, var(--tab-bg, var(--bg-color, #f0f0f0)) 0%, rgba(76, 175, 80, 0.06) 100%);
+  background-color: var(--tab-bg, var(--bg-color, #2d2d2d));
   border-left: 3px solid transparent;
 }
 
 .terminal-tab.sftp-tab:hover {
-  background: linear-gradient(135deg, var(--tab-hover-bg, var(--hover-bg, #e5e5e5)) 0%, rgba(76, 175, 80, 0.10) 100%);
+  background-color: var(--tab-hover-bg, var(--hover-bg, #3c3c3c));
 }
 
-/* SFTP 激活状态：高亮 + 左侧绿色指示条 */
+/* SFTP 激活状态：主题色高亮 + 左侧指示条 */
 .terminal-tab.sftp-tab.active {
-  background: linear-gradient(135deg, rgba(76, 175, 80, 0.12) 0%, rgba(76, 175, 80, 0.18) 100%);
-  border-left: 3px solid #4CAF50;
-  box-shadow: inset 0 0 8px rgba(76, 175, 80, 0.1);
+  background-color: var(--tab-active-bg, var(--bg-color, #1e1e1e));
+  border-left: 3px solid var(--primary-color, #0e639c);
 }
 
 /* SFTP 未激活：图标和文字变暗 */
@@ -322,13 +311,13 @@ const handleEditFromError = (sessionId: string): void => {
   opacity: 0.6;
 }
 
-/* SFTP 激活：图标和文字明亮 */
+/* SFTP 激活：图标使用主题色 */
 .terminal-tab.sftp-tab.active .type-icon.sftp-icon {
-  color: #4CAF50;
+  color: var(--primary-color, #0e639c);
 }
 
 .terminal-tab.sftp-tab.active .tab-title {
-  color: var(--text-color, #333333);
+  color: var(--tab-text-color, #ffffff);
 }
 
 /* 标签类型图标 */
@@ -336,46 +325,52 @@ const handleEditFromError = (sessionId: string): void => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary, #999);
+  color: var(--text-secondary, #808080);
   flex-shrink: 0;
 }
 
+/* SFTP 图标连接状态颜色 */
 .type-icon.sftp-icon {
-  color: #4CAF50;
+  color: var(--text-tertiary, #606060);
 }
 
-/* 连接状态指示器 */
-.status-indicator {
-  display: flex;
-  align-items: center;
+/* 已连接 - 绿色 */
+.type-icon.sftp-icon.connected {
+  color: #4ec9b0;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--text-tertiary, #aaaaaa);
-}
-
-/* 已连接状态 - 绿色 */
-.status-indicator.connected .status-dot {
-  background-color: #4ec9b0;
-}
-
-/* 连接中状态 - 黄色闪烁 */
-.status-indicator.connecting .status-dot {
-  background-color: #dcdcaa;
+/* 连接中 - 黄色闪烁 */
+.type-icon.sftp-icon.connecting {
+  color: #dcdcaa;
   animation: pulse 1s infinite;
 }
 
-/* 断开状态 - 灰色 */
-.status-indicator.disconnected .status-dot {
-  background-color: var(--text-tertiary, #aaaaaa);
+/* 断开 - 灰色 */
+.type-icon.sftp-icon.disconnected {
+  color: var(--text-tertiary, #606060);
 }
 
-/* 错误状态 - 红色 */
-.status-indicator.error .status-dot {
-  background-color: #f14c4c;
+/* 错误 - 红色 */
+.type-icon.sftp-icon.error {
+  color: #f14c4c;
+}
+
+/* 激活态 + 连接状态：状态颜色优先于主题色 */
+.terminal-tab.sftp-tab.active .type-icon.sftp-icon.connected {
+  color: #41f30bec;
+}
+
+.terminal-tab.sftp-tab.active .type-icon.sftp-icon.connecting {
+  color: #dcdcaa;
+  animation: pulse 1s infinite;
+}
+
+.terminal-tab.sftp-tab.active .type-icon.sftp-icon.disconnected {
+  color: var(--text-tertiary, #606060);
+}
+
+.terminal-tab.sftp-tab.active .type-icon.sftp-icon.error {
+  color: #f14c4c;
 }
 
 @keyframes pulse {
@@ -391,14 +386,14 @@ const handleEditFromError = (sessionId: string): void => {
 .tab-title {
   flex: 1;
   font-size: 12px;
-  color: var(--text-secondary, #888888);
+  color: var(--tab-text-color, #ffffff);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .terminal-tab.active .tab-title {
-  color: var(--text-color, #333333);
+  color: var(--tab-text-color, #ffffff);
 }
 
 .close-btn {
@@ -409,7 +404,7 @@ const handleEditFromError = (sessionId: string): void => {
   height: 18px;
   border: none;
   background: transparent;
-  color: var(--text-tertiary, #aaaaaa);
+  color: var(--text-tertiary, #606060);
   cursor: pointer;
   border-radius: 3px;
   opacity: 0;
@@ -421,16 +416,16 @@ const handleEditFromError = (sessionId: string): void => {
 }
 
 .close-btn:hover {
-  background-color: var(--hover-bg, #e5e5e5);
-  color: var(--text-color, #333333);
+  background-color: var(--hover-bg, #3c3c3c);
+  color: var(--tab-text-color, #ffffff);
 }
 
-/* SFTP 激活：图标和文字明亮 */
+/* SFTP 激活：图标使用主题色 */
 .terminal-tab.sftp-tab.active .type-icon.sftp-icon {
-  color: #4CAF50;
+  color: var(--primary-color, #0e639c);
 }
 
 .terminal-tab.sftp-tab.active .tab-title {
-  color: var(--text-color, #333333);
+  color: var(--tab-text-color, #ffffff);
 }
 </style>
