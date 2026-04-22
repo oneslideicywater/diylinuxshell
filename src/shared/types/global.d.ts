@@ -1,5 +1,5 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
-import type { Session, SessionGroup, AppConfig, TerminalSize } from './index'
+import type { Session, SessionGroup, AppConfig, TerminalSize, TransferNode } from './index'
 
 /**
  * 自定义API接口
@@ -63,28 +63,57 @@ export interface CustomAPI {
      */
     connect: (sftpConnectionId: string, sessionId: string) => Promise<{ success: boolean; error?: string }>
     listDir: (sessionId: string, remotePath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
-    download: (sessionId: string, remotePath: string, localPath: string) => Promise<{ success: boolean; error?: string }>
-    downloadFolder: (sessionId: string, remotePath: string, localPath: string) => Promise<{ success: boolean; error?: string }>
-    upload: (sessionId: string, localPath: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
-    uploadFolder: (sessionId: string, localPath: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
+    download: (sessionId: string, taskId: string, node: TransferNode) => Promise<{ success: boolean; error?: string }>
+    downloadFolder: (sessionId: string, taskId: string, node: TransferNode) => Promise<{ success: boolean; error?: string }>
+    upload: (sessionId: string, taskId: string, node: TransferNode) => Promise<{ success: boolean; error?: string }>
+    uploadFolder: (sessionId: string, taskId: string, node: TransferNode) => Promise<{ success: boolean; error?: string }>
     mkdir: (sessionId: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
     delete: (sessionId: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
     cancelUpload: (sessionId: string) => Promise<{ success: boolean; error?: string }>
     onDeleteProgress: (callback: (data: { sessionId: string; currentPath: string }) => void) => () => void
-    onUploadProgress: (callback: (data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => void) => () => void
-    onDownloadProgress: (callback: (data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => void) => () => void
+    onUploadProgress: (callback: (data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => void) => () => void
+    onDownloadProgress: (callback: (data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => void) => () => void
     disconnect: (sessionId: string) => Promise<{ success: boolean; error?: string }>
     selectLocalFile: (options: { selectFolder?: boolean }) => Promise<{ success: boolean; path?: string; error?: string }>
     getLocalFiles: (localPath: string) => Promise<{ success: boolean; data?: any[]; error?: string }>
     getDrives: () => Promise<{ success: boolean; data?: any[]; error?: string }>
     getPlatform: () => Promise<{ success: boolean; data?: string; error?: string }>
     dirname: (filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>
+    pathJoin: (...segments: string[]) => Promise<{ success: boolean; data?: string; error?: string }>
     getHomeDir: () => Promise<{ success: boolean; data?: string; error?: string }>
     deleteLocalFile: (localPath: string) => Promise<{ success: boolean; error?: string }>
     statLocal: (localPath: string) => Promise<{ success: boolean; data?: { isDirectory: boolean; size: number }; error?: string }>
     onDeleteLocalProgress: (callback: (data: { currentPath: string }) => void) => () => void
     createLocalFolder: (parentPath: string, folderName: string) => Promise<{ success: boolean; error?: string }>
     ensureDir: (dirPath: string) => Promise<{ success: boolean; error?: string }>
+
+    /**
+     * 扫描本地文件树（v5 优化）
+     * 
+     * 直接返回 TransferNode 对象（无循环引用，可安全通过 IPC 序列化）
+     * 渲染进程接收后可直接使用，无需类型转换
+     */
+    scanLocalTree: (folderPath: string, remoteBasePath: string) => Promise<{
+      success: boolean
+      root?: import('./sftp').TransferNode
+      totalFiles?: number
+      totalBytes?: number
+      error?: string
+    }>
+
+    /**
+     * 扫描远程文件树（v5 优化）
+     * 
+     * 直接返回 TransferNode 对象（无循环引用，可安全通过 IPC 序列化）
+     * 渲染进程接收后可直接使用，无需类型转换
+     */
+    scanRemoteTree: (sessionId: string, remotePath: string, localBasePath?: string) => Promise<{
+      success: boolean
+      root?: import('./sftp').TransferNode
+      totalFiles?: number
+      totalBytes?: number
+      error?: string
+    }>
   }
 }
 

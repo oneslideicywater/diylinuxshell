@@ -1,13 +1,18 @@
 /**
  * SFTP 传输树节点组件
  * 显示单个文件传输状态，支持树形缩进
+ * 
+ * 重构说明：
+ * - 静态字段（name、size、path 等）从 props 获取（不变）
+ * - 动态字段（speed、progress、status、time）从 Pinia Store 直接读取（实时响应）
+ * - 通过 taskId + nodeId 在 Store 树中定位最新节点状态
  * @module components/session/sftp/SftpTransferTreeNode
  */
 
 <template>
   <div class="tree-node">
     <!-- 节点内容 -->
-    <div v-if="node" class="node-row" :class="{ 'is-folder': node.isDirectory, 'is-error': node.status === 'error' }">
+    <div v-if="node" class="node-row" :class="{ 'is-folder': node.isDirectory, 'is-error': liveStatus === 'error' }">
       <!-- 复选框占位列（与表头对齐） -->
       <div class="column checkbox-column">
         <span class="checkbox-placeholder"></span>
@@ -43,58 +48,62 @@
           {{ node.name }}
           <!-- 如果是文件夹且有总文件数信息，显示总体进度 -->
           <span v-if="node.isDirectory && node.totalFiles !== undefined" class="folder-progress">
-            ({{ node.completedFiles || 0 }}/{{ node.totalFiles }})
+            ({{ liveCompletedFiles || 0 }}/{{ node.totalFiles }})
           </span>
         </span>
       </div>
 
-      <!-- 状态列 -->
+      <!-- 状态列（从 Store 实时读取） -->
       <div class="column status-column">
-        <span :class="'status-' + node.status">{{ statusText }}</span>
+        <span :class="'status-' + liveStatus">{{ statusText }}</span>
       </div>
 
-      <!-- 进度列 -->
+      <!-- 进度列（从 Store 实时读取） -->
       <div class="column progress-column">
-        <div v-if="node.status === 'transferring' || node.status === 'pending'" class="progress-bar">
-          <div class="progress-fill" :style="{ width: node.progress + '%' }"></div>
+        <div v-if="liveStatus === 'transferring' || liveStatus === 'pending'" class="progress-bar">
+          <div class="progress-fill" :style="{ width: liveProgress + '%' }"></div>
         </div>
-        <span v-else-if="node.status === 'completed'" class="progress-percent">100%</span>
+        <div v-else-if="liveStatus === 'scanning'" class="scanning-indicator">
+          <span class="scanning-dot"></span>
+          <span>扫描中...</span>
+        </div>
+        <span v-else-if="liveStatus === 'completed'" class="progress-percent">100%</span>
         <span v-else class="progress-percent">-</span>
       </div>
 
-      <!-- 大小列 -->
+      <!-- 大小列（静态，从 props 获取） -->
       <div class="column size-column">
         {{ formatSize(node.size) }}
       </div>
 
-      <!-- 本地路径列 -->
+      <!-- 本地路径列（静态） -->
       <div class="column local-path-column" :title="node.localPath">
         {{ node.localPath || '-' }}
       </div>
 
-      <!-- 箭头列 -->
+      <!-- 箭头列（静态） -->
       <div class="column arrow-column">
         {{ node.type === 'upload' ? '→' : (node.type === 'download' ? '←' : '×') }}
       </div>
 
-      <!-- 远程路径列 -->
+      <!-- 远程路径列（静态） -->
       <div class="column remote-path-column" :title="node.remotePath">
         {{ node.remotePath || '-' }}
       </div>
 
-      <!-- 速度列 -->
+      <!-- 速度列（从 Store 实时读取） -->
       <div class="column speed-column">
-        {{ formatSpeed(node.speed) }}
+        {{ formatSpeed(liveSpeed) }}
       </div>
 
-      <!-- 估计剩余列 -->
+      <!-- 估计剩余列（从 Store 实时读取） -->
       <div class="column remaining-column">
-        {{ node.remaining }}
+        {{ liveRemaining }}
       </div>
 
-      <!-- 经过时间列 -->
+      <!-- 经过时间列（从 Store 实时读取） -->
       <div class="column elapsed-column">
-        {{ node.elapsed }}
+        {{ liveElapsed }}
       </div>
     </div>
 
@@ -104,6 +113,7 @@
         v-for="child in node.children"
         :key="child.id"
         :node="child"
+        :task-id="taskId"
         :level="level + 1"
         @update:node-expanded="handleChildExpanded"
       />
@@ -112,10 +122,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { TransferNode } from '@shared/types/sftp'
 import { formatSize, formatSpeed } from '@/utils/fs-utils'
+import { formatTime } from '../script/utils'
 import { getStatusText } from '../script/statusText'
+import { useSftpTransferStore } from '@/stores/sftpTransfer'
 
 /**
  * 组件名称（用于递归调用）
@@ -128,13 +140,79 @@ defineOptions({
  * Props 定义
  */
 interface Props {
-  /** 传输节点 */
+  /** 传输节点（提供静态信息：name、size、path、children 结构等） */
   node: TransferNode
   /** 缩进层级 */
   level: number
+  /** 任务 ID（用于从 Pinia Store 查询实时动态数据） */
+  taskId: string
 }
 
 const props = defineProps<Props>()
+
+const sftpTransferStore = useSftpTransferStore()
+
+/**
+ * 定时刷新计数器
+ * 通过 setInterval 定时递增，驱动 liveNode 等 computed 强制重算
+ * 解决 mutateNode 直接变异响应式对象时部分 computed 不触发的问题
+ */
+const refreshTick = ref(0)
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  // 每 500ms 强制刷新一次，确保传输中的节点实时显示速度/进度/时间
+  refreshTimer = setInterval(() => {
+    refreshTick.value++
+  }, 500)
+})
+
+onUnmounted(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+})
+
+/**
+ * 从 Store 中查找当前节点的最新状态
+ * 依赖 refreshTick 确保定时重算，即使底层 reactive 对象的属性被直接变异也能感知变化
+ */
+const liveNode = computed((): TransferNode | undefined => {
+  void refreshTick.value  // 触发依赖收集
+  return sftpTransferStore.getNode(props.taskId, props.node.id)
+})
+
+/** 实时速度（字节/秒） */
+const liveSpeed = computed(() => liveNode.value?.speed ?? 0)
+
+/** 实时进度百分比 */
+const liveProgress = computed(() => liveNode.value?.progress ?? 0)
+
+/** 实时状态 */
+const liveStatus = computed(() => liveNode.value?.status ?? props.node.status)
+
+/** 实时剩余时间（根据 size/TransferredBytes/speed 计算） */
+const liveRemaining = computed(() => {
+  const node = liveNode.value
+  if (!node) return ''
+  const { size = 0, transferredBytes = 0, speed = 0 } = node
+  if (speed <= 0 || size <= transferredBytes) return ''
+  return formatTime(Math.ceil((size - transferredBytes) / speed))
+})
+
+/** 实时经过时间（根据 TransferredBytes/speed 或 startTime 计算） */
+const liveElapsed = computed(() => {
+  const node = liveNode.value
+  if (!node) return ''
+  if (node.startTime) return formatTime(Math.round((Date.now() - node.startTime) / 1000))
+  const { transferredBytes = 0, speed = 0 } = node
+  if (speed <= 0 || transferredBytes <= 0) return ''
+  return formatTime(Math.ceil(transferredBytes / speed))
+})
+
+/** 已完成文件数（文件夹专用） */
+const liveCompletedFiles = computed(() => liveNode.value?.completedFiles ?? 0)
 
 /**
  * 获取节点的展开状态（默认为 false，即默认折叠）
@@ -156,7 +234,6 @@ const emit = defineEmits<{
  * 触发父组件的 update 事件来更新节点状态
  */
 function toggleExpand(): void {
-  // 触发更新事件，由父组件处理状态更新
   emit('update:node-expanded', props.node.id, !isExpanded.value)
 }
 
@@ -165,15 +242,14 @@ function toggleExpand(): void {
  * 将事件向上传递给父组件
  */
 function handleChildExpanded(nodeId: string, expanded: boolean): void {
-  // 向上传递事件
   emit('update:node-expanded', nodeId, expanded)
 }
 
 /**
- * 状态文本（根据任务类型动态显示：删除任务显示"已删除/删除中"，其他任务保持原有文案）
+ * 状态文本（根据任务类型和实时状态动态显示）
  */
 const statusText = computed(() => {
-  return getStatusText(props.node.type, props.node.status)
+  return getStatusText(props.node.type, liveStatus.value)
 })
 </script>
 
@@ -251,7 +327,7 @@ const statusText = computed(() => {
 .expand-placeholder {
   display: flex;
   align-items: center;
-  visibility: hidden;  /* 不可见但占据空间 */
+  visibility: hidden;
   flex-shrink: 0;
 }
 
@@ -365,6 +441,10 @@ const statusText = computed(() => {
   text-decoration: line-through;
 }
 
+.status-scanning {
+  color: var(--warning-color, #e6a23c);
+}
+
 /* 进度条 */
 .progress-bar {
   width: 100%;
@@ -384,6 +464,28 @@ const statusText = computed(() => {
 .progress-percent {
   font-size: 11px;
   color: var(--text-color-secondary, #999999);
+}
+
+/* 扫描中指示器 */
+.scanning-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--warning-color, #e6a23c);
+}
+
+.scanning-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warning-color, #e6a23c);
+  animation: scanning-pulse 1s ease-in-out infinite;
+}
+
+@keyframes scanning-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
 }
 
 /* 子节点容器 */

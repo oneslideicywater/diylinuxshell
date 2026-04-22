@@ -26,7 +26,7 @@
 
 | 函数名 | 类型 | 参数 | 返回值 | 说明 |
 |--------|------|------|--------|------|
-| `scanRemoteFolderForDelete` | 导出 | `remotePath: string, sftpConnectionId: string` | `Promise<{ rootNode: TransferNode; totalFiles: number; totalBytes: number }>` | 递归扫描远程文件夹并构建传输节点树（用于删除） |
+| `scanIntoNodeForDelete` | 导出 | `targetNode: TransferNode, remotePath: string, sftpConnectionId: string` | `Promise<{ totalFiles: number; totalBytes: number }>` | 递归扫描远程文件夹并直接填充到已有的 TransferNode 中（用于删除操作） |
 | `deleteSingleItem` | 内部 | `node: TransferNode, sftpConnectionId: string, taskId: string` | `Promise<void>` | 删除单个文件/文件夹（原子操作） |
 | `deleteFolderContent` | 导出 | `node: TransferNode, sftpConnectionId: string, taskId: string` | `Promise<void>` | 递归删除文件夹内容（安全架构 v4） |
 | `deleteLocalBatch` | 导出 | `paths: string[], sftpConnectionId: string` | `Promise<{ success: number; failed: number }>` | 批量删除本地文件/文件夹（支持混合选择） |
@@ -48,7 +48,7 @@
 
 | 函数名 | 类型 | 参数 | 返回值 | 说明 |
 |--------|------|------|--------|------|
-| `scanRemoteFolderRecursive` | 内部 | `remotePath: string, localBasePath: string, sftpConnectionId: string` | `Promise<{ rootNode: TransferNode; totalFiles: number; totalBytes: number }>` | 递归扫描远程文件夹并构建传输节点树 |
+| `scanIntoRemoteNode` | 内部 | `targetNode: TransferNode, remotePath: string, localBasePath: string, sftpConnectionId: string` | `Promise<{ totalFiles: number; totalBytes: number }>` | 递归扫描远程文件夹并直接填充到已有的 TransferNode 中（用于下载） |
 | `downloadSingleFile` | 内部 | `node: TransferNode, sftpConnectionId: string, taskId: string` | `Promise<void>` | 下载单个文件（核心函数），通过 Store API 更新状态，支持进度回调 |
 | `downloadFolderContent` | 内部 | `node: TransferNode, sftpConnectionId: string, taskId: string` | `Promise<void>` | 递归下载文件夹内容（利用 Pinia reactive 特性） |
 | `downloadFile` | 导出 | `remotePath: string, sftpConnectionId: string, sessionId?: string, localPath?: string \| { value: string }` | `Promise<void>` | 下载单个文件（导出函数，安全架构 v4） |
@@ -144,6 +144,7 @@ interface RemoteFileState {
 | 状态 | 显示文案 |
 |------|----------|
 | pending | 等待中 |
+| scanning | 扫描中 |
 | transferring | 传输中 |
 | completed | 已完成 |
 | error | 错误 |
@@ -153,6 +154,7 @@ interface RemoteFileState {
 | 状态 | 显示文案 |
 |------|----------|
 | pending | 等待中 |
+| scanning | 扫描中 |
 | transferring | 删除中 |
 | completed | 已删除 |
 | error | 错误 |
@@ -162,7 +164,7 @@ interface RemoteFileState {
 
 | 函数名 | 类型 | 参数 | 返回值 | 说明 |
 |--------|------|------|--------|------|
-| `getStatusText` | 导出 | `taskType: TransferType, status: TransferStatus` | `string` | 获取状态显示文本（删除任务返回"已删除/删除中"，其他返回"已完成/传输中"） |
+| `getStatusText` | 导出 | `taskType: TransferType, status: TransferStatus` | `string` | 获取状态显示文本（删除任务返回"已删除/删除中"，其他返回"已完成/传输中"，新增 scanning → "扫描中"） |
 
 ---
 
@@ -203,6 +205,8 @@ interface RemoteFileState {
 | `formatSize` | 导出 | `bytes: number` | `string` | 格式化文件大小（字节 → 人类可读格式，如 '1.5 MB'） |
 | `createTransferTask` | 导出 | `config: { type, root, sftpConnectionId, ... }` | `TransferTask` | 创建传输任务工厂函数（自动生成唯一 ID，包含操作类型前缀） |
 | `isTaskCancelled` | 导出 | `taskId: string, context?: string` | `boolean` | 检查传输任务是否已被取消（用于在关键节点检测取消状态） |
+| `aggregateChildProgress` | 导出 | `node: TransferNode` | `{ progress, completedFiles, speed, transferredBytes, totalBytes }` | 从子节点聚合计算文件夹节点的进度信息（基于字节数加权，统一版本） |
+| `propagateViaParentChain` | 导出 | `taskId, startNode, store` | `void` | 通过 parent 引用链向上传播进度到所有祖先节点（O(depth)复杂度，统一版本） |
 
 ### 使用场景说明
 
@@ -228,6 +232,17 @@ interface RemoteFileState {
 - 进度回调中检查（停止 UI 更新）
 - 操作完成后检查（防止状态覆盖）
 
+#### aggregateChildProgress
+- 被 `propagateViaParentChain` 内部调用
+- 基于字节数加权计算文件夹总进度、速度、剩余时间等
+- 递归处理嵌套子文件夹
+
+#### propagateViaParentChain
+- 上传/下载/删除进度回调中调用
+- 利用 TransferNode.parent 字段沿父指针上溯
+- 无需从根节点遍历整棵树，复杂度 O(树深度)
+- 配合 SftpTransferTreeNode.vue 的 500ms 定时器实现实时 UI 更新
+
 ---
 
 ## 🔗 模块依赖关系
@@ -236,7 +251,8 @@ interface RemoteFileState {
 ┌─────────────────────────────────────────────────────────────┐
 │                        utils.ts                              │
 │  (formatTime, formatSize, createTransferNode,               │
-│   createTransferTask, isTaskCancelled)                      │
+│   createTransferTask, isTaskCancelled,                      │
+│   aggregateChildProgress, propagateViaParentChain)          │
 └───────────┬──────────────┬──────────────┬───────────────────┘
             │              │              │
     ┌───────▼───────┐ ┌────▼─────┐ ┌─────▼──────┐
@@ -274,8 +290,8 @@ interface RemoteFileState {
 | remote.ts | 8 | 0 | 8 |
 | statusText.ts | 1 | 0 | 1 |
 | upload.ts | 3 | 3 | 6 |
-| utils.ts | 5 | 0 | 5 |
-| **总计** | **31** | **8** | **39** |
+| utils.ts | 7 | 0 | 7 |
+| **总计** | **33** | **8** | **41** |
 
 ---
 

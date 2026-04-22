@@ -275,10 +275,16 @@ async function loadFiles(): Promise<void> {
 }
 
 /**
- * 处理路径输入回车
+ * 处理路径输入回车 — 使用输入框的值导航到目标目录
+ * （修复：之前使用 DRIVES_PATH 常量，忽略了用户输入的实际路径）
  */
 async function handlePathEnter(): Promise<void> {
-  await loadFiles()
+  const targetPath = localPathInput.value.trim()
+  if (!targetPath || !props.connectionId) return
+
+  // 立即同步设置路径（跳过 debounce 延迟），然后加载文件
+  sftpBrowserStore.setLocalPath(props.connectionId, targetPath)
+  await sftpBrowserStore.loadLocalFiles(props.connectionId, DRIVES_PATH)
 }
 
 /**

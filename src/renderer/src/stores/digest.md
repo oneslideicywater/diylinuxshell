@@ -375,12 +375,15 @@ selectionMap (Map<string, string[]>)
 
 | 方法名 | 参数 | 返回值 | 说明 |
 |--------|------|--------|------|
-| `addTask` | `task: TransferTask` | `void` | 添加传输任务（自动清理超限的已完成任务） |
+| `addTask` | `task: TransferTask` | `void` | 添加传输任务（**不建节点索引**，等扫描完成后调用 rebuildNodeIndex 统一重建） |
 | `cleanupCompletedTasks` | 无 | `void` | 清理超出限制的已完成任务 |
-| `updateTask` | `taskId: string, updates: Partial<TransferTask>` | `void` | 更新传输任务的顶层属性 |
+| `updateTask` | `taskId: string, updates: Partial<TransferTask>` | `void` | 更新传输任务的顶层属性（**当 root 被替换时自动重建 nodeIndexMap**） |
 | `updateTaskStatus` | `taskId: string, status: TransferTask['status']` | `void` | 更新任务状态 |
 | `updateTaskRoot` | `taskId: string, rootUpdates: Partial<TransferNode>` | `void` | 更新根节点的属性（利用 reactive 特性） |
-| `updateNodeStatus` | `taskId: string, nodeId: string, updates: Partial<TransferNode>` | `void` | **核心方法**：更新指定节点的状态（递归查找节点并修改） |
+| `mutateNode` | `taskId: string, nodeId: string, updates: Partial<TransferNode>` | `void` | **O(1) 直接变异节点**：从 nodeIndexMap 查找 → Object.assign 变异 reactive Proxy（自动触发 Proxy.set 驱动响应式更新，无需手动替换 Task 对象） |
+| `rebuildNodeIndex` | `taskId: string` | `void` | **扫描完成后必须调用**：清除旧索引 + 对 task.root 整棵树递归 buildNodeIndex（所有节点均为 reactive Proxy） |
+| `getNode` | `taskId: string, nodeId: string` | `TransferNode | undefined` | **O(1) 获取节点**：从 nodeIndexMap 查找，配合 UI 定时器实现实时数据读取 |
+| `updateNodeStatus` | `taskId: string, nodeId: string, updates: Partial<TransferNode>` | `void` | 兼容旧接口：递归遍历树查找节点并更新（O(N)，已被 mutateNode 取代） |
 | `removeTask` | `taskId: string` | `void` | 移除传输任务 |
 | `clearCompletedTasks` | 无 | `void` | 清除已完成的任务（保留最近 5 个） |
 | `clearAllTasks` | 无 | `void` | 清除所有任务 |
@@ -391,7 +394,8 @@ selectionMap (Map<string, string[]>)
 
 | 函数名 | 参数 | 返回值 | 说明 |
 |--------|------|--------|------|
-| `updateNodeInTree` | `node: TransferNode, nodeId: string, updates: Partial<TransferNode>` | `boolean` | 在树形结构中递归查找并更新节点 |
+| `updateNodeInTree` | `node: TransferNode, nodeId: string, updates: Partial<TransferNode>` | `boolean` | 在树形结构中递归查找并更新节点（被 updateNodeStatus 调用） |
+| `buildNodeIndex` | `taskId: string, node: TransferNode` | `void` | 递归构建节点 ID → 节点引用的 Map 索引（O(1) 查找基础） |
 | `setNodeExpandedRecursive` | `node: TransferNode, expanded: boolean` | `void` | 递归设置节点展开状态 |
 | `markAllNodesCancelled` | `node: TransferNode, taskId: string` | `void` | 递归标记树中所有节点为已取消状态 |
 

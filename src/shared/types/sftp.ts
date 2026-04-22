@@ -5,7 +5,7 @@
 /**
  * 传输节点状态
  */
-export type TransferStatus = 'pending' | 'transferring' | 'completed' | 'error' | 'cancelled'
+export type TransferStatus = 'pending' | 'scanning' | 'transferring' | 'completed' | 'error' | 'cancelled'
 
 /**
  * 传输类型
@@ -14,10 +14,17 @@ export type TransferType = 'upload' | 'download' | 'delete'
 
 /**
  * 传输节点
+ * 
+ * 设计原则（v5 优化）：
+ * - 使用 parentId 字符串代替 parent 对象引用
+ * - 消除循环引用，使 TransferNode 可通过 IPC 序列化传输
+ * - 父节点通过 Store 的 nodeIndexMap O(1) 查找（getNode(taskId, parentId)）
  */
 export interface TransferNode {
   /** 节点唯一标识 */
   id: string
+  /** 父节点 ID（用于祖先链传播，通过 Store.getNode() O(1) 查找父节点） */
+  parentId?: string
   /** 节点名称（文件或文件夹名） */
   name: string
   /** 是否为文件夹 */
@@ -36,10 +43,8 @@ export interface TransferNode {
   remotePath?: string
   /** 传输速度（字节/秒） */
   speed: number
-  /** 估计剩余时间 */
-  remaining: string
-  /** 已经过的时间 */
-  elapsed: string
+  /** 已传输字节数 */
+  transferredBytes: number
   /** 子节点（文件夹） */
   children?: TransferNode[]
   /** 错误信息 */

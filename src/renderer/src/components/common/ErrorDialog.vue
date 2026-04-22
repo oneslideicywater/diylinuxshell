@@ -7,17 +7,15 @@
 <template>
   <div v-if="visible" class="error-dialog-overlay" @click.self="handleClose">
     <div class="error-dialog">
-      <!-- 标题 -->
       <div class="dialog-header">
         <h3>连接失败</h3>
         <button class="close-btn" @click="handleClose">
           <svg width="14" height="14" viewBox="0 0 14 14">
-            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="2" />
+            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </button>
       </div>
 
-      <!-- 错误信息 -->
       <div class="dialog-body">
         <div class="error-icon">
           <svg width="48" height="48" viewBox="0 0 48 48">
@@ -31,7 +29,6 @@
         </div>
       </div>
 
-      <!-- 操作按钮 -->
       <div class="dialog-footer">
         <button class="btn cancel" @click="handleClose">关闭</button>
         <button v-if="showRetry" class="btn retry" @click="handleRetry">重新输入密码</button>
@@ -46,18 +43,15 @@ import { computed } from 'vue'
 import { useErrorDialogStore } from '@/stores/errorDialog'
 import { useSessionStore } from '@/stores/session'
 
-// 状态管理
 const errorDialogStore = useErrorDialogStore()
 const sessionStore = useSessionStore()
 
-// 定义事件
 const emit = defineEmits<{
   (e: 'close'): void
   (e: 'retry', sessionId: string): void
   (e: 'edit', sessionId: string): void
 }>()
 
-// 使用 store 中的状态
 const visible = computed(() => errorDialogStore.visible)
 const title = computed(() => errorDialogStore.title)
 const message = computed(() => errorDialogStore.message)
@@ -65,34 +59,20 @@ const sessionId = computed(() => errorDialogStore.sessionId)
 const showRetry = computed(() => errorDialogStore.showRetry)
 const showEdit = computed(() => errorDialogStore.showEdit)
 
-/**
- * 关闭对话框
- */
 const handleClose = (): void => {
   errorDialogStore.closeError()
   emit('close')
 }
 
-/**
- * 重试连接
- */
 const handleRetry = (): void => {
   const sid = sessionId.value
-  if (sid) {
-    // 找到对应的会话并打开编辑表单
-    const session = sessionStore.sessions.find(s => s.id === sid)
-    if (session) {
-      emit('retry', sid)
-      // 同时发送编辑事件
-      emit('edit', sid)
-    }
+  if (sid && sessionStore.sessions.some(s => s.id === sid)) {
+    emit('retry', sid)
+    emit('edit', sid)
   }
   handleClose()
 }
 
-/**
- * 编辑会话
- */
 const handleEdit = (): void => {
   const sid = sessionId.value
   if (sid) {
@@ -118,7 +98,7 @@ const handleEdit = (): void => {
 
 .error-dialog {
   width: 450px;
-  background-color: var(--bg-color, #1e1e1e);
+  background-color: var(--card-bg, #2d2d2d);
   border: 1px solid var(--border-color, #3c3c3c);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -232,5 +212,39 @@ const handleEdit = (): void => {
 .btn.edit:hover {
   background-color: var(--primary-color, #0e639c);
   color: #ffffff;
+}
+
+/* 浅色主题适配 */
+[data-theme="light"] .error-dialog {
+  background-color: #ffffff;
+  border-color: #e0e0e0;
+}
+
+[data-theme="light"] .dialog-header {
+  border-bottom-color: #e0e0e0;
+}
+
+[data-theme="light"] .dialog-header h3 {
+  color: #333333;
+}
+
+[data-theme="light"] .close-btn:hover {
+  background-color: #f0f0f0;
+}
+
+[data-theme="light"] .error-title {
+  color: #333333;
+}
+
+[data-theme="light"] .error-detail {
+  color: #666666;
+}
+
+[data-theme="light"] .dialog-footer {
+  border-top-color: #e0e0e0;
+}
+
+[data-theme="light"] .btn.cancel:hover {
+  background-color: #f0f0f0;
 }
 </style>

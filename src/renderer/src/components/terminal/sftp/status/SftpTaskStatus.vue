@@ -14,6 +14,7 @@
       <SftpTransferTreeNode 
         v-if="taskRoot"
         :node="taskRoot" 
+        :task-id="taskId"
         :level="0"
         @update:node-expanded="handleNodeExpanded"
       />

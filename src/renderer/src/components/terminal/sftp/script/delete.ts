@@ -19,124 +19,7 @@
 
 import type { TransferTask, TransferNode } from '@shared/types/sftp'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
-import { formatTime, createTransferNode, createTransferTask } from './utils'
-
-/**
- * 递归扫描远程文件夹并构建传输节点树（用于删除）
- * 
- * 安全架构 v4：
- * - 不再依赖 session 对象
- * - 直接使用 sftpConnectionId 调用 SFTP API
- * 
- * @param remotePath 远程文件夹路径
- * @param sftpConnectionId SFTP 连接标识符（已在 TerminalTab 初始化时建立）
- * @returns 根节点和文件统计信息
- */
-export async function scanRemoteFolderForDelete(
-  remotePath: string,
-  sftpConnectionId: string
-): Promise<{ rootNode: TransferNode; totalFiles: number; totalBytes: number }> {
-  // 获取文件夹名称
-  const folderName = remotePath.split('/').pop() || 'folder'
-  
-  // 创建当前文件夹节点（type 为 'delete'）
-  const currentNode = createTransferNode({
-    name: folderName,
-    isDirectory: true,
-    type: 'delete',
-    localPath: '',
-    remotePath: remotePath,
-    children: [],
-    totalFiles: 0,
-    completedFiles: 0,
-    expanded: false
-  })
-  
-  let totalFiles = 0
-  let totalBytes = 0
-  
-  try {
-    // 通过 Electron API 列出远程目录内容（使用已建立的 sftpConnectionId）
-    const result = await window.api.sftp.listDir(sftpConnectionId, remotePath)
-    
-    if (!result.success || !result.data) {
-      throw new Error(result.error || '无法读取远程目录')
-    }
-    
-    const entries = result.data
-
-    // 遍历远程目录项，跳过父目录导航项
-    for (const entry of entries) {
-      // 跳过父目录导航项（.. 和 .）
-      if (entry.name === '..' || entry.name === '.') {
-        console.log(`[delete] 跳过导航项: ${entry.name}`)
-        continue
-      }
-
-      const fullRemotePath = `${remotePath}/${entry.name}`
-
-      if (entry.type === 'd' || entry.isDirectory) {
-        // 递归扫描子文件夹（添加异常处理，跳过无权限访问的目录）
-        try {
-          const subResult = await scanRemoteFolderForDelete(fullRemotePath, sftpConnectionId)
-
-          if (currentNode.children) {
-            currentNode.children.push(subResult.rootNode)
-          }
-
-          totalFiles += subResult.totalFiles
-          totalBytes += subResult.totalBytes
-        } catch (subError: any) {
-          // 跳过无法访问的子目录，记录警告但不中断整个删除
-          console.warn(`[delete] 无法访问远程子目录 ${fullRemotePath}，已跳过:`, subError.message)
-          
-          // 创建错误标记节点
-          const errorNode = createTransferNode({
-            name: entry.name,
-            isDirectory: true,
-            type: 'delete',
-            localPath: '',
-            remotePath: fullRemotePath,
-            status: 'error',
-            error: `无法访问目录: ${subError.message}`,
-            children: []
-          })
-
-          if (currentNode.children) {
-            currentNode.children.push(errorNode)
-          }
-        }
-      } else {
-        // 创建文件节点
-        const fileNode = createTransferNode({
-          name: entry.name,
-          isDirectory: false,
-          type: 'delete',
-          localPath: '',
-          remotePath: fullRemotePath,
-          size: entry.size || 0
-        })
-
-        if (currentNode.children) {
-          currentNode.children.push(fileNode)
-        }
-
-        totalFiles++
-        totalBytes += entry.size || 0
-      }
-    }
-
-    // 更新当前节点的统计信息
-    currentNode.totalFiles = totalFiles
-    currentNode.size = totalBytes
-    
-    return { rootNode: currentNode, totalFiles, totalBytes }
-    
-  } catch (error: any) {
-    console.error(`[delete] 扫描远程文件夹失败: ${remotePath}`, error)
-    throw error
-  }
-}
+import { createTransferNode, createTransferTask, propagateViaParentChain } from './utils'
 
 /**
  * 删除单个文件/文件夹（原子操作）
@@ -164,30 +47,22 @@ async function deleteSingleItem(
   }
   
   // 更新节点状态为删除中
-  sftpTransferStore.updateNodeStatus(taskId, node.id, {
+  sftpTransferStore.mutateNode(taskId, node.id, {
     status: 'transferring',
-    progress: 50, // 删除是原子操作，显示中间进度
+    progress: 50,
     startTime: Date.now()
   })
-  
-  const startTime = Date.now()
-  
-  // 监听删除进度（实时更新节点状态）
+
+  // 监听删除进度（500ms 定时器已控制 UI 刷新频率，无需节流）
   const cleanupProgress = window.api.sftp.onDeleteProgress((data) => {
-    // 匹配当前正在删除的文件（通过远程路径）
     if (node.remotePath && (data.currentPath === node.remotePath || (data.currentPath && data.currentPath.includes(node.remotePath)))) {
-      // 计算已用时间
-      let elapsed = ''
-      if (node.startTime) {
-        elapsed = formatTime(Math.round((Date.now() - node.startTime) / 1000))
-      }
-      
-      // 实时更新视图（通过 Store API，利用 Pinia reactive 特性）
-      sftpTransferStore.updateNodeStatus(taskId, node.id, {
-        progress: 50, // 删除是原子操作，显示中间进度表示正在删除
-        speed: 0,    // 删除操作不显示速度
-        remaining: '',
-        elapsed
+
+      console.log(`[delete] 进度回调: ${node.name} | currentPath=${data.currentPath}`)
+
+      sftpTransferStore.mutateNode(taskId, node.id, {
+        progress: 50,
+        speed: 0,
+        transferredBytes: 0
       })
     }
   })
@@ -206,15 +81,11 @@ async function deleteSingleItem(
     }
     
     // 删除完成 - 更新最终状态
-    const endTime = Date.now()
-    const elapsedSeconds = Math.round((endTime - startTime) / 1000)
-    
-    sftpTransferStore.updateNodeStatus(taskId, node.id, {
+    sftpTransferStore.mutateNode(taskId, node.id, {
       status: 'completed',
       progress: 100,
-      elapsed: formatTime(elapsedSeconds),
-      speed: 0, // 删除操作不显示速度
-      remaining: ''
+      speed: 0,
+      transferredBytes: node.size || 0
     })
     
     console.log(`[delete] ✅ 删除完成: ${node.name}`)
@@ -222,8 +93,7 @@ async function deleteSingleItem(
   } catch (error: any) {
     console.error(`[delete] ❌ 删除失败: ${node.name}`, error)
     
-    // 更新错误状态
-    sftpTransferStore.updateNodeStatus(taskId, node.id, {
+    sftpTransferStore.mutateNode(taskId, node.id, {
       status: 'error',
       error: error.message || '删除失败'
     })
@@ -264,30 +134,18 @@ export async function deleteFolderContent(
       console.log('[delete] 任务状态从 pending 转换为 transferring（文件夹删除开始）')
     }
     
-    // 通过 Store 更新状态为删除中（利用 Pinia reactive 特性）
-    sftpTransferStore.updateNodeStatus(taskId, node.id, {
+    // 更新状态为删除中
+    sftpTransferStore.mutateNode(taskId, node.id, {
       status: 'transferring',
       startTime: Date.now()
     })
     
-    // 先删除所有子文件/子文件夹（从叶子节点开始，传递 sftpConnectionId）
+    // 先删除所有子文件/子文件夹（从叶子节点开始）
     for (const child of node.children) {
       await deleteFolderContent(child, sftpConnectionId, taskId)
       
-      // 计算父节点的完成统计
-      let completedItems = 0
-      let progress = 0
-      
-      if (node.children && node.children.length > 0) {
-        completedItems = node.children.filter(c => c.status === 'completed' || c.status === 'error').length
-        progress = Math.round((completedItems / node.children.length) * 100)
-      }
-      
-      // 每完成一个子项就更新父节点状态（通过 Store API）
-      sftpTransferStore.updateNodeStatus(taskId, node.id, {
-        completedFiles: completedItems,
-        progress
-      })
+      // 沿 parent 链传播进度到所有祖先
+      propagateViaParentChain(taskId, node, sftpTransferStore)
     }
     
     // 所有子项删除完成 - 最后删除父文件夹本身（传递 sftpConnectionId）
@@ -378,7 +236,7 @@ export async function deleteLocalBatch(
     
     try {
       sftpTransferStore.updateTaskStatus(task.id, 'transferring')
-      sftpTransferStore.updateNodeStatus(task.id, task.root.id, {
+      sftpTransferStore.mutateNode(task.id, task.root.id, {
         status: 'transferring',
         startTime: Date.now()
       })
@@ -386,16 +244,18 @@ export async function deleteLocalBatch(
       if (!task.root.localPath) {
         throw new Error('本地路径为空，无法删除')
       }
-      
+
       const result = await window.api.sftp.deleteLocalFile(task.root.localPath)
       
       if (!result.success) {
         throw new Error(result.error || '删除失败')
       }
       
-      sftpTransferStore.updateNodeStatus(task.id, task.root.id, {
+      sftpTransferStore.mutateNode(task.id, task.root.id, {
         status: 'completed',
-        progress: 100
+        progress: 100,
+        speed: 0,
+        transferredBytes: task.root.size || 0
       })
       
       task.status = 'completed'
@@ -458,11 +318,9 @@ export async function deleteRemoteBatch(
       ) : null
       
       if (selectedItem && (selectedItem.type === 'd' || selectedItem.isDirectory)) {
-        // ========== 文件夹：两阶段策略 ==========
-        // 阶段1：先创建仅含根节点的占位任务，立即入 Store（UI 可即时显示）
-        console.log(`[delete-remote] 创建文件夹删除任务（先入 Store）: ${remotePath}`)
-        
-        const placeholderNode = createTransferNode({
+        console.log(`[delete-remote] 创建文件夹删除任务: ${remotePath}`)
+
+        const rootNode = createTransferNode({
           name: itemName,
           isDirectory: true,
           type: 'delete',
@@ -470,47 +328,61 @@ export async function deleteRemoteBatch(
           children: [],
           totalFiles: 0,
           completedFiles: 0,
-          status: 'pending'
+          expanded: false,
+          status: 'scanning'
         })
-        
+
         const task = createTransferTask({
           type: 'delete',
-          root: placeholderNode,
+          root: rootNode,
           sftpConnectionId: sftpConnectionId,
           sessionId: sessionId,
           totalBytes: 0
         })
-        
+
         sftpTransferStore.addTask(task)
         createdTasks.push(task)
-        
-        console.log(`[delete-remote] ✅ 已创建删除任务 #${createdTasks.length}（占位）: ${itemName}`)
-        
-        // 阶段2：异步递归扫描子项，完成后更新 Store 中的 root 节点
+
+        console.log(`[delete-remote] ✅ 已创建删除任务 #${createdTasks.length}（扫描中）: ${itemName}`)
+
         try {
-          sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
-            status: 'transferring'
+          console.log(`[delete-remote] 扫描远程文件夹（主进程扫描）: ${remotePath}`)
+          
+          // 调用主进程扫描 API（一次性返回完整树结构，不需要 localBasePath）
+          const delScanResult = await window.api.sftp.scanRemoteTree(sftpConnectionId, remotePath)
+          
+          if (!delScanResult.success || !delScanResult.root) {
+            throw new Error(delScanResult.error || '扫描远程文件夹失败')
+          }
+          
+          console.log(`[delete-remote] 远程文件夹扫描完成: ${delScanResult.totalFiles} 个文件`)
+          
+          // v5 优化：主进程直接返回 TransferNode（无循环引用），无需类型转换
+          const delIpcRoot = delScanResult.root as TransferNode
+          
+          // 替换根节点的子节点（保留原根节点的 reactive 引用）
+          if (delIpcRoot.children && rootNode.children) {
+            rootNode.children.length = 0  // 清空原数组
+            rootNode.children.push(...delIpcRoot.children)  // 直接使用主进程返回的 TransferNode
+          }
+
+          sftpTransferStore.rebuildNodeIndex(task.id)
+
+          sftpTransferStore.mutateNode(task.id, rootNode.id, {
+            status: 'transferring',
+            totalFiles: delScanResult.totalFiles || 0,
+            size: delScanResult.totalBytes || 0
           })
-          
-          const folderResult = await scanRemoteFolderForDelete(remotePath, sftpConnectionId)
-          
-          console.log(`[delete-remote] 远程文件夹扫描完成: ${folderResult.totalFiles} 个文件`)
-          
-          // 用完整的树形结构替换占位根节点
-          sftpTransferStore.updateTask(task.id, {
-            root: folderResult.rootNode,
-            totalBytes: folderResult.rootNode.size || 0
-          })
-          
-          // 同步更新本地引用（供后续删除流程使用）
-          task.root = folderResult.rootNode
-          task.totalBytes = folderResult.rootNode.size || 0
-          
+
+          sftpTransferStore.updateTask(task.id, { totalBytes: delScanResult.totalBytes || 0 })
+
+          task.root = rootNode
+          task.totalBytes = delScanResult.totalBytes || 0
+
         } catch (scanError: any) {
           console.error(`[delete-remote] 扫描远程文件夹失败: ${remotePath}`, scanError)
-          
-          // 扫描失败时将占位节点标记为错误状态
-          sftpTransferStore.updateNodeStatus(task.id, placeholderNode.id, {
+
+          sftpTransferStore.mutateNode(task.id, rootNode.id, {
             status: 'error',
             error: `扫描失败: ${scanError.message}`
           })
@@ -573,6 +445,15 @@ export async function deleteRemoteBatch(
         completedAt,
         elapsedTime,
         transferredBytes: task.totalBytes
+      })
+      
+      // 更新根节点最终状态
+      sftpTransferStore.mutateNode(task.id, task.root.id, {
+        status: 'completed',
+        progress: 100,
+        speed: 0,
+        transferredBytes: task.root.size || 0,
+        completedFiles: task.root.totalFiles || 0
       })
       
       console.log(`[delete-remote] ✅ 任务 ${i + 1} 完成: ${task.root.name}`)

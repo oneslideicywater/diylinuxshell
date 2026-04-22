@@ -113,10 +113,10 @@ onUnmounted(() => {
 <style scoped>
 .global-context-menu {
   position: fixed;
-  background: var(--card-bg, var(--bg-color, #ffffff));
-  border: 1px solid var(--border-color, #e0e0e0);
+  background: var(--card-bg, #2d2d2d);
+  border: 1px solid var(--border-color, #3c3c3c);
   border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   padding: 4px 8px;
   min-width: 140px;
   z-index: 99999;
@@ -132,15 +132,11 @@ onUnmounted(() => {
 }
 
 .context-menu-item:hover {
-  background: var(--hover-bg, rgba(255, 255, 255, 0.08));
+  background: var(--hover-bg, #2a2a2a);
 }
 
 .context-menu-item:hover .menu-item-title {
-  color: var(--text-color-hover, var(--text-color, #ffffff));
-}
-
-.context-menu-item:hover .menu-item-icon {
-  opacity: 1;
+  color: var(--text-color, #e0e0e0);
 }
 
 .menu-item-icon {
@@ -155,7 +151,7 @@ onUnmounted(() => {
 
 .menu-item-title {
   font-size: 13px;
-  color: var(--text-color, #333333);
+  color: var(--text-color, #e0e0e0);
   white-space: nowrap;
 }
 </style>

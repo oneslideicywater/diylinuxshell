@@ -10,6 +10,7 @@ import type { TransferType, TransferStatus } from '@shared/types/sftp'
 /** 状态文本映射表（通用） */
 const STATUS_TEXT_MAP: Record<TransferStatus, string> = {
   pending: '等待中',
+  scanning: '扫描中',
   transferring: '传输中',
   completed: '已完成',
   error: '错误',
@@ -19,6 +20,7 @@ const STATUS_TEXT_MAP: Record<TransferStatus, string> = {
 /** 删除任务专用状态文本映射表 */
 const DELETE_STATUS_TEXT_MAP: Record<TransferStatus, string> = {
   pending: '等待中',
+  scanning: '扫描中',
   transferring: '删除中',
   completed: '已删除',
   error: '错误',

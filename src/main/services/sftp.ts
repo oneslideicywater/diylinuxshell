@@ -7,6 +7,7 @@
 import { Client } from 'ssh2'
 import * as fs from 'fs'
 import * as path from 'path'
+import type { TransferNode } from '../../shared/types/sftp'
 
 /**
  * SFTP 连接配置
@@ -141,13 +142,16 @@ export class SFTPService {
    * 与 uploadFile 保持一致的进度报告机制
    */
   async downloadFile(
-    remotePath: string,
-    localPath: string,
-    onProgress?: (progress: number, size: number, transferredSize: number, speed: number) => void
+    taskId: string,
+    node: TransferNode,
+    onProgress?: (speed: number, transferredBytes: number, taskId: string, node: TransferNode) => void
   ): Promise<void> {
     if (!this.sftpHandle) {
       throw new Error('SFTP not connected')
     }
+
+    const remotePath = node.remotePath!
+    const localPath = node.localPath!
 
     return new Promise((resolve, reject) => {
       // 获取文件大小
@@ -213,11 +217,10 @@ export class SFTPService {
                     if (onProgress && fileSize > 0) {
                       const finalSpeed = this.calculateTransferSpeed(
                         downloadedBytes,
-                        startTime,
                         lastUpdateTime,
                         lastDownloadedBytes
                       )
-                      onProgress(100, fileSize, downloadedBytes, finalSpeed)
+                      onProgress(finalSpeed, downloadedBytes, taskId, node)
                     }
                     resolve()
                   })
@@ -229,23 +232,16 @@ export class SFTPService {
                   downloadedBytes += bytesRead
                   
                   if (onProgress && fileSize > 0) {
-                    // 计算进度百分比
-                    const progress = (downloadedBytes / fileSize) * 100
-                    
-                    // 计算传输速度
                     const speed = this.calculateTransferSpeed(
                       downloadedBytes,
-                      startTime,
                       lastUpdateTime,
                       lastDownloadedBytes
                     )
                     
-                    // 更新时间和已传输字节
                     lastUpdateTime = Date.now()
                     lastDownloadedBytes = downloadedBytes
                     
-                    // 调用进度回调（传递完整数据）
-                    onProgress(progress, fileSize, downloadedBytes, speed)
+                    onProgress(speed, downloadedBytes, taskId, node)
                   }
 
                   readChunk()
@@ -263,40 +259,30 @@ export class SFTPService {
   /**
    * 递归下载文件夹
    */
-  async downloadFolder(remotePath: string, localPath: string, onProgress?: (progress: number, currentFile: string) => void): Promise<void> {
+  async downloadFolder(
+    taskId: string,
+    node: TransferNode,
+    onProgress?: (speed: number, transferredBytes: number, taskId: string, childNode: TransferNode) => void
+  ): Promise<void> {
     if (!this.sftpHandle) {
       throw new Error('SFTP not connected')
     }
 
-    // 创建本地目录
+    const localPath = node.localPath!
+
     if (!fs.existsSync(localPath)) {
       fs.mkdirSync(localPath, { recursive: true })
     }
 
-    // 读取远程目录内容
-    const entries = await this.listDir(remotePath)
-    
-    for (const entry of entries) {
-      if (entry.name === '.' || entry.name === '..') {
-        continue
-      }
+    if (!node.children || node.children.length === 0) {
+      return
+    }
 
-      const remoteFilePath = `${remotePath}/${entry.name}`
-      const localFilePath = `${localPath}/${entry.name}`
-
-      if (entry.isDirectory) {
-        // 递归下载子文件夹
-        await this.downloadFolder(remoteFilePath, localFilePath, onProgress)
+    for (const child of node.children) {
+      if (child.isDirectory) {
+        await this.downloadFolder(taskId, child, onProgress)
       } else {
-        // 下载文件
-        if (onProgress) {
-          onProgress(0, entry.name)
-        }
-        await this.downloadFile(remoteFilePath, localFilePath, (progress) => {
-          if (onProgress) {
-            onProgress(progress, entry.name)
-          }
-        })
+        await this.downloadFile(taskId, child, onProgress)
       }
     }
   }
@@ -318,44 +304,35 @@ export class SFTPService {
 
   /**
    * 计算传输速度
-   * @param uploadedBytes - 已传输的字节数
-   * @param startTime - 开始时间戳
+   * @param transferredBytes - 已传输的字节数
    * @param lastUpdateTime - 上次更新时间戳
-   * @param lastUploadedBytes - 上次已传输的字节数
+   * @param lastTransferredBytes - 上次已传输的字节数
    * @returns 传输速度（字节/秒）
    */
   private calculateTransferSpeed(
-    uploadedBytes: number,
-    startTime: number,
+    transferredBytes: number,
     lastUpdateTime: number,
-    lastUploadedBytes: number
+    lastTransferredBytes: number
   ): number {
     const now = Date.now()
-    const timeDiff = (now - lastUpdateTime) / 1000 // 转换为秒
-    const bytesDiff = uploadedBytes - lastUploadedBytes
-    
-    // 计算瞬时速度（字节/秒）
-    const instantSpeed = timeDiff > 0 ? bytesDiff / timeDiff : 0
-    
-    // 计算平均速度（字节/秒）
-    const totalTime = (now - startTime) / 1000
-    const avgSpeed = totalTime > 0 ? uploadedBytes / totalTime : 0
-    
-    // 使用平均速度和瞬时速度的较大值，避免速度为 0
-    return Math.max(instantSpeed, avgSpeed)
+    const timeDiff = (now - lastUpdateTime) / 1000
+    return timeDiff > 0 ? (transferredBytes - lastTransferredBytes) / timeDiff : 0
   }
 
   /**
    * 上传文件
    */
   async uploadFile(
-    localPath: string,
-    remotePath: string,
-    onProgress?: (progress: number, size: number, transferredSize: number, speed: number) => void
+    taskId: string,
+    node: TransferNode,
+    onProgress?: (speed: number, transferredBytes: number, taskId: string, node: TransferNode) => void
   ): Promise<void> {
     if (!this.sftpHandle) {
       throw new Error('SFTP not connected')
     }
+
+    const localPath = node.localPath!
+    const remotePath = node.remotePath!
 
     // 重置取消标志
     this.uploadCancelled = false
@@ -425,16 +402,14 @@ export class SFTPService {
               if (onProgress && fileSize > 0) {
                 const speed = this.calculateTransferSpeed(
                   uploadedBytes,
-                  startTime,
                   lastUpdateTime,
                   lastUploadedBytes
                 )
                 
-                // 更新时间和已传输字节
                 lastUpdateTime = Date.now()
                 lastUploadedBytes = uploadedBytes
                 
-                onProgress((uploadedBytes / fileSize) * 100, fileSize, uploadedBytes, speed)
+                onProgress(speed, uploadedBytes, taskId, node)
               }
             })
           })
@@ -451,11 +426,10 @@ export class SFTPService {
             if (onProgress) {
               const speed = this.calculateTransferSpeed(
                 uploadedBytes,
-                startTime,
                 lastUpdateTime,
                 lastUploadedBytes
               )
-              onProgress(100, fileSize, uploadedBytes, speed)
+              onProgress(speed, uploadedBytes, taskId, node)
             }
             resolve()
           })
@@ -477,76 +451,58 @@ export class SFTPService {
    * 上传文件夹（递归）
    */
   async uploadFolder(
-    localPath: string, 
-    remotePath: string, 
-    onProgress?: (progress: number, currentFile: string, size: number, transferredSize: number, speed: number) => void
+    taskId: string,
+    node: TransferNode,
+    onProgress?: (speed: number, transferredBytes: number, taskId: string, node: TransferNode) => void
   ): Promise<void> {
     if (!this.sftpHandle) {
       throw new Error('SFTP not connected')
     }
 
-    // 首先创建远程目录
+    const remotePath = node.remotePath!
+
     try {
       await this.mkdir(remotePath)
     } catch (error: any) {
       throw error
     }
 
-    // 递归上传所有文件和子目录
-    await this.uploadDirectoryRecursive(localPath, remotePath, onProgress)
+    await this.uploadDirectoryRecursive(taskId, node, onProgress)
   }
 
   /**
    * 递归上传目录
    */
   private async uploadDirectoryRecursive(
-    localDir: string,
-    remoteDir: string,
-    onProgress?: (progress: number, currentFile: string, size: number, transferredSize: number, speed: number) => void
+    taskId: string,
+    node: TransferNode,
+    onProgress?: (speed: number, transferredBytes: number, taskId: string, childNode: TransferNode) => void
   ): Promise<void> {
-    // 检查是否被取消
     if (this.uploadCancelled) {
       throw new Error('Upload cancelled')
     }
 
-    // 首先创建远程目录
+    const remoteDir = node.remotePath!
+
     try {
       await this.mkdir(remoteDir)
     } catch (error: any) {
       throw error
     }
-    
-    const entries = fs.readdirSync(localDir)
 
-    for (const entry of entries) {
-      // 检查是否被取消
+    if (!node.children || node.children.length === 0) {
+      return
+    }
+
+    for (const child of node.children) {
       if (this.uploadCancelled) {
         throw new Error('Upload cancelled')
       }
 
-      // 跳过 . 和 .. 目录
-      if (entry === '.' || entry === '..') {
-        continue
-      }
-      
-      const localPath = path.join(localDir, entry)
-      const remotePath = `${remoteDir}/${entry}`
-      const stats = fs.statSync(localPath)
-
-      if (stats.isDirectory()) {
-        // 递归上传子目录
-        await this.uploadDirectoryRecursive(localPath, remotePath, onProgress)
+      if (child.isDirectory) {
+        await this.uploadDirectoryRecursive(taskId, child, onProgress)
       } else {
-        // 上传文件
-        try {
-          await this.uploadFile(localPath, remotePath, (progress, size, transferredSize, speed) => {
-            if (onProgress) {
-              onProgress(progress, localPath, size, transferredSize, speed)
-            }
-          })
-        } catch (error: any) {
-          throw error
-        }
+        await this.uploadFile(taskId, child, onProgress)
       }
     }
   }
@@ -676,6 +632,345 @@ export class SFTPService {
       this.client.end()
       this.connected = false
       this.sftpHandle = null
+    }
+  }
+
+  // ==================== v5 优化：文件树扫描方法 ====================
+
+  /** Windows 系统受保护目录列表（扫描时自动跳过） */
+  private static readonly SYSTEM_PROTECTED_DIRS: string[] = [
+    'System Volume Information',
+    '$Recycle.Bin',
+    '$RECYCLE.BIN',
+    'Recovery',
+    'Config.Msi'
+  ]
+
+  /**
+   * 扫描本地文件树（用于上传前的文件扫描）
+   * 
+   * v5 优化：直接返回 TransferNode 对象（无循环引用，可安全通过 IPC 序列化）
+   * 使用 path.join 屏蔽操作系统路径分隔符差异
+   * 
+   * @param folderPath 要扫描的本地文件夹路径
+   * @param remoteBasePath 远程基础路径（用于生成远程路径）
+   * @returns 扫描结果（包含 TransferNode 根节点和统计信息）
+   */
+  async scanLocalTree(
+    folderPath: string,
+    remoteBasePath: string
+  ): Promise<{ success: boolean; root?: TransferNode; totalFiles?: number; totalBytes?: number; error?: string }> {
+    const normalizedFolderPath = path.normalize(folderPath)
+    const folderName = path.basename(normalizedFolderPath)
+
+    // 创建根节点（使用 TransferNode 类型，无 parent 字段避免循环引用）
+    const rootNode: TransferNode = {
+      id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: folderName,
+      isDirectory: true,
+      type: 'upload',
+      status: 'pending',
+      progress: 0,
+      size: 0,
+      localPath: normalizedFolderPath,
+      remotePath: `${remoteBasePath}/${folderName}`,
+      speed: 0,
+      transferredBytes: 0,
+      children: []
+    }
+
+    try {
+      // 验证路径存在且是目录
+      const stat = await fs.promises.stat(normalizedFolderPath)
+      if (!stat.isDirectory()) {
+        throw new Error('路径不是文件夹')
+      }
+
+      // 递归扫描函数（内部辅助函数）
+      async function scanDir(
+        currentPath: string,
+        currentNode: TransferNode,
+        currentRemotePath: string
+      ): Promise<{ files: number; bytes: number }> {
+        let files = 0
+        let bytes = 0
+
+        // 读取目录内容
+        const entries = await fs.promises.readdir(currentPath, { withFileTypes: true })
+
+        for (const entry of entries) {
+          // 跳过 . 和 .. 目录项
+          if (entry.name === '.' || entry.name === '..') {
+            continue
+          }
+
+          // 使用 path.join 拼接完整路径（屏蔽系统差异）
+          const fullPath = path.join(currentPath, entry.name)
+          const fullRemotePath = `${currentRemotePath}/${entry.name}`
+
+          if (entry.isDirectory()) {
+            // 跳过 Windows 系统受保护目录
+            if (SFTPService.SYSTEM_PROTECTED_DIRS.includes(entry.name)) {
+              console.warn(`[scanLocalTree] 跳过系统受保护目录: ${entry.name}`)
+              continue
+            }
+
+            try {
+              // 创建子目录节点（设置 parentId 建立父子关系）
+              const subNode: TransferNode = {
+                id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                name: entry.name,
+                isDirectory: true,
+                type: 'upload',
+                status: 'pending',
+                progress: 0,
+                size: 0,
+                localPath: path.normalize(fullPath),
+                remotePath: fullRemotePath,
+                speed: 0,
+                transferredBytes: 0,
+                parentId: currentNode.id,
+                children: []
+              }
+
+              // 递归扫描子目录
+              const subResult = await scanDir(fullPath, subNode, fullRemotePath)
+
+              files += subResult.files
+              bytes += subResult.bytes
+
+              // 添加到当前节点的子节点列表
+              currentNode.children?.push(subNode)
+
+            } catch (subError: any) {
+              console.warn(`[scanLocalTree] 无法访问子目录 ${fullPath}，已跳过:`, subError.message)
+
+              // 创建错误节点
+              const errorNode: TransferNode = {
+                id: `node-error-${Date.now()}`,
+                name: entry.name,
+                isDirectory: true,
+                type: 'upload',
+                status: 'error',
+                progress: 0,
+                size: 0,
+                localPath: path.normalize(fullPath),
+                remotePath: fullRemotePath,
+                speed: 0,
+                transferredBytes: 0,
+                parentId: currentNode.id,
+                error: `无法访问: ${subError.message}`
+              }
+
+              currentNode.children?.push(errorNode)
+            }
+
+          } else if (entry.isFile()) {
+            try {
+              // 获取文件大小
+              const fileStat = await fs.promises.stat(fullPath)
+
+              // 创建文件节点（设置 parentId）
+              const fileNode: TransferNode = {
+                id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                name: entry.name,
+                isDirectory: false,
+                type: 'upload',
+                status: 'pending',
+                progress: 0,
+                size: fileStat.size,
+                localPath: path.normalize(fullPath),
+                remotePath: fullRemotePath,
+                speed: 0,
+                transferredBytes: 0,
+                parentId: currentNode.id
+              }
+
+              currentNode.children?.push(fileNode)
+
+              files++
+              bytes += fileStat.size
+
+            } catch (fileError: any) {
+              console.warn(`[scanLocalTree] 无法读取文件 ${fullPath}，已跳过:`, fileError.message)
+            }
+          }
+        }
+
+        // 更新当前节点的统计信息
+        currentNode.totalFiles = files
+        currentNode.size = bytes
+
+        return { files, bytes }
+      }
+
+      // 开始递归扫描
+      await scanDir(normalizedFolderPath, rootNode, rootNode.remotePath || '')
+
+      console.log(`[scanLocalTree] 扫描完成：${rootNode.totalFiles} 个文件，总大小 ${rootNode.size} 字节`)
+
+      return { success: true, root: rootNode, totalFiles: rootNode.totalFiles, totalBytes: rootNode.size }
+
+    } catch (error: any) {
+      console.error(`[scanLocalTree] 扫描失败: ${folderPath}`, error)
+      return { success: false, error: error.message }
+    }
+  }
+
+  /**
+   * 扫描远程文件树（用于下载/删除前的文件扫描）
+   * 
+   * v5 优化：直接返回 TransferNode 对象（无循环引用，可安全通过 IPC 序列化）
+   * 远程路径统一使用 / 分隔符（SFTP 标准），本地路径使用 path.join 屏蔽系统差异
+   * 
+   * @param remotePath 要扫描的远程文件夹路径
+   * @param localBasePath 本地基础路径（可选，下载时用于生成本地路径）
+   * @returns 扫描结果（包含 TransferNode 根节点和统计信息）
+   */
+  async scanRemoteTree(
+    remotePath: string,
+    localBasePath?: string
+  ): Promise<{ success: boolean; root?: TransferNode; totalFiles?: number; totalBytes?: number; error?: string }> {
+    const remoteName = remotePath.split('/').pop() || remotePath
+
+    // 创建根节点
+    const rootNode: TransferNode = {
+      id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      name: remoteName,
+      isDirectory: true,
+      type: localBasePath ? 'download' : 'delete',
+      status: 'pending',
+      progress: 0,
+      size: 0,
+      localPath: localBasePath ? path.normalize(path.join(localBasePath, remoteName)) : '',
+      remotePath: remotePath,
+      speed: 0,
+      transferredBytes: 0,
+      children: []
+    }
+
+    try {
+      // 验证 SFTP 连接状态
+      if (!this.sftpHandle) {
+        throw new Error('SFTP 未连接')
+      }
+
+      // 递归扫描函数（内部辅助函数）
+      async function scanRemoteDir(
+        this: SFTPService,
+        currentRemotePath: string,
+        currentNode: TransferNode,
+        currentLocalBase: string
+      ): Promise<{ files: number; bytes: number }> {
+        let files = 0
+        let bytes = 0
+
+        // 列出远程目录内容（使用实例方法 listDir）
+        const entries = await this!.listDir(currentRemotePath)
+
+        for (const entry of entries) {
+          if (entry.name === '.' || entry.name === '..') {
+            continue
+          }
+
+          // 构建完整路径（远程使用 /，本地使用 path.join）
+          const fullRemotePath = `${currentRemotePath}/${entry.name}`
+          const fullLocalPath = path.normalize(path.join(currentLocalBase, entry.name))
+
+          if (entry.isDirectory) {
+            try {
+              // 创建子目录节点（设置 parentId）
+              const subNode: TransferNode = {
+                id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                name: entry.name,
+                isDirectory: true,
+                type: localBasePath ? 'download' : 'delete',
+                status: 'pending',
+                progress: 0,
+                size: 0,
+                localPath: fullLocalPath,
+                remotePath: fullRemotePath,
+                speed: 0,
+                transferredBytes: 0,
+                parentId: currentNode.id,
+                children: [],
+                totalFiles: 0,
+                completedFiles: 0,
+                expanded: false
+              }
+
+              // 递归扫描子目录
+              const subResult = await scanRemoteDir.call(this, fullRemotePath, subNode, fullLocalPath)
+
+              files += subResult.files
+              bytes += subResult.bytes
+
+              currentNode.children?.push(subNode)
+
+            } catch (subError: any) {
+              console.warn(`[scanRemoteTree] 无法访问远程子目录 ${fullRemotePath}，已跳过:`, subError.message)
+
+              const errorNode: TransferNode = {
+                id: `node-error-${Date.now()}`,
+                name: entry.name,
+                isDirectory: true,
+                type: localBasePath ? 'download' : 'delete',
+                status: 'error',
+                progress: 0,
+                size: 0,
+                localPath: fullLocalPath,
+                remotePath: fullRemotePath,
+                speed: 0,
+                transferredBytes: 0,
+                parentId: currentNode.id,
+                error: `无法访问目录: ${subError.message}`,
+                children: []
+              }
+
+              currentNode.children?.push(errorNode)
+            }
+          } else {
+            // 创建文件节点（设置 parentId）
+            const fileNode: TransferNode = {
+              id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              name: entry.name,
+              isDirectory: false,
+              type: localBasePath ? 'download' : 'delete',
+              status: 'pending',
+              progress: 0,
+              size: entry.size || 0,
+              localPath: fullLocalPath,
+              remotePath: fullRemotePath,
+              speed: 0,
+              transferredBytes: 0,
+              parentId: currentNode.id
+            }
+
+            currentNode.children?.push(fileNode)
+
+            files++
+            bytes += entry.size || 0
+          }
+        }
+
+        // 更新当前节点的统计信息
+        currentNode.totalFiles = files
+        currentNode.size = bytes
+
+        return { files, bytes }
+      }
+
+      // 开始递归扫描（绑定 this 上下文）
+      const boundScanRemoteDir = scanRemoteDir.bind(this)
+      await boundScanRemoteDir(remotePath, rootNode, localBasePath || '')
+
+      console.log(`[scanRemoteTree] 扫描完成：${rootNode.totalFiles} 个文件，总大小 ${rootNode.size} 字节`)
+
+      return { success: true, root: rootNode, totalFiles: rootNode.totalFiles, totalBytes: rootNode.size }
+
+    } catch (error: any) {
+      console.error(`[scanRemoteTree] 扫描失败: ${remotePath}`, error)
+      return { success: false, error: error.message }
     }
   }
 }

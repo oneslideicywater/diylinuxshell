@@ -8,6 +8,7 @@
 import { ipcMain, dialog, BrowserWindow } from 'electron'
 import { exec } from 'child_process'
 import { sftpPool, type SFTPConfig, type FileInfo } from '../services/sftp'
+import type { TransferNode } from '../../shared/types/sftp'
 import { StoreService } from '../services/store'
 import { CryptoService } from '../services/crypto'
 import * as fs from 'fs'
@@ -87,7 +88,7 @@ export function registerSFTPIpcHandlers(): void {
    */
   ipcMain.handle(
     'sftp:download',
-    async (event, sessionId: string, remotePath: string, localPath: string) => {
+    async (event, sessionId: string, taskId: string, node: TransferNode) => {
       try {
         const service = sftpPool.getConnection(sessionId)
         const window = BrowserWindow.fromWebContents(event.sender)
@@ -95,20 +96,15 @@ export function registerSFTPIpcHandlers(): void {
           throw new Error('BrowserWindow not found')
         }
 
-        // 进度回调函数（接收完整数据：progress, size, transferredSize, speed）
-        const onProgress = (progress: number, size: number, transferredSize: number, speed: number) => {
+        await service.downloadFile(taskId, node, (speed, transferredBytes, taskId, node) => {
           window.webContents.send('sftp:downloadProgress', {
-            sessionId,
-            localPath,
-            remotePath,
-            progress,
-            size,
-            transferredSize,
-            speed
+            taskId,
+            nodeId: node.id,
+            speed,
+            transferredBytes
           })
-        }
+        })
 
-        await service.downloadFile(remotePath, localPath, onProgress)
         return { success: true }
       } catch (error: any) {
         return { success: false, error: error.message }
@@ -121,7 +117,7 @@ export function registerSFTPIpcHandlers(): void {
    */
   ipcMain.handle(
     'sftp:downloadFolder',
-    async (event, sessionId: string, remotePath: string, localPath: string) => {
+    async (event, sessionId: string, taskId: string, node: TransferNode) => {
       try {
         const service = sftpPool.getConnection(sessionId)
         const window = BrowserWindow.fromWebContents(event.sender)
@@ -129,22 +125,15 @@ export function registerSFTPIpcHandlers(): void {
           throw new Error('BrowserWindow not found')
         }
 
-        // 进度回调函数
-        const onProgress = (progress: number, currentFile: string) => {
-          const currentRemotePath = `${remotePath}/${currentFile}`
-          const currentLocalPath = `${localPath}/${currentFile}`
+        await service.downloadFolder(taskId, node, (speed, transferredBytes, taskId, childNode) => {
           window.webContents.send('sftp:downloadProgress', {
-            sessionId,
-            localPath: currentLocalPath,
-            remotePath: currentRemotePath,
-            progress,
-            size: 0,
-            transferredSize: 0,
-            speed: 0
+            taskId,
+            nodeId: childNode.id,
+            speed,
+            transferredBytes
           })
-        }
+        })
 
-        await service.downloadFolder(remotePath, localPath, onProgress)
         return { success: true }
       } catch (error: any) {
         return { success: false, error: error.message }
@@ -157,7 +146,7 @@ export function registerSFTPIpcHandlers(): void {
    */
   ipcMain.handle(
     'sftp:upload',
-    async (event, sessionId: string, localPath: string, remotePath: string) => {
+    async (event, sessionId: string, taskId: string, node: TransferNode) => {
       try {
         const service = sftpPool.getConnection(sessionId)
         const window = BrowserWindow.fromWebContents(event.sender)
@@ -165,17 +154,12 @@ export function registerSFTPIpcHandlers(): void {
           throw new Error('BrowserWindow not found')
         }
         
-        // 带进度回调的上传
-        await service.uploadFile(localPath, remotePath, (progress: number, size: number, transferredSize: number, speed: number) => {
-          // 发送进度事件到渲染进程
+        await service.uploadFile(taskId, node, (speed, transferredBytes, taskId, node) => {
           window.webContents.send('sftp:uploadProgress', {
-            sessionId,
-            localPath,
-            remotePath,
-            progress,
-            size,
-            transferredSize,
-            speed
+            taskId,
+            nodeId: node.id,
+            speed,
+            transferredBytes
           })
         })
         
@@ -191,31 +175,21 @@ export function registerSFTPIpcHandlers(): void {
    */
   ipcMain.handle(
     'sftp:uploadFolder',
-    async (event, sessionId: string, localPath: string, remotePath: string) => {
+    async (event, sessionId: string, taskId: string, node: TransferNode) => {
       try {
-        console.log('uploadFolder 被调用:', { sessionId, localPath, remotePath })
-        // 检查本地路径是否存在
-        if (!fs.existsSync(localPath)) {
-          console.error('本地路径不存在:', localPath)
-          return { success: false, error: `本地路径不存在：${localPath}` }
-        }
+        console.log('uploadFolder 被调用:', { sessionId, taskId, nodeId: node.id })
         const service = sftpPool.getConnection(sessionId)
         const window = BrowserWindow.fromWebContents(event.sender)
         if (!window) {
           throw new Error('BrowserWindow not found')
         }
         
-        // 带进度回调的上传
-        await service.uploadFolder(localPath, remotePath, (progress: number, currentFile: string, size: number, transferredSize: number, speed: number) => {
-          // 发送进度事件到渲染进程
+        await service.uploadFolder(taskId, node, (speed, transferredBytes, taskId, childNode) => {
           window.webContents.send('sftp:uploadProgress', {
-            sessionId,
-            localPath: currentFile,
-            remotePath,
-            progress,
-            size,
-            transferredSize,
-            speed
+            taskId,
+            nodeId: childNode.id,
+            speed,
+            transferredBytes
           })
         })
         
@@ -441,6 +415,59 @@ export function registerSFTPIpcHandlers(): void {
       await fs.promises.mkdir(dirPath, { recursive: true })
       return { success: true }
     } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  // ==================== v5 优化：文件树扫描 API ====================
+  
+  /**
+   * 扫描本地文件树（用于上传前的文件扫描）
+   * 
+   * IPC 层只做薄封装，业务逻辑在 SFTPService.scanLocalTree() 中实现
+   * 优势：
+   * - 直接使用 Node.js fs 和 path 模块，性能更高
+   * - 使用 path.join 屏蔽操作系统路径差异
+   * - 一次性返回完整 TransferNode 树结构（无循环引用）
+   */
+  ipcMain.handle('sftp:scanLocalTree', async (_event, folderPath: string, remoteBasePath: string) => {
+    try {
+      console.log(`[SFTP] 开始扫描本地文件夹: ${folderPath}`)
+      
+      // 创建临时 SFTPService 实例（本地扫描不需要连接）
+      const tempService = new (await import('../services/sftp')).SFTPService()
+      const result = await tempService.scanLocalTree(folderPath, remoteBasePath)
+      
+      console.log(`[SFTP] 本地扫描完成：${result.totalFiles} 个文件`)
+      return result
+    } catch (error: any) {
+      console.error(`[SFTP] scanLocalTree 异常:`, error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  /**
+   * 扫描远程文件树（用于下载/删除前的文件扫描）
+   * 
+   * IPC 层只做薄封装，业务逻辑在 SFTPService.scanRemoteTree() 中实现
+   * 优势：
+   * - 直接调用 SFTP 服务层方法，减少 IPC 往返次数
+   * - 在主进程中完成所有递归逻辑
+   * - 远程路径统一使用 / 分隔符（SFTP 标准）
+   * - 本地路径使用 path.join 屏蔽系统差异
+   */
+  ipcMain.handle('sftp:scanRemoteTree', async (_event, sessionId: string, remotePath: string, localBasePath?: string) => {
+    try {
+      console.log(`[SFTP] 开始扫描远程文件夹: ${remotePath}`)
+      
+      // 获取已连接的 SFTP 服务实例
+      const service = sftpPool.getConnection(sessionId)
+      const result = await service.scanRemoteTree(remotePath, localBasePath)
+      
+      console.log(`[SFTP] 远程扫描完成：${result.totalFiles} 个文件`)
+      return result
+    } catch (error: any) {
+      console.error(`[SFTP] scanRemoteTree 异常:`, error)
       return { success: false, error: error.message }
     }
   })

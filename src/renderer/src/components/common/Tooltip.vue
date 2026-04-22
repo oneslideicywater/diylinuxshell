@@ -86,39 +86,24 @@ const tooltipStyle = computed(() => {
 })
 
 let showTimer: number | null = null
-let hideTimer: number | null = null
 
 /**
  * 鼠标进入
  */
 const handleMouseEnter = (event: MouseEvent) => {
-  // 清除隐藏定时器
-  if (hideTimer !== null) {
-    clearTimeout(hideTimer)
-    hideTimer = null
-  }
-  
-  // 记录触发元素位置
   triggerRect.value = (event.target as HTMLElement).getBoundingClientRect()
-  
-  // 延迟显示
+
   showTimer = window.setTimeout(() => {
     visible.value = true
     showTimer = null
   }, props.delay)
 }
 
-/**
- * 鼠标离开
- */
 const handleMouseLeave = () => {
-  // 清除显示定时器
   if (showTimer !== null) {
     clearTimeout(showTimer)
     showTimer = null
   }
-  
-  // 立即隐藏
   visible.value = false
 }
 </script>
@@ -140,7 +125,7 @@ const handleMouseLeave = () => {
   word-break: break-word;
   z-index: 10000;
   pointer-events: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 /* 位置修饰 */
@@ -199,6 +184,8 @@ const handleMouseLeave = () => {
 [data-theme="light"] .tooltip {
   background: rgba(255, 255, 255, 0.95);
   color: #333333;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 [data-theme="light"] .tooltip-top::after {

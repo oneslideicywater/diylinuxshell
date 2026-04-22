@@ -10,6 +10,11 @@
       <div class="alert-dialog" :class="{ 'is-error': isError }">
         <div class="dialog-header">
           <h3 class="dialog-title">{{ title }}</h3>
+          <button class="close-btn" @click="handleClose">
+            <svg width="14" height="14" viewBox="0 0 14 14">
+              <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
         </div>
 
         <div class="dialog-content">
@@ -67,12 +72,12 @@ const handleConfirm = () => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 9999;
-  animation: fadeIn 0.2s ease;
+  z-index: 2000;
+  animation: fadeIn 0.15s ease;
 }
 
 @keyframes fadeIn {
@@ -81,11 +86,12 @@ const handleConfirm = () => {
 }
 
 .alert-dialog {
-  background: var(--card-bg, #2d2d2d);
+  background-color: var(--card-bg, #2d2d2d);
+  border: 1px solid var(--border-color, #3c3c3c);
   border-radius: 8px;
   min-width: 400px;
   max-width: 500px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   animation: slideIn 0.2s ease;
 }
 
@@ -101,10 +107,13 @@ const handleConfirm = () => {
 }
 
 .alert-dialog.is-error {
-  border-left: 4px solid #d93025;
+  border-left: 4px solid #f14c4c;
 }
 
 .dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border-color, #3c3c3c);
 }
@@ -113,7 +122,26 @@ const handleConfirm = () => {
   margin: 0;
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-color, #cccccc);
+  color: var(--text-color, #e0e0e0);
+}
+
+.close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #808080);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.close-btn:hover {
+  background-color: var(--hover-bg, #3c3c3c);
+  color: var(--text-color, #e0e0e0);
 }
 
 .dialog-content {
@@ -133,38 +161,39 @@ const handleConfirm = () => {
   border-top: 1px solid var(--border-color, #3c3c3c);
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  gap: 8px;
 }
 
 .btn {
-  padding: 8px 20px;
-  font-size: 14px;
+  padding: 8px 16px;
+  font-size: 13px;
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
 
 .btn-confirm {
-  background: var(--primary-color, #0e639c);
+  background-color: var(--primary-color, #0e639c);
   color: #ffffff;
 }
 
 .btn-confirm:hover {
-  background: var(--primary-hover, #1177bb);
+  background-color: var(--primary-hover, #1177bb);
 }
 
 .btn-danger {
-  background: #d93025;
+  background-color: #d93025;
 }
 
 .btn-danger:hover {
-  background: #b52b1f;
+  background-color: #b52b1f;
 }
 
 /* 浅色主题适配 */
 [data-theme="light"] .alert-dialog {
-  background: #ffffff;
+  background-color: #ffffff;
+  border-color: #e0e0e0;
 }
 
 [data-theme="light"] .dialog-header {
@@ -175,7 +204,11 @@ const handleConfirm = () => {
   color: #333333;
 }
 
-[data-theme="light"] .dialog-content {
+[data-theme="light"] .close-btn:hover {
+  background-color: #f0f0f0;
+}
+
+[data-theme="light"] .content-text {
   color: #666666;
 }
 

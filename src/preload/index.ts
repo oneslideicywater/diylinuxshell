@@ -8,6 +8,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { IPC_CHANNELS } from '@shared/constants/ipc-channels'
 import type { CustomAPI } from '@shared/types/global'
+import type { TransferType, TransferStatus, TransferNode } from '../shared/types/sftp'
 import type { Session, SessionGroup, AppConfig, TerminalSize } from '@shared/types'
 
 /**
@@ -195,26 +196,25 @@ const api: CustomAPI = {
     listDir: (sessionId: string, remotePath: string): Promise<{ success: boolean; data?: any[]; error?: string }> => 
       ipcRenderer.invoke('sftp:listDir', sessionId, remotePath),
     
-    // 下载文件
-    download: (sessionId: string, remotePath: string, localPath: string): Promise<{ success: boolean; error?: string }> => 
-      ipcRenderer.invoke('sftp:download', sessionId, remotePath, localPath),
+    download: (sessionId: string, taskId: string, node: TransferNode): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:download', sessionId, taskId, node),
     
     // 下载文件夹（递归）
-    downloadFolder: (sessionId: string, remotePath: string, localPath: string): Promise<{ success: boolean; error?: string }> => 
-      ipcRenderer.invoke('sftp:downloadFolder', sessionId, remotePath, localPath),
+    downloadFolder: (sessionId: string, taskId: string, node: TransferNode): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:downloadFolder', sessionId, taskId, node),
     
     // 上传文件
-    upload: (sessionId: string, localPath: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
-      ipcRenderer.invoke('sftp:upload', sessionId, localPath, remotePath),
+    upload: (sessionId: string, taskId: string, node: TransferNode): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:upload', sessionId, taskId, node),
     
     // 上传文件夹（递归）
-    uploadFolder: (sessionId: string, localPath: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
-      ipcRenderer.invoke('sftp:uploadFolder', sessionId, localPath, remotePath),
+    uploadFolder: (sessionId: string, taskId: string, node: TransferNode): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:uploadFolder', sessionId, taskId, node),
     
     // 监听上传进度
-    onUploadProgress: (callback: (data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => void) => {
+    onUploadProgress: (callback: (data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => void) => {
       const channel = 'sftp:uploadProgress'
-      const listener = (_event: Electron.IpcRendererEvent, data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => {
         callback(data)
       }
       ipcRenderer.on(channel, listener)
@@ -222,9 +222,9 @@ const api: CustomAPI = {
     },
     
     // 监听下载进度
-    onDownloadProgress: (callback: (data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => void) => {
+    onDownloadProgress: (callback: (data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => void) => {
       const channel = 'sftp:downloadProgress'
-      const listener = (_event: Electron.IpcRendererEvent, data: { sessionId: string; localPath: string; remotePath: string; progress: number; size: number; transferredSize: number; speed: number }) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => {
         callback(data)
       }
       ipcRenderer.on(channel, listener)
@@ -277,6 +277,10 @@ const api: CustomAPI = {
     dirname: (filePath: string): Promise<{ success: boolean; data?: string; error?: string }> =>
       ipcRenderer.invoke('sftp:dirname', filePath),
     
+    // 路径拼接（使用 Node.js path.join，屏蔽操作系统差异）
+    pathJoin: (...segments: string[]): Promise<{ success: boolean; data?: string; error?: string }> =>
+      ipcRenderer.invoke('sftp:pathJoin', ...segments),
+    
     // 获取用户主目录
     getHomeDir: (): Promise<{ success: boolean; data?: string; error?: string }> => 
       ipcRenderer.invoke('sftp:getHomeDir'),
@@ -296,6 +300,68 @@ const api: CustomAPI = {
     // 确保本地目录存在（递归创建）
     ensureDir: (dirPath: string): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('sftp:ensure-dir', dirPath),
+
+    /**
+     * 扫描本地文件树（v5 优化）
+     * 直接返回 TransferNode 对象（无循环引用）
+     */
+    scanLocalTree: (folderPath: string, remoteBasePath: string): Promise<{
+      success: boolean
+      root?: {
+        id: string
+        name: string
+        isDirectory: boolean
+        type: TransferType
+        status: TransferStatus
+        progress: number
+        size: number
+        localPath?: string
+        remotePath?: string
+        speed: number
+        transferredBytes: number
+        parentId?: string
+        children?: any[]
+        error?: string
+        totalFiles?: number
+        completedFiles?: number
+        expanded?: boolean
+      }
+      totalFiles?: number
+      totalBytes?: number
+      error?: string
+    }> => 
+      ipcRenderer.invoke('sftp:scanLocalTree', folderPath, remoteBasePath),
+
+    /**
+     * 扫描远程文件树（v5 优化）
+     * 直接返回 TransferNode 对象（无循环引用）
+     */
+    scanRemoteTree: (sessionId: string, remotePath: string, localBasePath?: string): Promise<{
+      success: boolean
+      root?: {
+        id: string
+        name: string
+        isDirectory: boolean
+        type: TransferType
+        status: TransferStatus
+        progress: number
+        size: number
+        localPath?: string
+        remotePath?: string
+        speed: number
+        transferredBytes: number
+        parentId?: string
+        children?: any[]
+        error?: string
+        totalFiles?: number
+        completedFiles?: number
+        expanded?: boolean
+      }
+      totalFiles?: number
+      totalBytes?: number
+      error?: string
+    }> => 
+      ipcRenderer.invoke('sftp:scanRemoteTree', sessionId, remotePath, localBasePath),
 
     // 监听删除本地文件进度
     onDeleteLocalProgress: (callback: (data: { currentPath: string }) => void) => {

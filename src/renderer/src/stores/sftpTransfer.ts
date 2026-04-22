@@ -18,6 +18,25 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   const transferTasks = ref<TransferTask[]>([])
 
   /**
+   * 节点 ID → 节点引用的快速查找索引
+   * 在 addTask 时构建，getNode 直接 O(1) 查表
+   * key 格式: "taskId::nodeId"
+   */
+  const nodeIndexMap = new Map<string, TransferNode>()
+
+  /**
+   * 递归构建节点索引（将树中所有节点存入 Map）
+   */
+  function buildNodeIndex(taskId: string, node: TransferNode): void {
+    nodeIndexMap.set(`${taskId}::${node.id}`, node)
+    if (node.children) {
+      for (const child of node.children) {
+        buildNodeIndex(taskId, child)
+      }
+    }
+  }
+
+  /**
    * 选中的任务 ID 集合（用于批量取消操作）
    */
   const selectedTaskIds = ref<Set<string>>(new Set())
@@ -64,14 +83,18 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
 
   /**
    * 添加传输任务
-   * @param task 任务数据
+   * 
+   * 注意：此处不构建节点索引！
+   * 正确的索引时机是：扫描完成后子节点填充完毕，调用 rebuildNodeIndex 统一重建。
+   * 如果在 addTask 时对空根节点建索引，后续扫描填充子节点后需要补丁式 indexSubTree，
+   * 容易导致 Proxy 引用混乱（普通对象 vs reactive Proxy 混用）→ 响应式更新失效。
+   * 
+   * @param task 任务数据（root 可以为空 children 的占位节点）
    */
   function addTask(task: TransferTask): void {
-    // 清理超出限制的已完成任务
     cleanupCompletedTasks()
-    
-    // 直接 push 到 ref 数组中，Vue 3 会自动处理响应式
     transferTasks.value.push(task)
+    // 不在此处 buildNodeIndex，等扫描完成后由调用方触发 rebuildNodeIndex
   }
 
   /**
@@ -103,14 +126,29 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
 
   /**
    * 更新传输任务的顶层属性
+   * 当 root 被替换时自动重建节点索引（两阶段策略的关键）
+   * 
    * @param taskId 任务 ID
    * @param updates 要更新的字段
    */
   function updateTask(taskId: string, updates: Partial<TransferTask>): void {
     const task = transferTasks.value.find(t => t.id === taskId)
-    if (task) {
-      Object.assign(task, updates)
+    if (!task) return
+    
+    // 如果 root 被整体替换（两阶段策略：占位节点 → 真实树），必须重建索引
+    if (updates.root && task.root !== updates.root) {
+      // 清除该任务的所有旧索引
+      for (const key of Array.from(nodeIndexMap.keys())) {
+        if (key.startsWith(`${taskId}::`)) {
+          nodeIndexMap.delete(key)
+        }
+      }
+      // 用新 root 重建索引
+      buildNodeIndex(taskId, updates.root)
+      console.log(`[sftpTransfer] 🔄 任务 ${taskId} 索引已重建（root 替换）`)
     }
+
+    Object.assign(task, updates)
   }
 
   /**
@@ -133,6 +171,58 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
       // 直接修改 reactive 对象的属性，Vue 会自动追踪变化
       Object.assign(task.root, rootUpdates)
     }
+  }
+
+  /**
+   * 直接变异节点并触发 Vue 响应式更新
+   * 
+   * 利用 nodeIndexMap 实现 O(1) 节点查找，
+   * 直接对响应式对象做 Object.assign 变异，
+   * 最后通过替换数组元素触发 computed 重算。
+   * 
+   * 配合 TransferNode.parent 引用使用，可实现 O(depth) 的祖先链传播
+   * 
+   * @param taskId 任务 ID
+   * @param nodeId 节点 ID
+   * @param updates 要更新的字段
+   */
+  function mutateNode(taskId: string, nodeId: string, updates: Partial<TransferNode>): void {
+    const node = nodeIndexMap.get(`${taskId}::${nodeId}`)
+    if (!node) {
+      console.warn(`[sftpTransfer] ⚠️ mutateNode 未找到节点: taskId=${taskId} nodeId=${nodeId}（索引可能未重建）`)
+      return
+    }
+
+    // 直接对 reactive Proxy 做 Object.assign，触发 Proxy.set → 自动通知所有依赖该属性的 computed/watcher
+    // 无需手动替换整个 Task 对象（之前的 { ...task } 浅拷贝会破坏 nodeIndexMap 中引用的 Proxy 链接）
+    Object.assign(node, updates)
+  }
+
+  /**
+   * 重建任务的完整节点索引（扫描完成后必须调用）
+   * 
+   * 使用时机：addTask 时根节点是空 children（scanning 状态），
+   * 异步扫描完成并填充子节点后，调用此方法一次性重建整棵树的索引。
+   * 此时 task.root 及其所有子节点都已在 reactive 数组中，
+   * buildNodeIndex 取到的全部是 Vue Proxy → mutateNode 的 Object.assign 能正确触发 Proxy.set。
+   * 
+   * @param taskId 任务 ID
+   */
+  function rebuildNodeIndex(taskId: string): void {
+    const task = transferTasks.value.find(t => t.id === taskId)
+    if (!task || !task.root) return
+
+    // 先清除该任务的所有旧索引（防止重复）
+    for (const key of Array.from(nodeIndexMap.keys())) {
+      if (key.startsWith(`${taskId}::`)) {
+        nodeIndexMap.delete(key)
+      }
+    }
+
+    // 重建完整树索引（此时子节点已填充完毕，全部是 reactive Proxy）
+    buildNodeIndex(taskId, task.root)
+
+    console.log(`[sftpTransfer] 🔨 重建索引完成: taskId=${taskId}, 根节点="${task.root.name}"`)
   }
 
   /**
@@ -235,6 +325,20 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
    */
   function getTask(taskId: string): TransferTask | undefined {
     return transferTasks.value.find(t => t.id === taskId)
+  }
+
+  /**
+   * 获取指定任务的指定节点的最新状态
+   * 使用 nodeIndexMap 实现 O(1) 查找，避免遍历整棵树
+   * 
+   * @param taskId 任务 ID
+   * @param nodeId 节点 ID
+   * @returns 最新状态的节点引用，或 undefined
+   */
+  function getNode(taskId: string, nodeId: string): TransferNode | undefined {
+    // 触发 transferTasks 的响应式依赖收集（确保 Store 变化时 computed 重算）
+    void transferTasks.value.length
+    return nodeIndexMap.get(`${taskId}::${nodeId}`)
   }
 
   /**
@@ -349,12 +453,15 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
     updateTaskStatus,
     updateTaskRoot,
     // 节点状态更新方法（核心）
-    updateNodeStatus,
+    mutateNode,             // O(1) 直接变异 + 响应式触发（配合 parent 链使用）
+    rebuildNodeIndex,       // 扫描完成后重建整棵树索引（必须调用）
+    updateNodeStatus,       // 兼容旧接口（树遍历查找）
     // 其他方法
     removeTask,
     clearCompletedTasks,
     clearAllTasks,
     getTask,
+    getNode,                // 获取指定任务的指定节点最新状态（实时数据）
     setAllNodesExpanded,
     // ========== 任务选中相关方法 ==========
     toggleTaskSelection,     // 切换任务选中状态

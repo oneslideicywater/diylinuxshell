@@ -9,4 +9,9 @@
 6. 永远不要用C盘的文件路径，写测试用例。使用D盘的文件路径。
 7. 打开终端powershell后,先切换编码再运行命令,切换编码: `$OutputEncoding = [Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.Encoding]::UTF8;chcp 65001`
 8. 永远不要使用require,用import导入模块。
-9. 如果有现成的API,一定要优先使用,不要自己实现。
+9. 如果有现成的API,一定要优先使用; 用最简单清晰的代码实现需求。
+10. 永远不要只写代码，要写详细的注释.
+11. 每次写完代码如果增删函数的话,一定要更新被更改文件的digest.md,存放了文件函数的摘要信息。
+12. 永远用nodejs path模块处理文件分隔符差异,不要用字符串拼接。
+13. 不要违反分层原则: 业务逻辑应该放在 Service 层，IPC 层只做薄封装。
+14. 要根据函数作用域插入新代码,不要直接将新代码追加到文件末尾
