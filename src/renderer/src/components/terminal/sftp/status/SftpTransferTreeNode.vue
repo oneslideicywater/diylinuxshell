@@ -3,16 +3,16 @@
  * 显示单个文件传输状态，支持树形缩进
  * 
  * 重构说明：
- * - 静态字段（name、size、path 等）从 props 获取（不变）
- * - 动态字段（speed、progress、status、time）从 Pinia Store 直接读取（实时响应）
- * - 通过 taskId + nodeId 在 Store 树中定位最新节点状态
+ * - 所有数据（静态 + 动态）均通过 taskId + nodeId 从 Pinia Store 获取
+ * - 不再接收 node 对象 prop，完全依赖 Store 的响应式数据
+ * - 依赖 store.version 确保每次 mutateNode 后自动重算
  * @module components/session/sftp/SftpTransferTreeNode
  */
 
 <template>
-  <div class="tree-node">
+  <div v-if="node" class="tree-node">
     <!-- 节点内容 -->
-    <div v-if="node" class="node-row" :class="{ 'is-folder': node.isDirectory, 'is-error': liveStatus === 'error' }">
+    <div class="node-row" :class="{ 'is-folder': node.isDirectory, 'is-error': liveStatus === 'error' }">
       <!-- 复选框占位列（与表头对齐） -->
       <div class="column checkbox-column">
         <span class="checkbox-placeholder"></span>
@@ -71,22 +71,22 @@
         <span v-else class="progress-percent">-</span>
       </div>
 
-      <!-- 大小列（静态，从 props 获取） -->
+      <!-- 大小列（从 Store 获取） -->
       <div class="column size-column">
         {{ formatSize(node.size) }}
       </div>
 
-      <!-- 本地路径列（静态） -->
+      <!-- 本地路径列（从 Store 获取） -->
       <div class="column local-path-column" :title="node.localPath">
         {{ node.localPath || '-' }}
       </div>
 
-      <!-- 箭头列（静态） -->
+      <!-- 箭头列（从 Store 获取） -->
       <div class="column arrow-column">
         {{ node.type === 'upload' ? '→' : (node.type === 'download' ? '←' : '×') }}
       </div>
 
-      <!-- 远程路径列（静态） -->
+      <!-- 远程路径列（从 Store 获取） -->
       <div class="column remote-path-column" :title="node.remotePath">
         {{ node.remotePath || '-' }}
       </div>
@@ -107,13 +107,13 @@
       </div>
     </div>
 
-    <!-- 子节点 -->
+    <!-- 子节点（递归渲染，所有子节点数据均从 Store 获取） -->
     <div v-if="node.isDirectory && isExpanded && node.children && node.children.length > 0" class="children">
       <SftpTransferTreeNode
         v-for="child in node.children"
         :key="child.id"
-        :node="child"
         :task-id="taskId"
+        :node-id="child.id"
         :level="level + 1"
         @update:node-expanded="handleChildExpanded"
       />
@@ -122,7 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed } from 'vue'
 import type { TransferNode } from '@shared/types/sftp'
 import { formatSize, formatSpeed } from '@/utils/fs-utils'
 import { formatTime } from '../script/utils'
@@ -140,12 +140,12 @@ defineOptions({
  * Props 定义
  */
 interface Props {
-  /** 传输节点（提供静态信息：name、size、path、children 结构等） */
-  node: TransferNode
+  /** 任务 ID（用于从 Pinia Store 查询节点数据） */
+  taskId: string
+  /** 节点 ID（用于在 Store 树中定位当前节点） */
+  nodeId: string
   /** 缩进层级 */
   level: number
-  /** 任务 ID（用于从 Pinia Store 查询实时动态数据） */
-  taskId: string
 }
 
 const props = defineProps<Props>()
@@ -153,72 +153,56 @@ const props = defineProps<Props>()
 const sftpTransferStore = useSftpTransferStore()
 
 /**
- * 定时刷新计数器
- * 通过 setInterval 定时递增，驱动 liveNode 等 computed 强制重算
- * 解决 mutateNode 直接变异响应式对象时部分 computed 不触发的问题
+ * 从 Store 中查找当前节点的最新状态（全部字段：静态 + 动态）
+ * 依赖 store.version 确保每次 mutateNode 后自动重算（替代旧的 setInterval 定时刷新）
  */
-const refreshTick = ref(0)
-let refreshTimer: ReturnType<typeof setInterval> | null = null
-
-onMounted(() => {
-  // 每 500ms 强制刷新一次，确保传输中的节点实时显示速度/进度/时间
-  refreshTimer = setInterval(() => {
-    refreshTick.value++
-  }, 500)
+const node = computed((): TransferNode | undefined => {
+  void sftpTransferStore.version
+  return sftpTransferStore.getNode(props.taskId, props.nodeId)
 })
 
-onUnmounted(() => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
-})
-
-/**
- * 从 Store 中查找当前节点的最新状态
- * 依赖 refreshTick 确保定时重算，即使底层 reactive 对象的属性被直接变异也能感知变化
- */
-const liveNode = computed((): TransferNode | undefined => {
-  void refreshTick.value  // 触发依赖收集
-  return sftpTransferStore.getNode(props.taskId, props.node.id)
-})
-
-/** 实时速度（字节/秒） */
-const liveSpeed = computed(() => liveNode.value?.speed ?? 0)
+/** 实时速度 */
+const liveSpeed = computed(() => node.value?.speed ?? 0)
 
 /** 实时进度百分比 */
-const liveProgress = computed(() => liveNode.value?.progress ?? 0)
+const liveProgress = computed(() => node.value?.progress ?? 0)
 
 /** 实时状态 */
-const liveStatus = computed(() => liveNode.value?.status ?? props.node.status)
+const liveStatus = computed(() => node.value?.status ?? 'pending')
 
-/** 实时剩余时间（根据 size/TransferredBytes/speed 计算） */
+/** 实时剩余时间（根据 size/transferredBytes/speed 计算） */
 const liveRemaining = computed(() => {
-  const node = liveNode.value
-  if (!node) return ''
-  const { size = 0, transferredBytes = 0, speed = 0 } = node
-  if (speed <= 0 || size <= transferredBytes) return ''
+  const n = node.value
+  if (!n) return ''
+  if (n.status === 'completed') return '00:00:00'
+
+  const { size = 0, transferredBytes = 0, speed = 0 } = n
+  if (speed <= 0 || size <= transferredBytes) return 'x'
   return formatTime(Math.ceil((size - transferredBytes) / speed))
 })
 
-/** 实时经过时间（根据 TransferredBytes/speed 或 startTime 计算） */
+/** 实时经过时间（优先用 endTime - startTime 计算实际耗时，进行中则用 Date.now - startTime） */
 const liveElapsed = computed(() => {
-  const node = liveNode.value
-  if (!node) return ''
-  if (node.startTime) return formatTime(Math.round((Date.now() - node.startTime) / 1000))
-  const { transferredBytes = 0, speed = 0 } = node
-  if (speed <= 0 || transferredBytes <= 0) return ''
-  return formatTime(Math.ceil(transferredBytes / speed))
+  const n = node.value
+  if (!n) return ''
+  // 已结束（completed/error/cancelled）：用 endTime - startTime 得到精确实际耗时
+  if (n.status === 'completed' && n.endTime && n.startTime) {
+    return formatTime(Math.round((n.endTime - n.startTime) / 1000))
+  }
+  // 进行中：实时计算
+  if (n.startTime) return formatTime(Math.round((Date.now() - n.startTime) / 1000))
+
+  return formatTime(0)
 })
 
 /** 已完成文件数（文件夹专用） */
-const liveCompletedFiles = computed(() => liveNode.value?.completedFiles ?? 0)
+const liveCompletedFiles = computed(() => node.value?.completedFiles ?? 0)
 
 /**
  * 获取节点的展开状态（默认为 false，即默认折叠）
  */
 const isExpanded = computed(() => {
-  return props.node.expanded ?? false
+  return node.value?.expanded ?? false
 })
 
 /**
@@ -234,7 +218,7 @@ const emit = defineEmits<{
  * 触发父组件的 update 事件来更新节点状态
  */
 function toggleExpand(): void {
-  emit('update:node-expanded', props.node.id, !isExpanded.value)
+  emit('update:node-expanded', props.nodeId, !isExpanded.value)
 }
 
 /**
@@ -249,7 +233,9 @@ function handleChildExpanded(nodeId: string, expanded: boolean): void {
  * 状态文本（根据任务类型和实时状态动态显示）
  */
 const statusText = computed(() => {
-  return getStatusText(props.node.type, liveStatus.value)
+  const n = node.value
+  if (!n) return ''
+  return getStatusText(n.type, liveStatus.value)
 })
 </script>
 

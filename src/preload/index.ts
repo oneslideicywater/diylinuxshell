@@ -235,18 +235,18 @@ const api: CustomAPI = {
     mkdir: (sessionId: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('sftp:mkdir', sessionId, remotePath),
     
-    // 删除远程文件
-    delete: (sessionId: string, remotePath: string): Promise<{ success: boolean; error?: string }> => 
-      ipcRenderer.invoke('sftp:delete', sessionId, remotePath),
+    // 删除远程文件或目录（对齐 upload/download 模式）
+    delete: (sessionId: string, taskId: string, node: TransferNode): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:delete', sessionId, taskId, node),
     
     // 取消上传
     cancelUpload: (sessionId: string): Promise<{ success: boolean; error?: string }> => 
       ipcRenderer.invoke('sftp:cancelUpload', sessionId),
     
-    // 监听删除进度
-    onDeleteProgress: (callback: (data: { sessionId: string; currentPath: string }) => void) => {
+    // 监听删除进度（对齐 upload/download 进度事件格式）
+    onDeleteProgress: (callback: (data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => void) => {
       const channel = 'sftp:deleteProgress'
-      const listener = (_event: Electron.IpcRendererEvent, data: { sessionId: string; currentPath: string }) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => {
         callback(data)
       }
       ipcRenderer.on(channel, listener)
@@ -285,9 +285,9 @@ const api: CustomAPI = {
     getHomeDir: (): Promise<{ success: boolean; data?: string; error?: string }> => 
       ipcRenderer.invoke('sftp:getHomeDir'),
 
-    // 删除本地文件
-    deleteLocalFile: (localPath: string): Promise<{ success: boolean; error?: string }> => 
-      ipcRenderer.invoke('sftp:delete-local', localPath),
+    // 删除本地文件或文件夹（对齐 upload/download 模式）
+    deleteLocalFile: (taskId: string, node: TransferNode): Promise<{ success: boolean; error?: string }> => 
+      ipcRenderer.invoke('sftp:delete-local', taskId, node),
 
     // 获取本地文件/文件夹状态
     statLocal: (localPath: string): Promise<{ success: boolean; data?: { isDirectory: boolean; size: number }; error?: string }> =>
@@ -363,10 +363,10 @@ const api: CustomAPI = {
     }> => 
       ipcRenderer.invoke('sftp:scanRemoteTree', sessionId, remotePath, localBasePath),
 
-    // 监听删除本地文件进度
-    onDeleteLocalProgress: (callback: (data: { currentPath: string }) => void) => {
+    // 监听删除本地文件进度（对齐 upload/download 进度事件格式）
+    onDeleteLocalProgress: (callback: (data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => void) => {
       const channel = 'sftp:delete-local-progress'
-      const listener = (_event: Electron.IpcRendererEvent, data: { currentPath: string }) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => {
         callback(data)
       }
       ipcRenderer.on(channel, listener)

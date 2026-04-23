@@ -53,7 +53,7 @@ export const pathUtils = {
  * @returns 格式化后的大小字符串
  */
 export function formatSize(bytes: number): string {
-  if (bytes === 0) return ''
+  if (bytes === 0) return '0 B'
   const k = 1024
   const sizes = ['B', 'KB', 'MB', 'GB']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
@@ -93,6 +93,6 @@ export function formatTime(seconds: number): string {
  * @returns 格式化后的速度字符串
  */
 export function formatSpeed(bytesPerSecond: number): string {
-  if (bytesPerSecond === 0) return '-'
+
   return formatBytes(bytesPerSecond) + '/s'
 }

@@ -31,6 +31,21 @@ export function formatTime(seconds: number): string {
 }
 
 /**
+ * 拼接远程路径（SFTP 使用 / 分隔符，自动处理尾部斜杠避免双斜杠）
+ * 
+ * 等价于 Node.js 的 path.posix.join，用于前端环境
+ * 
+ * @param parts 路径段
+ * @returns 拼接后的规范化路径
+ */
+export function joinRemotePath(...parts: string[]): string {
+  return parts
+    .map(p => p.replace(/\/+$/, ''))   // 去除每段的尾部斜杠
+    .filter(p => p !== '')             // 过滤空段
+    .join('/')
+}
+
+/**
  * 创建传输节点工厂函数
  * 
  * ✅ 统一版本：消除各模块中手动创建 TransferNode 的重复代码
@@ -190,91 +205,4 @@ export function isTaskCancelled(taskId: string, context: string = ''): boolean {
   }
   
   return cancelled
-}
-
-/**
- * 从子节点聚合计算文件夹节点的进度信息（统一版本）
- * 基于字节数加权计算总进度、速度、剩余时间等
- * 
- * @param node 文件夹节点
- * @returns 聚合后的进度信息
- */
-export function aggregateChildProgress(node: TransferNode): {
-  progress: number; completedFiles: number; speed: number;
-  transferredBytes: number; totalBytes: number
-} {
-  if (!node.children || node.children.length === 0) {
-    return {
-      progress: node.status === 'completed' ? 100 : (node.progress || 0),
-      completedFiles: node.status === 'completed' ? 1 : 0,
-      speed: node.speed || 0,
-      transferredBytes: node.status === 'completed' ? (node.size || 0) : Math.round((node.size || 0) * (node.progress || 0) / 100),
-      totalBytes: node.size || 0
-    }
-  }
-
-  let totalSize = 0
-  let transferredSize = 0
-  let activeSpeed = 0
-  let completedCount = 0
-
-  for (const child of node.children) {
-    const childSize = child.size || 0
-    totalSize += childSize
-
-    if (child.isDirectory && child.children) {
-      const childAgg = aggregateChildProgress(child)
-      transferredSize += childAgg.transferredBytes
-      if (childAgg.progress >= 100) completedCount++
-      if (child.status === 'transferring') activeSpeed = childAgg.speed
-    } else {
-      if (child.status === 'completed') { transferredSize += childSize; completedCount++ }
-      else { transferredSize += Math.round(childSize * (child.progress || 0) / 100) }
-      if (child.status === 'transferring') activeSpeed = child.speed || 0
-    }
-  }
-
-  return {
-    progress: totalSize > 0 ? Math.round((transferredSize / totalSize) * 100) : 0,
-    completedFiles: completedCount,
-    speed: activeSpeed,
-    transferredBytes: transferredSize,
-    totalBytes: totalSize
-  }
-}
-
-/**
- * 通过 parent ID 链向上传播进度到所有祖先节点（v5 优化版）
- * 
- * 利用 TransferNode.parentId 字段 + Store.getNode() 实现 O(1) 祖先链遍历，
- * 无需从根节点遍历整棵树，复杂度 O(树深度)
- * 
- * @param taskId 任务 ID
- * @param startNode 起始文件夹节点（通常是当前传输文件的直接父节点）
- * @param store Store 实例
- */
-export function propagateViaParentChain(
-  taskId: string,
-  startNode: TransferNode,
-  store: ReturnType<typeof useSftpTransferStore>
-): void {
-  let current: TransferNode | undefined = startNode
-
-  while (current && current.isDirectory) {
-    const agg = aggregateChildProgress(current)
-
-    store.mutateNode(taskId, current.id, {
-      progress: agg.progress,
-      completedFiles: agg.completedFiles,
-      speed: agg.speed,
-      transferredBytes: agg.transferredBytes
-    })
-
-    // 通过 Store.getNode() O(1) 查找父节点（替代之前的 current.parent 引用）
-    if (current.parentId) {
-      current = store.getNode(taskId, current.parentId)
-    } else {
-      current = undefined
-    }
-  }
 }

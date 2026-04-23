@@ -51,6 +51,8 @@ export interface TransferNode {
   error?: string
   /** 开始时间戳 */
   startTime?: number
+  /** 结束时间戳（完成/失败/取消时设置，用于计算实际经过时间） */
+  endTime?: number
   /** 展开状态（用于树形列表） */
   expanded?: boolean
   /** 总文件数（文件夹节点） */
@@ -77,6 +79,8 @@ export interface TransferTask {
   status: TransferStatus
   /** 传输根节点 */
   root: TransferNode
+  /** 当前正在传输的节点 ID（对应 Pinia Store 中 TransferNode.id），用于高亮/定位活跃节点 */
+  activeNodeId?: string
   
   // 连接标识（用于隔离不同 SFTP 连接的任务）
   /**

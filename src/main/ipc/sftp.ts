@@ -96,6 +96,15 @@ export function registerSFTPIpcHandlers(): void {
           throw new Error('BrowserWindow not found')
         }
 
+        // ── 下载进度回调：Service 层每次写入 chunk 后触发 ───────────────
+        // 回调参数说明：
+        //   speed           - 瞬时传输速度（字节/秒），由 Service 层 calculateTransferSpeed 计算
+        //   transferredBytes - 当前文件已传输的总字节数（累加值）
+        //   taskId          - 所属传输任务的唯一标识，前端用于定位 Store 中的任务
+        //   node            - 正在传输的子节点对象（文件节点），包含 id/localPath/remotePath/size 等
+        //
+        // IPC 层职责：将回调数据转发给渲染进程（通过 webContents.send）
+        // 前端通过 nodeId 匹配到具体节点，更新 UI 进度条和速度显示
         await service.downloadFile(taskId, node, (speed, transferredBytes, taskId, node) => {
           window.webContents.send('sftp:downloadProgress', {
             taskId,
@@ -125,6 +134,9 @@ export function registerSFTPIpcHandlers(): void {
           throw new Error('BrowserWindow not found')
         }
 
+        // ── 下载文件夹进度回调：递归下载每个子文件时触发 ──────────────
+        // 与 downloadFile 共用同一回调签名，childNode 为当前正在传输的子节点
+        // 文件夹本身无进度，进度由子文件逐个上报后前端聚合计算
         await service.downloadFolder(taskId, node, (speed, transferredBytes, taskId, childNode) => {
           window.webContents.send('sftp:downloadProgress', {
             taskId,
@@ -154,6 +166,8 @@ export function registerSFTPIpcHandlers(): void {
           throw new Error('BrowserWindow not found')
         }
         
+        // ── 上传进度回调：Service 层每次写入 chunk 后触发 ───────────────
+        // 回调参数说明同 download，node 为当前正在上传的文件节点
         await service.uploadFile(taskId, node, (speed, transferredBytes, taskId, node) => {
           window.webContents.send('sftp:uploadProgress', {
             taskId,
@@ -184,6 +198,8 @@ export function registerSFTPIpcHandlers(): void {
           throw new Error('BrowserWindow not found')
         }
         
+        // ── 上传文件夹进度回调：递归上传每个子文件时触发 ──────────────
+        // 与 uploadFile 共用同一回调签名，childNode 为当前正在传输的子节点
         await service.uploadFolder(taskId, node, (speed, transferredBytes, taskId, childNode) => {
           window.webContents.send('sftp:uploadProgress', {
             taskId,
@@ -215,30 +231,43 @@ export function registerSFTPIpcHandlers(): void {
   })
 
   /**
-   * 删除远程文件
+   * 删除远程文件或目录（递归）
+   * 对齐 upload/download 模式：接收 TransferNode，进度事件携带 taskId + nodeId
    */
-  ipcMain.handle('sftp:delete', async (event, sessionId: string, remotePath: string) => {
-    try {
-      const service = sftpPool.getConnection(sessionId)
-      const window = BrowserWindow.fromWebContents(event.sender)
-      if (!window) {
-        throw new Error('BrowserWindow not found')
-      }
+  ipcMain.handle(
+    'sftp:delete',
+    async (event, sessionId: string, taskId: string, node: TransferNode) => {
+      try {
+        const service = sftpPool.getConnection(sessionId)
+        const window = BrowserWindow.fromWebContents(event.sender)
+        if (!window) {
+          throw new Error('BrowserWindow not found')
+        }
 
-      // 进度回调函数
-      const onProgress = (currentPath: string) => {
-        window.webContents.send('sftp:deleteProgress', {
-          sessionId,
-          currentPath
+        // ── 删除进度回调：Service 层每个节点删除前后触发 ─────────────
+        // 回调参数说明：
+        //   speed            - 删除操作无速度概念，固定为 0
+        //   transferredBytes - 完成时为 node.size（表示已删除字节数），否则为 0
+        //   taskId           - 所属传输任务的唯一标识
+        //   childNode        - 当前正在删除的节点（文件或目录）
+        //
+        // IPC 层职责：将回调数据转发给渲染进程
+        // 前端通过 nodeId 匹配到具体节点，更新 UI 进度条（0% → 100%）
+        await service.deleteFile(taskId, node, (speed, transferredBytes, taskId, childNode) => {
+          window.webContents.send('sftp:deleteProgress', {
+            taskId,
+            nodeId: childNode.id,
+            speed,
+            transferredBytes
+          })
         })
-      }
 
-      await service.deleteFile(remotePath, onProgress)
-      return { success: true }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+        return { success: true }
+      } catch (error: any) {
+        return { success: false, error: error.message }
+      }
     }
-  })
+  )
 
   /**
    * 断开 SFTP 连接
@@ -371,41 +400,54 @@ export function registerSFTPIpcHandlers(): void {
   })
 
   /**
-   * 删除本地文件或文件夹（支持递归删除文件夹）
+   * 删除本地文件或文件夹（对齐 upload/download 模式）
+   * 接收 TransferNode，进度事件携带 taskId + nodeId
    */
-  ipcMain.handle('sftp:delete-local', async (_event, localPath: string) => {
-    try {
-      const window = BrowserWindow.fromWebContents(_event.sender)
-      
-      const stat = await fs.promises.stat(localPath)
-      
-      if (stat.isDirectory()) {
-        // 文件夹：递归删除所有内容后删除文件夹本身
-        await fs.promises.rm(localPath, { recursive: true, force: true })
-        
+  ipcMain.handle(
+    'sftp:delete-local',
+    async (event, taskId: string, node: TransferNode) => {
+      try {
+        const window = BrowserWindow.fromWebContents(event.sender)
+        if (!window) {
+          throw new Error('BrowserWindow not found')
+        }
+
+        const localPath = node.localPath!
+
+        // ── 删除开始：上报 0% 进度 ─────────────────────────────────────
+        window.webContents.send('sftp:delete-local-progress', {
+          taskId,
+          nodeId: node.id,
+          speed: 0,
+          transferredBytes: 0
+        })
+
+        const stat = await fs.promises.stat(localPath)
+
+        if (stat.isDirectory()) {
+          // 文件夹：递归删除所有内容后删除文件夹本身
+          await fs.promises.rm(localPath, { recursive: true, force: true })
+        } else {
+          // 单文件：直接删除
+          await fs.promises.unlink(localPath)
+        }
+
+        // ── 删除完成：上报 100% 进度 ───────────────────────────────────
         if (window) {
           window.webContents.send('sftp:delete-local-progress', {
-            currentPath: localPath,
-            completed: true
+            taskId,
+            nodeId: node.id,
+            speed: 0,
+            transferredBytes: node.size || 0
           })
         }
-      } else {
-        // 单文件：直接删除
-        await fs.promises.unlink(localPath)
-        
-        if (window) {
-          window.webContents.send('sftp:delete-local-progress', {
-            currentPath: localPath,
-            completed: true
-          })
-        }
+
+        return { success: true }
+      } catch (error: any) {
+        return { success: false, error: error.message }
       }
-      
-      return { success: true }
-    } catch (error: any) {
-      return { success: false, error: error.message }
     }
-  })
+  )
 
   /**
    * 确保本地目录存在（递归创建）

@@ -68,9 +68,9 @@ export interface CustomAPI {
     upload: (sessionId: string, taskId: string, node: TransferNode) => Promise<{ success: boolean; error?: string }>
     uploadFolder: (sessionId: string, taskId: string, node: TransferNode) => Promise<{ success: boolean; error?: string }>
     mkdir: (sessionId: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
-    delete: (sessionId: string, remotePath: string) => Promise<{ success: boolean; error?: string }>
+    delete: (sessionId: string, taskId: string, node: TransferNode) => Promise<{ success: boolean; error?: string }>
     cancelUpload: (sessionId: string) => Promise<{ success: boolean; error?: string }>
-    onDeleteProgress: (callback: (data: { sessionId: string; currentPath: string }) => void) => () => void
+    onDeleteProgress: (callback: (data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => void) => () => void
     onUploadProgress: (callback: (data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => void) => () => void
     onDownloadProgress: (callback: (data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => void) => () => void
     disconnect: (sessionId: string) => Promise<{ success: boolean; error?: string }>
@@ -81,9 +81,9 @@ export interface CustomAPI {
     dirname: (filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>
     pathJoin: (...segments: string[]) => Promise<{ success: boolean; data?: string; error?: string }>
     getHomeDir: () => Promise<{ success: boolean; data?: string; error?: string }>
-    deleteLocalFile: (localPath: string) => Promise<{ success: boolean; error?: string }>
+    deleteLocalFile: (taskId: string, node: TransferNode) => Promise<{ success: boolean; error?: string }>
     statLocal: (localPath: string) => Promise<{ success: boolean; data?: { isDirectory: boolean; size: number }; error?: string }>
-    onDeleteLocalProgress: (callback: (data: { currentPath: string }) => void) => () => void
+    onDeleteLocalProgress: (callback: (data: { taskId: string; nodeId: string; speed: number; transferredBytes: number }) => void) => () => void
     createLocalFolder: (parentPath: string, folderName: string) => Promise<{ success: boolean; error?: string }>
     ensureDir: (dirPath: string) => Promise<{ success: boolean; error?: string }>
 

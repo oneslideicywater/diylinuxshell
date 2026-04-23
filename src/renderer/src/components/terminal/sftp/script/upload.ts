@@ -1,6 +1,6 @@
 import type { TransferTask, TransferNode } from '@shared/types/sftp'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
-import { formatSize, createTransferNode, createTransferTask, isTaskCancelled, propagateViaParentChain } from './utils'
+import { formatSize, createTransferNode, createTransferTask, isTaskCancelled, joinRemotePath } from './utils'
 
 /**
  * 上传单个文件（利用 Pinia reactive 特性）
@@ -25,8 +25,7 @@ import { formatSize, createTransferNode, createTransferTask, isTaskCancelled, pr
 async function uploadSingleFile(
   node: TransferNode, 
   sftpConnectionId: string,
-  taskId: string,
-  parentNode?: TransferNode
+  taskId: string
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
@@ -59,20 +58,28 @@ async function uploadSingleFile(
   
   try {
     // 监听上传进度（500ms 定时器已控制 UI 刷新频率，无需节流）
+    let lastSpeed = 0
     const cleanupProgress = window.api.sftp.onUploadProgress((data) => {
       if (isTaskCancelled(taskId)) { return }
 
       if (data.nodeId === node.id) {
         const progress = node.size > 0 ? Math.round((data.transferredBytes / node.size) * 100) : 0
         const speed = data.speed
+        lastSpeed = speed
 
         console.log(`[upload] 进度回调: ${node.name} | progress=${progress}% speed=${formatSize(speed)}/s`)
 
-        sftpTransferStore.mutateNode(taskId, node.id, { progress, speed, transferredBytes: data.transferredBytes })
-
-        if (parentNode) {
-          propagateViaParentChain(taskId, parentNode, sftpTransferStore)
+        // 首次收到进度回调时初始化 startTime（文件和目录统一）
+        const liveNode = sftpTransferStore.getNode(taskId, node.id)
+        const updates: Partial<TransferNode> = { progress, speed }
+        if (liveNode && !liveNode.startTime) {
+          updates.startTime = Date.now()
         }
+
+        sftpTransferStore.mutateNode(taskId, node.id, updates, data.transferredBytes)
+
+        // 标记当前活跃传输节点（用于 UI 高亮定位）
+        sftpTransferStore.updateTask(taskId, { activeNodeId: node.id })
       }
     })
     
@@ -94,16 +101,19 @@ async function uploadSingleFile(
     // 上传完成 - 更新最终状态
     sftpTransferStore.mutateNode(taskId, node.id, {
       status: 'completed',
-      progress: 100
+      progress: 100,
+      transferredBytes: node.size,
+      speed: lastSpeed,
+      endTime: Date.now()
     })
     
   } catch (error: any) {
     console.error(`[upload] 文件上传失败: ${node.localPath}`, error)
     
-    // 错误状态更新
     sftpTransferStore.mutateNode(taskId, node.id, {
       status: 'error',
-      error: error.message
+      error: error.message,
+      endTime: Date.now()
     })
   }
 }
@@ -131,8 +141,7 @@ async function uploadSingleFile(
 async function uploadFolderContent(
   node: TransferNode, 
   sftpConnectionId: string,
-  taskId: string,
-  parentNode?: TransferNode
+  taskId: string
 ): Promise<void> {
   const sftpTransferStore = useSftpTransferStore()
   
@@ -155,7 +164,9 @@ async function uploadFolderContent(
     
     // 通过 Store 更新状态为传输中（利用 Pinia reactive 特性）
     sftpTransferStore.mutateNode(taskId, node.id, {
-      status: 'transferring'
+      status: 'transferring',
+      progress: 0,
+      startTime: Date.now()
     })
     
     // 递归上传所有子节点（传递 sftpConnectionId 和当前节点作为父节点）
@@ -165,10 +176,7 @@ async function uploadFolderContent(
         break  // 跳出循环，不再上传剩余子节点
       }
       
-      await uploadFolderContent(child, sftpConnectionId, taskId, node)
-      
-      // 每完成一个子节点就聚合更新父节点状态（含速度、剩余时间等）
-      propagateViaParentChain(taskId, node, sftpTransferStore)
+      await uploadFolderContent(child, sftpConnectionId, taskId)
     }
     
     // 所有子节点上传完成 - 检查是否被取消
@@ -176,11 +184,13 @@ async function uploadFolderContent(
       return  // 不更新状态，保持 cancelled
     }
     
-    // 更新最终状态
     sftpTransferStore.mutateNode(taskId, node.id, {
       status: 'completed',
-      progress: 100
+      progress: 100,
+      endTime: Date.now()
     })
+
+    // 完成后更新节点状态
     
   } else if (node.isDirectory) {
     // ✅ 空文件夹处理：直接创建远程目录并标记完成
@@ -206,24 +216,25 @@ async function uploadFolderContent(
       sftpTransferStore.mutateNode(taskId, node.id, {
         status: 'completed',
         progress: 100,
-        transferredBytes: 0
+        transferredBytes: 0,
+        endTime: Date.now()
       })
       
     } catch (error: any) {
       console.error(`[upload] ❌ 空文件夹创建失败: ${node.name}`, error)
       
-      // 更新错误状态
       sftpTransferStore.mutateNode(taskId, node.id, {
         status: 'error',
-        error: error.message || '空文件夹创建失败'
+        error: error.message || '空文件夹创建失败',
+        endTime: Date.now()
       })
       
       throw error
     }
     
   } else if (!node.isDirectory) {
-    // 如果是文件，执行上传（传递 sftpConnectionId 和父节点用于进度传播）
-    await uploadSingleFile(node, sftpConnectionId, taskId, parentNode)
+    // 如果是文件，执行上传（传递 sftpConnectionId）
+    await uploadSingleFile(node, sftpConnectionId, taskId)
   }
 }
 
@@ -271,7 +282,7 @@ export async function uploadFile(
       isDirectory: false,
       type: 'upload',
       localPath: filePath,
-      remotePath: `${remoteBasePath}/${fileName}`
+      remotePath: joinRemotePath(remoteBasePath, fileName)
     })
     
     // 创建传输任务并添加到 Store（安全架构 v4：直接使用 sftpConnectionId）
@@ -359,7 +370,7 @@ export async function uploadFolder(
       isDirectory: true,
       type: 'upload',
       localPath: folderPath,
-      remotePath: `${remoteBasePath}/${folderName}`,
+      remotePath: joinRemotePath(remoteBasePath, folderName),
       children: [],
       totalFiles: 0,
       completedFiles: 0,
@@ -419,7 +430,8 @@ export async function uploadFolder(
 
       sftpTransferStore.mutateNode(task.id, rootNode.id, {
         status: 'error',
-        error: `扫描失败: ${scanError.message}`
+        error: `扫描失败: ${scanError.message}`,
+        endTime: Date.now()
       })
       sftpTransferStore.updateTaskStatus(task.id, 'error')
       throw scanError
@@ -449,7 +461,8 @@ export async function uploadFolder(
       progress: 100,
       speed: 0,
       transferredBytes: rootNode.size || 0,
-      completedFiles: rootNode.totalFiles || 0
+      completedFiles: rootNode.totalFiles || 0,
+      endTime: Date.now()
     })
     
 
@@ -528,7 +541,7 @@ export async function uploadBatch(
             isDirectory: true,
             type: 'upload',
             localPath: filePath,
-            remotePath: `${remoteBasePath}/${fileName}`,
+            remotePath: joinRemotePath(remoteBasePath, fileName),
             children: [],
             totalFiles: 0,
             completedFiles: 0,
@@ -543,7 +556,8 @@ export async function uploadBatch(
             root: rootNode,
             sftpConnectionId: sftpConnectionId,
             sessionId: sessionId,
-            totalBytes: 0
+            totalBytes: 0,
+            
           })
 
           sftpTransferStore.addTask(task)
@@ -590,7 +604,8 @@ export async function uploadBatch(
 
             sftpTransferStore.mutateNode(task.id, rootNode.id, {
               status: 'error',
-              error: `扫描失败: ${scanError.message}`
+              error: `扫描失败: ${scanError.message}`,
+              endTime: Date.now()
             })
             sftpTransferStore.updateTaskStatus(task.id, 'error')
             task.status = 'error'
@@ -609,7 +624,7 @@ export async function uploadBatch(
             progress: 0,
             size: fileSize,
             localPath: filePath,
-            remotePath: `${remoteBasePath}/${fileName}`,
+            remotePath: joinRemotePath(remoteBasePath, fileName),
             speed: 0,
             transferredBytes: 0
           }
@@ -637,6 +652,8 @@ export async function uploadBatch(
     
     console.log(`[upload] 📊 共创建 ${createdTasks.length} 个传输任务`)
     
+
+    // 开始上传文件/文件夹
     for (let i = 0; i < createdTasks.length; i++) {
       const task = createdTasks[i]
       
@@ -662,7 +679,9 @@ export async function uploadBatch(
           progress: 100,
           speed: 0,
           transferredBytes: task.root.size || 0,
-          completedFiles: task.root.totalFiles || 0
+          completedFiles: task.root.totalFiles || 0,
+          endTime: Date.now()
+          
         })
         
         console.log(`[upload] ✅ 任务 ${i + 1} 完成: ${task.root.name}`)

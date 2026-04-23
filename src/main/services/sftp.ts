@@ -213,8 +213,11 @@ export class SFTPService {
                   }
                   
                   writeStream.end(() => {
-                    // 确保在文件下载完成时触发最后一次进度回调（100%）
-                    if (onProgress && fileSize > 0) {
+                    // ── 文件下载完成：触发最后一次进度回调（100%） ─────────
+                    // 必须无条件调用（包括空文件）：
+                    //   空文件 bytesRead==0 直接进入此分支，per-chunk 回调从未执行
+                    //   前端需要收到此次回调才能将进度更新为 completed
+                    if (onProgress) {
                       const finalSpeed = this.calculateTransferSpeed(
                         downloadedBytes,
                         lastUpdateTime,
@@ -231,6 +234,11 @@ export class SFTPService {
                 writeStream.write(data.slice(0, bytesRead), () => {
                   downloadedBytes += bytesRead
                   
+                  // ── 每次读取 chunk 写入本地后：触发进度回调 ─────────────
+                  // 计算逻辑：
+                  //   1. speed = (当前已传字节 - 上次已传字节) / (当前时间 - 上次时间)
+                  //   2. 更新 lastUpdateTime / lastTransferredBytes 为下一次计算做准备
+                  //   3. 调用 onProgress 将数据传给 IPC 层，最终到达前端 UI
                   if (onProgress && fileSize > 0) {
                     const speed = this.calculateTransferSpeed(
                       downloadedBytes,
@@ -278,6 +286,10 @@ export class SFTPService {
       return
     }
 
+    // ── 遍历子节点：将同一 onProgress 回调透传给子文件/子文件夹 ─────
+    // 文件夹本身不上报进度，进度由叶子节点（文件）逐个触发回调后前端聚合
+    // ── 遍历子节点：将同一 onProgress 回调透传给子文件/子文件夹 ─────
+    // 与 downloadFolder 对称设计：文件夹不上报进度，叶子文件逐个触发
     for (const child of node.children) {
       if (child.isDirectory) {
         await this.downloadFolder(taskId, child, onProgress)
@@ -399,6 +411,9 @@ export class SFTPService {
               position += chunk.length
               uploadedBytes += chunk.length
 
+              // ── 每次 chunk 写入远程后：触发进度回调 ───────────────────
+              // 计算逻辑同 download：瞬时速度 = 本轮增量字节 / 时间差
+              // 更新时间戳和已传字节数，供下一轮计算使用
               if (onProgress && fileSize > 0) {
                 const speed = this.calculateTransferSpeed(
                   uploadedBytes,
@@ -420,9 +435,11 @@ export class SFTPService {
             } catch (closeErr) {
               // 忽略关闭错误
             }
-            // Bug 修复：确保在文件上传完成时触发最后一次进度回调
-            // 对于空文件（0 字节），不会触发 data 事件，需要在 end 事件中触发进度回调
-            // 对于非空文件，如果最后一个 data 事件的回调执行滞后，也需要在 end 事件中确保触发最后的进度回调
+            // ── 文件上传完成（readStream end 事件）：触发最后一次进度回调 ──
+            // 需要在此处补发的原因：
+            //   1. 空文件（0 字节）不会触发 data 事件，进度回调永远不会执行
+            //   2. 非空文件最后一个 chunk 的 write 回调可能滞后于 end 事件
+            //      导致最后一次进度丢失，前端进度条卡在 99%
             if (onProgress) {
               const speed = this.calculateTransferSpeed(
                 uploadedBytes,
@@ -541,10 +558,27 @@ export class SFTPService {
 
   /**
    * 删除远程文件或目录（递归）
+   * 
+   * 设计对齐 uploadFile/downloadFile 模式：
+   *   - 接收 TransferNode 而非 remotePath 字符串
+   *   - 回调签名统一为 (speed, transferredBytes, taskId, node)
+   *   - 文件：删除前 0%，删除完成 100%
+   *   - 目录：删除前 0%，递归删完子项后 100%
    */
-  async deleteFile(remotePath: string, onProgress?: (currentPath: string) => void): Promise<void> {
+  async deleteFile(
+    taskId: string,
+    node: TransferNode,
+    onProgress?: (speed: number, transferredBytes: number, taskId: string, childNode: TransferNode) => void
+  ): Promise<void> {
     if (!this.sftpHandle) {
       throw new Error('SFTP not connected')
+    }
+
+    const remotePath = node.remotePath!
+
+    // ── 删除开始：上报 0% 进度 ─────────────────────────────────────
+    if (onProgress) {
+      onProgress(0, 0, taskId, node)
     }
 
     return new Promise((resolve, reject) => {
@@ -556,8 +590,7 @@ export class SFTPService {
         }
 
         if (stats.isDirectory()) {
-          console.log('SFTPService.deleteFile 开始删除目录:', { remotePath })
-          // 递归删除目录内容
+          // ── 目录：递归删除子项，完成后上报 100% ───────────────────
           this.sftpHandle.readdir(remotePath, async (err: Error, entries: any[]) => {
             if (err) {
               console.error('SFTPService.deleteFile readdir 失败:', { remotePath, error: err.message })
@@ -565,59 +598,106 @@ export class SFTPService {
               return
             }
 
-            // 删除所有子文件和子目录
+            // 删除所有子文件和子目录（通过 node.children 匹配子节点）
             for (const entry of entries) {
               if (entry.filename === '.' || entry.filename === '..') {
                 continue
               }
-              const childPath = `${remotePath}/${entry.filename}`
-              try {
-                if (onProgress) {
-                  onProgress(childPath)
+              const childPath = path.posix.join(remotePath, entry.filename)
+
+              // 从 node.children 中查找匹配的子节点
+              const childNode = node.children?.find(c => c.remotePath === childPath)
+              if (childNode) {
+                try {
+                  await this.deleteFile(taskId, childNode, onProgress)
+                } catch (error: any) {
+                  console.error('SFTPService.deleteFile 删除子项失败:', { childPath, error: error.message })
+                  reject(error)
+                  return
                 }
-                await this.deleteFile(childPath, onProgress)
-              } catch (error: any) {
-                console.error('SFTPService.deleteFile 删除子项失败:', { childPath, error: error.message })
-                reject(error)
-                return
+              } else {
+                // 子节点不在 TransferNode 树中（异常情况），回退到路径删除
+                try {
+                  await this.deleteFileByPath(taskId, childPath, node, onProgress)
+                } catch (error: any) {
+                  console.error('SFTPService.deleteFile 删除子项失败(回退):', { childPath, error: error.message })
+                  reject(error)
+                  return
+                }
               }
             }
 
-            // 删除空目录
-            console.log('SFTPService.deleteFile 删除空目录:', { remotePath })
-            
-            // 触发进度回调（通知渲染进程正在删除此空目录）
-            if (onProgress) {
-              onProgress(remotePath)
-            }
-            
+            // ── 所有子项删除完毕：rmdir 空目录 + 上报 100% ─────────────
             this.sftpHandle.rmdir(remotePath, (err: Error) => {
               if (err) {
                 console.error('SFTPService.deleteFile rmdir 失败:', { remotePath, error: err.message })
                 reject(err)
               } else {
-                console.log('SFTPService.deleteFile 目录删除成功:', { remotePath })
+                console.log('SFTPService.deleteFile 目录删除成功:', { remotePath})
+                if (onProgress) {
+                  onProgress(0, node.size || 0, taskId, node)
+                }
                 resolve()
               }
             })
           })
         } else {
-          // 删除文件
-          console.log('SFTPService.deleteFile 删除文件:', { remotePath })
-          
-          // 触发进度回调（通知渲染进程正在删除此文件）
-          if (onProgress) {
-            onProgress(remotePath)
-          }
-          
+          // ── 文件：unlink + 上报 100% ────────────────────────────────
           this.sftpHandle.unlink(remotePath, (err: Error) => {
             if (err) {
               console.error('SFTPService.deleteFile unlink 失败:', { remotePath, error: err.message })
               reject(err)
             } else {
-              console.log('SFTPService.deleteFile 文件删除成功:', { remotePath })
+              console.log('SFTPService.deleteFile 文件删除成功:', { remotePath})
+              if (onProgress) {
+                onProgress(0, node.size || 0, taskId, node)
+              }
               resolve()
             }
+          })
+        }
+      })
+    })
+  }
+
+  /**
+   * 回退方法：当子节点不在 TransferNode 树中时，用路径方式删除
+   * 仅在 deleteFile 内部调用，保持对外 API 统一
+   */
+  private async deleteFileByPath(
+    taskId: string,
+    remotePath: string,
+    parentNode: TransferNode,
+    onProgress?: (speed: number, transferredBytes: number, taskId: string, childNode: TransferNode) => void
+  ): Promise<void> {
+    if (!this.sftpHandle) {
+      throw new Error('SFTP not connected')
+    }
+
+    return new Promise((resolve, reject) => {
+      this.sftpHandle.stat(remotePath, (err: Error, stats: any) => {
+        if (err) {
+          reject(err)
+          return
+        }
+
+        if (stats.isDirectory()) {
+          this.sftpHandle.readdir(remotePath, async (err: Error, entries: any[]) => {
+            if (err) { reject(err); return }
+
+            for (const entry of entries) {
+              if (entry.filename === '.' || entry.filename === '..') continue
+              const childPath = path.posix.join(remotePath, entry.filename)
+              await this.deleteFileByPath(taskId, childPath, parentNode, onProgress)
+            }
+
+            this.sftpHandle.rmdir(remotePath, (err: Error) => {
+              if (err) { reject(err) } else { resolve() }
+            })
+          })
+        } else {
+          this.sftpHandle.unlink(remotePath, (err: Error) => {
+            if (err) { reject(err) } else { resolve() }
           })
         }
       })
@@ -673,7 +753,7 @@ export class SFTPService {
       progress: 0,
       size: 0,
       localPath: normalizedFolderPath,
-      remotePath: `${remoteBasePath}/${folderName}`,
+      remotePath: path.posix.join(remoteBasePath, folderName),
       speed: 0,
       transferredBytes: 0,
       children: []
@@ -706,7 +786,7 @@ export class SFTPService {
 
           // 使用 path.join 拼接完整路径（屏蔽系统差异）
           const fullPath = path.join(currentPath, entry.name)
-          const fullRemotePath = `${currentRemotePath}/${entry.name}`
+          const fullRemotePath = path.posix.join(currentRemotePath, entry.name)
 
           if (entry.isDirectory()) {
             // 跳过 Windows 系统受保护目录

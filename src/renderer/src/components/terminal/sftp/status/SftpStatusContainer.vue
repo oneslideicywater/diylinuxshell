@@ -130,7 +130,6 @@
         <SftpTaskStatus
           v-for="task in filteredTasks"
           :key="task.id"
-          :task-root="task.root"
           :task-id="task.id"
           @update:node-expanded="handleNodeExpanded"
         />

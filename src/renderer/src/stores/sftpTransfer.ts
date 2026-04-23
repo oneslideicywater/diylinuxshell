@@ -25,6 +25,14 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   const nodeIndexMap = new Map<string, TransferNode>()
 
   /**
+   * 版本计数器：每次 mutateNode 调用时递增
+   * 用于驱动 Vue 组件的 computed 重新计算（替代旧的 setInterval 定时刷新方案）
+   * 组件通过依赖此值实现精确的数据驱动更新
+   */
+  const version = ref(0)
+
+
+  /**
    * 递归构建节点索引（将树中所有节点存入 Map）
    */
   function buildNodeIndex(taskId: string, node: TransferNode): void {
@@ -174,28 +182,104 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   }
 
   /**
-   * 直接变异节点并触发 Vue 响应式更新
+   * 获取从指定节点到根节点的祖先链 ID 列表（含自身）
    * 
-   * 利用 nodeIndexMap 实现 O(1) 节点查找，
-   * 直接对响应式对象做 Object.assign 变异，
-   * 最后通过替换数组元素触发 computed 重算。
+   * 通过 parentId 链向上遍历，返回 [nodeId, parentId, grandParentId, ..., rootId]
+   * 数组第一个元素为指定节点自身，最后一个元素为根节点
    * 
-   * 配合 TransferNode.parent 引用使用，可实现 O(depth) 的祖先链传播
+   * @param taskId 任务 ID
+   * @param nodeId 起始节点 ID
+   * @returns 祖先链 ID 数组（从叶子到根），未找到节点时返回空数组
+   */
+  function getAncestorChain(taskId: string, nodeId: string): string[] {
+    const chain: string[] = []
+    let currentId: string | undefined = nodeId
+
+    while (currentId) {
+      chain.push(currentId)
+      const node = nodeIndexMap.get(`${taskId}::${currentId}`)
+      if (!node) break
+      currentId = node.parentId
+    }
+
+    return chain
+  }
+
+
+  /**
+   * 更新指定节点的状态并沿祖先链传播属性
    * 
    * @param taskId 任务 ID
    * @param nodeId 节点 ID
-   * @param updates 要更新的字段
+   * @param updates 要更新的字段（Partial<TransferNode>）
+   * @param deltaBytes 本次回调的增量传输字节数（仅对文件/叶子节点有意义）
    */
-  function mutateNode(taskId: string, nodeId: string, updates: Partial<TransferNode>): void {
+  function mutateNode(taskId: string, nodeId: string, updates: Partial<TransferNode>, deltaBytes?: number): void {
     const node = nodeIndexMap.get(`${taskId}::${nodeId}`)
     if (!node) {
       console.warn(`[sftpTransfer] ⚠️ mutateNode 未找到节点: taskId=${taskId} nodeId=${nodeId}（索引可能未重建）`)
       return
     }
 
-    // 直接对 reactive Proxy 做 Object.assign，触发 Proxy.set → 自动通知所有依赖该属性的 computed/watcher
-    // 无需手动替换整个 Task 对象（之前的 { ...task } 浅拷贝会破坏 nodeIndexMap 中引用的 Proxy 链接）
+    // 递增版本号 → 触发所有依赖 version 的 computed 重算
+    version.value++
+
+    const isFile = !node.isDirectory
+
+    // ========== 更新当前节点 ==========
+    if (isFile && typeof deltaBytes === 'number' && deltaBytes > 0) {
+      // 文件节点：transferredBytes 为累计值 = 旧值 + 增量
+      updates.transferredBytes = (node.transferredBytes || 0) + deltaBytes
+    }
     Object.assign(node, updates)
+
+    // 获取祖先链 [自身, 父, 祖父, ..., 根]
+    const chain = getAncestorChain(taskId, nodeId)
+    if (chain.length <= 1) return  // 无祖先节点，无需传播
+
+    // ========== 第一遍：正向遍历（根 → 自身），传播 startTime ==========
+    const hasStartTime = typeof updates.startTime === 'number'
+    if (hasStartTime) {
+      for (let i = chain.length - 1; i >= 0; i--) {
+        const ancestor = nodeIndexMap.get(`${taskId}::${chain[i]}`)
+        if (!ancestor) continue
+        if (!ancestor.startTime) {
+          Object.assign(ancestor, { startTime: updates.startTime! })
+        }
+      }
+    }
+
+    // ========== 第二遍：反向遍历（自身 → 根），向上传播传输字节增量 ==========
+    // 计算本次对父节点的有效增量
+    let effectiveDelta = 0
+    if (isFile && typeof deltaBytes === 'number' && deltaBytes > 0) {
+      // 文件节点：使用传入的增量字节
+      effectiveDelta = deltaBytes
+    } else if (!isFile && typeof updates.transferredBytes === 'number' && updates.transferredBytes > 0) {
+      // 目录节点完成时：transferredBytes = 文件夹总大小，增量 = 最终值 - 旧值
+      effectiveDelta = updates.transferredBytes - (node.transferredBytes || 0)
+    }
+    if (effectiveDelta <= 0) return
+
+    for (let i = 1; i < chain.length; i++) {
+      const parent = nodeIndexMap.get(`${taskId}::${chain[i]}`)
+      if (!parent) continue
+
+      const folderSize = parent.size || 0
+      const newParentTransferred = (parent.transferredBytes || 0) + effectiveDelta
+
+      let folderSpeed = 0
+      if (newParentTransferred > 0 && parent.startTime) {
+        const elapsed = (Date.now() - parent.startTime) / 1000
+        folderSpeed = elapsed > 0 ? Math.round(newParentTransferred / elapsed) : 0
+      }
+
+      Object.assign(parent, {
+        transferredBytes: newParentTransferred,
+        progress: folderSize > 0 ? Math.round((newParentTransferred / folderSize) * 100) : 0,
+        speed: folderSpeed
+      })
+    }
   }
 
   /**
@@ -224,6 +308,8 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
 
     console.log(`[sftpTransfer] 🔨 重建索引完成: taskId=${taskId}, 根节点="${task.root.name}"`)
   }
+
+  /**
 
   /**
    * 更新指定节点的状态（核心方法）
@@ -438,6 +524,7 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   return {
     // 状态
     transferTasks,
+    version,                // 版本号（mutateNode 时递增，驱动 computed 重算）
     selectedTaskIds,      // 选中的任务 ID 集合
     
     // ========== 按状态分类的任务列表 ==========
@@ -455,6 +542,7 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
     // 节点状态更新方法（核心）
     mutateNode,             // O(1) 直接变异 + 响应式触发（配合 parent 链使用）
     rebuildNodeIndex,       // 扫描完成后重建整棵树索引（必须调用）
+    getAncestorChain,       // 获取从指定节点到根节点的祖先链 ID（含自身）
     updateNodeStatus,       // 兼容旧接口（树遍历查找）
     // 其他方法
     removeTask,

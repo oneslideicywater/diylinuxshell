@@ -11,7 +11,7 @@
 
 import type { TransferTask, TransferNode } from '@shared/types/sftp'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
-import { formatSize, createTransferNode, createTransferTask, isTaskCancelled, propagateViaParentChain } from './utils'
+import { formatSize, createTransferNode, createTransferTask, isTaskCancelled } from './utils'
 
 /**
  * 递归扫描远程文件夹并构建传输节点树
@@ -88,24 +88,29 @@ async function downloadSingleFile(
       }
     }
     
-    // 获取父节点引用（通过 Store.getNode() O(1) 查找，替代之前的 node.parent）
-    const parentNode = node.parentId ? sftpTransferStore.getNode(taskId, node.parentId) : undefined
-
     // 监听下载进度（500ms 定时器已控制 UI 刷新频率，无需节流）
+    let lastSpeed = 0
     const cleanupProgress = window.api.sftp.onDownloadProgress((data) => {
       if (isTaskCancelled(taskId)) { return }
 
       if (data.nodeId === node.id) {
         const progress = node.size > 0 ? Math.round((data.transferredBytes / node.size) * 100) : 0
         const speed = data.speed
+        lastSpeed = speed
 
         console.log(`[download] 进度回调: ${node.name} | progress=${progress}% speed=${formatSize(speed)}/s`)
 
-        sftpTransferStore.mutateNode(taskId, node.id, { progress, speed, transferredBytes: data.transferredBytes })
-
-        if (parentNode) {
-          propagateViaParentChain(taskId, parentNode, sftpTransferStore)
+        // 首次收到进度回调时初始化 startTime（文件和目录统一）
+        const liveNode = sftpTransferStore.getNode(taskId, node.id)
+        const updates: Partial<TransferNode> = { progress, speed }
+        if (liveNode && !liveNode.startTime) {
+          updates.startTime = Date.now()
         }
+
+        sftpTransferStore.mutateNode(taskId, node.id, updates, data.transferredBytes)
+
+        // 标记当前活跃传输节点（用于 UI 高亮定位）
+        sftpTransferStore.updateTask(taskId, { activeNodeId: node.id })
       }
     })
     
@@ -130,8 +135,9 @@ async function downloadSingleFile(
       status: 'completed',
       progress: 100,
       size: node.size || 0,
-      speed: 0,
-      transferredBytes: node.size || 0
+      speed: lastSpeed,
+      transferredBytes: node.size || 0,
+      endTime: Date.now()
     })
     
     console.log(`[download] ✅ 文件下载完成: ${node.name}`)
@@ -141,7 +147,8 @@ async function downloadSingleFile(
     
     sftpTransferStore.mutateNode(taskId, node.id, {
       status: 'error',
-      error: error.message || '下载失败'
+      error: error.message || '下载失败',
+      endTime: Date.now()
     })
     
     throw error
@@ -218,8 +225,6 @@ async function downloadFolderContent(
       
       await downloadFolderContent(child, sftpConnectionId, taskId)
       
-      // 沿 parent 链传播进度到所有祖先
-      propagateViaParentChain(taskId, node, sftpTransferStore)
     }
     
     if (isTaskCancelled(taskId, `文件夹下载完成但任务已取消: ${node.name}`)) {
@@ -228,8 +233,12 @@ async function downloadFolderContent(
     
     sftpTransferStore.mutateNode(taskId, node.id, {
       status: 'completed',
-      progress: 100
+      progress: 100,
+      endTime: Date.now()
     })
+
+    // 完成后更新节点状态
+    
     
   } else if (node.isDirectory) {
     console.log(`[download] 检测到空文件夹，创建本地目录: ${node.name}`)
@@ -253,15 +262,19 @@ async function downloadFolderContent(
       sftpTransferStore.mutateNode(taskId, node.id, {
         status: 'completed',
         progress: 100,
-        transferredBytes: 0
+        transferredBytes: 0,
+        endTime: Date.now()
       })
+
+      // 完成后更新节点
       
     } catch (error: any) {
       console.error(`[download] ❌ 空文件夹创建失败: ${node.name}`, error)
       
       sftpTransferStore.mutateNode(taskId, node.id, {
         status: 'error',
-        error: error.message || '空文件夹创建失败'
+        error: error.message || '空文件夹创建失败',
+        endTime: Date.now()
       })
       
       throw error
@@ -470,7 +483,8 @@ export async function downloadFolder(
 
       sftpTransferStore.mutateNode(task.id, rootNode.id, {
         status: 'error',
-        error: `扫描失败: ${scanError.message}`
+        error: `扫描失败: ${scanError.message}`,
+        endTime: Date.now()
       })
       sftpTransferStore.updateTaskStatus(task.id, 'error')
       throw scanError
@@ -495,7 +509,8 @@ export async function downloadFolder(
       progress: 100,
       speed: 0,
       transferredBytes: rootNode.size || 0,
-      completedFiles: rootNode.totalFiles || 0
+      completedFiles: rootNode.totalFiles || 0,
+      endTime: Date.now()
     })
     
     console.log('[download] ✅ 文件夹下载完成！')
@@ -628,7 +643,8 @@ export async function downloadBatch(
 
               sftpTransferStore.mutateNode(task.id, rootNode.id, {
                 status: 'error',
-                error: `扫描失败: ${scanError.message}`
+                error: `扫描失败: ${scanError.message}`,
+                endTime: Date.now()
               })
               sftpTransferStore.updateTaskStatus(task.id, 'error')
               task.status = 'error'
@@ -720,7 +736,8 @@ export async function downloadBatch(
           progress: 100,
           speed: 0,
           transferredBytes: task.root.size || 0,
-          completedFiles: task.root.totalFiles || 0
+          completedFiles: task.root.totalFiles || 0,
+          endTime: Date.now()
         })
         
         console.log(`[download] ✅ 任务 ${i + 1} 完成: ${task.root.name}`)

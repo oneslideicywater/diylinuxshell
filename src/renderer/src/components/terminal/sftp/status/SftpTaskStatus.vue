@@ -1,6 +1,10 @@
 /**
  * SFTP 单个传输任务状态组件
  * 显示单个传输任务的完整信息（表头 + 树形节点）
+ * 
+ * 重构说明：
+ * - 不再接收 taskRoot 对象 prop
+ * - 仅通过 taskId 从 Store 获取任务数据，根节点 ID 由 Store 推导
  * @module components/session/sftp/SftpTaskStatus
  */
 
@@ -9,12 +13,11 @@
     <!-- 任务表头 -->
     <SftpStatusHeader :task-id="taskId" :is-selected="isSelectedComputed" @toggle-selection="handleToggleSelection" />
 
-    <!-- 传输树节点（从根节点开始渲染） -->
-    <div class="tree-content">
-      <SftpTransferTreeNode 
-        v-if="taskRoot"
-        :node="taskRoot" 
+    <!-- 传输树节点（从根节点开始渲染，所有数据从 Store 获取） -->
+    <div v-if="rootNodeId" class="tree-content">
+      <SftpTransferTreeNode
         :task-id="taskId"
+        :node-id="rootNodeId"
         :level="0"
         @update:node-expanded="handleNodeExpanded"
       />
@@ -25,7 +28,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import type { TransferNode } from '@shared/types/sftp'
 import SftpTransferTreeNode from './SftpTransferTreeNode.vue'
 import SftpStatusHeader from './SftpStatusHeader.vue'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
@@ -39,8 +41,6 @@ const sftpTransferStore = useSftpTransferStore()
  * Props 定义
  */
 interface Props {
-  /** 传输任务根节点 */
-  taskRoot: TransferNode
   /** 任务 ID */
   taskId: string
 }
@@ -59,6 +59,12 @@ const { selectedTaskIds } = storeToRefs(sftpTransferStore)
  */
 const isSelectedComputed = computed((): boolean => {
   return !!props.taskId && selectedTaskIds.value.has(props.taskId)
+})
+
+/** 根节点 ID：从 Store 获取任务的 root 节点 id */
+const rootNodeId = computed((): string | undefined => {
+  const task = sftpTransferStore.transferTasks.find(t => t.id === props.taskId)
+  return task?.root?.id
 })
 
 /**
