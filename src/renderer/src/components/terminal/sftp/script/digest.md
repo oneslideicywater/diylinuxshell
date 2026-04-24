@@ -190,7 +190,7 @@ interface RemoteFileState {
 
 ## 6. TaskStateMachine.ts / NodeStateMachine.ts — 状态机
 
-> 📄 完整状态定义、转换矩阵、Mermaid 图、聚合规则 → [sftp-transfer-state-machine.md](../../../docs/relation/sftp-transfer-state-machine.md)
+> 📄 完整状态定义、转换矩阵、Mermaid 图、聚合规则 → [sftp-transfer-state-machine.md](../../../../../../docs/relation/sftp-transfer-state-machine.md)
 
 | 文件 | 管理对象 | 状态数 | 导出 |
 |------|---------|:------:|------|
@@ -258,4 +258,4 @@ interface RemoteFileState {
 | `aggregateChildProgress` | 被 `propagateViaParentChain` 内部调用，字节数加权聚合子节点进度 |
 | `propagateViaParentChain` | 进度回调中沿 parent 链向上传播（O(depth)） |
 
-> � 架构设计（分层/数据流/依赖图）→ 见 [arch.md](./arch.md)
+> 架构设计（分层/数据流/依赖图）→ 见 [arch.md](./arch.md)（待创建）
