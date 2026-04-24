@@ -57,12 +57,22 @@ const defaultConfig: AppConfig = {
 
 /**
  * 获取 data 目录路径
- * 数据存储在 project_root/data 目录下
+ * 开发环境：数据存储在项目根目录下的 data 文件夹（方便调试）
+ * 生产环境（打包后）：数据存储在用户 HOME 目录下的 .diylinuxshell 文件夹
  */
 const getDataDir = (): string => {
-  // 获取应用根目录（即项目根目录）
-  const appPath = app.getAppPath()
-  const dataDir = join(appPath, 'data')
+  let dataDir: string
+
+  if (app.isPackaged) {
+    // 生产环境：使用用户 HOME 目录下的 .diylinuxshell 文件夹
+    const homeDir = app.getPath('home')
+    dataDir = join(homeDir, '.diylinuxshell')
+  } else {
+    // 开发环境：使用项目根目录下的 data 文件夹
+    const appPath = app.getAppPath()
+    dataDir = join(appPath, 'data')
+  }
+
   // 确保 data 目录存在
   if (!existsSync(dataDir)) {
     mkdirSync(dataDir, { recursive: true })
