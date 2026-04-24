@@ -7,6 +7,7 @@
 import { Client, ClientChannel } from 'ssh2'
 import type { Session } from '@shared/types'
 import { CryptoService } from './crypto'
+import { StoreService } from './store'
 
 /**
  * SSH连接信息
@@ -130,7 +131,15 @@ export class SSHManager {
         connection.error = undefined
 
         // 创建Shell通道
-        client.shell((err, stream) => {
+        // 传入 TERM 环境变量以支持 256 色和 vim 等工具的语法高亮
+        const terminalConfig = StoreService.getConfig().terminal
+        client.shell(
+          {
+            term: terminalConfig.terminalType,
+            cols: 80,
+            rows: 24
+          },
+          (err, stream) => {
           if (err) {
             connection.status = 'error'
             connection.error = err.message
