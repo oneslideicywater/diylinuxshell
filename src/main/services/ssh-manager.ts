@@ -67,9 +67,15 @@ export class SSHManager {
    * @param tabId - 标签页 ID（连接的唯一标识）
    * @param session - 会话配置
    * @param isTestConnection - 是否为测试连接（测试连接时密码是明文，不需要解密）
+   * @param initialSize - 初始终端尺寸（从 XTerminal 组件动态获取，替代硬编码 80x24）
    * @returns 连接 ID（tabId）
    */
-  static async connect(tabId: string, session: Session, isTestConnection: boolean = false): Promise<string> {
+  static async connect(
+    tabId: string,
+    session: Session,
+    isTestConnection: boolean = false,
+    initialSize?: { cols: number; rows: number }
+  ): Promise<string> {
     // 如果已存在连接，先断开
     if (this.connections.has(tabId)) {
       await this.disconnect(tabId)
@@ -132,12 +138,15 @@ export class SSHManager {
 
         // 创建Shell通道
         // 传入 TERM 环境变量以支持 256 色和 vim 等工具的语法高亮
+        // cols/rows 从 XTerminal 组件动态获取，确保远程 PTY 尺寸与前端终端一致
         const terminalConfig = StoreService.getConfig().terminal
+        const cols = initialSize?.cols || 80
+        const rows = initialSize?.rows || 24
         client.shell(
           {
             term: terminalConfig.terminalType,
-            cols: 80,
-            rows: 24
+            cols,
+            rows
           },
           (err, stream) => {
           if (err) {

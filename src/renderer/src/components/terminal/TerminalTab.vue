@@ -163,10 +163,11 @@ const handleDuplicateSession = async (): Promise<void> => {
   // 创建新标签页
   const newTab = terminalStore.createTab(session.name, session.id)
   
-  // 连接会话
+  // 连接会话（传入终端初始尺寸，确保远程 PTY 与前端终端大小一致）
   try {
     terminalStore.updateTabStatus(newTab.id, 'connecting')
-    await window.api.session.connect(newTab.id, session.id)
+    const initialSize = terminalStore.getTerminalSize(newTab.id)
+    await window.api.session.connect(newTab.id, session.id, initialSize ? { cols: initialSize.cols, rows: initialSize.rows } : undefined)
     terminalStore.updateTabStatus(newTab.id, 'connected')
   } catch (error: unknown) {
     console.error('Failed to connect:', error)
@@ -210,7 +211,8 @@ const handleReconnectSession = async (): Promise<void> => {
         throw new Error(result.error || 'SFTP 重连失败')
       }
     } else {
-      await window.api.session.connect(props.tab.id, props.tab.sessionId)
+      const initialSize = terminalStore.getTerminalSize(props.tab.id)
+      await window.api.session.connect(props.tab.id, props.tab.sessionId, initialSize ? { cols: initialSize.cols, rows: initialSize.rows } : undefined)
     }
     terminalStore.updateTabStatus(props.tab.id, 'connected')
   } catch (error: unknown) {

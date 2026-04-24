@@ -77,9 +77,9 @@ const api: CustomAPI = {
     delete: (id: string): Promise<boolean> => 
       ipcRenderer.invoke(IPC_CHANNELS.SESSION.DELETE, id),
     
-    // 连接会话（为指定标签页创建独立连接）
-    connect: (tabId: string, sessionId: string): Promise<{ success: boolean; tabId: string }> => 
-      ipcRenderer.invoke(IPC_CHANNELS.SESSION.CONNECT, tabId, sessionId),
+    // 连接会话（为指定标签页创建独立连接，支持传入初始终端尺寸）
+    connect: (tabId: string, sessionId: string, initialSize?: { cols: number; rows: number }): Promise<{ success: boolean; tabId: string }> => 
+      ipcRenderer.invoke(IPC_CHANNELS.SESSION.CONNECT, tabId, sessionId, initialSize),
     
     // 断开标签页连接
     disconnect: (tabId: string): Promise<boolean> => 

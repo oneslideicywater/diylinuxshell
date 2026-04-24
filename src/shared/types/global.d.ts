@@ -23,7 +23,7 @@ export interface CustomAPI {
     create: (data: Omit<Session, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Session>
     update: (id: string, updates: Partial<Session>) => Promise<Session | undefined>
     delete: (id: string) => Promise<boolean>
-    connect: (tabId: string, sessionId: string) => Promise<{ success: boolean; tabId: string }>
+    connect: (tabId: string, sessionId: string, initialSize?: { cols: number; rows: number }) => Promise<{ success: boolean; tabId: string }>
     disconnect: (tabId: string) => Promise<boolean>
     getStatus: (tabId: string) => Promise<string | null>
     testConnection: (sessionData: Partial<Session>) => Promise<boolean>

@@ -133,16 +133,17 @@ export function registerSessionHandlers(): void {
 
   /**
    * 连接会话（为指定标签页创建独立连接）
+   * 支持传入初始终端尺寸，确保远程 PTY 与前端终端大小一致
    */
-  ipcMain.handle(IPC_CHANNELS.SESSION.CONNECT, async (event, tabId: string, sessionId: string) => {
+  ipcMain.handle(IPC_CHANNELS.SESSION.CONNECT, async (event, tabId: string, sessionId: string, initialSize?: { cols: number; rows: number }) => {
     const session = StoreService.getSessionById(sessionId)
     if (!session) {
       throw new Error('Session not found')
     }
 
     try {
-      // 建立SSH连接（使用tabId作为连接标识）
-      await SSHManager.connect(tabId, session)
+      // 建立SSH连接（使用tabId作为连接标识，传入初始终端尺寸）
+      await SSHManager.connect(tabId, session, false, initialSize)
 
       // 注册数据监听器
       const win = BrowserWindow.fromWebContents(event.sender)
