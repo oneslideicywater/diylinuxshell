@@ -144,18 +144,17 @@ function handleContentScroll(event: Event): void {
 
 /**
  * 树形内容区域 — 滚动条持有者
- * 同时拥有水平滚动（overflow-x: auto）和竖向滚动（overflow-y: auto）
+ * 采用单层滚动方案：同时持有水平滚动（overflow-x: auto）和竖向滚动（overflow-y: auto）
  * 水平滚动时通过 @scroll 事件同步表头 translateX，实现表头跟随效果
  *
- * 注意：CSS 原生不支持将水平滚动条定位到容器顶部。
+ * 关于水平滚动条位置：
+ * CSS 原生不支持将水平滚动条定位到容器顶部。
  * 浏览器规范规定水平滚动条始终出现在 overflow 容器的底部，
  * 竖向滚动条始终在右侧。这是浏览器引擎的硬性行为，无法通过 CSS 属性改变。
- *
- * 如需将水平滚动条移至表头下方，需要采用分层方案（外层管水平、内层管竖向），
- * 但该方案会引入额外的 DOM 嵌套和滚动同步复杂度。
+ * 因此当前方案接受水平滚动条在内容区底部的事实，通过 transform 同步表头来保证可用性。
  *
  * 关键：min-width: 0 允许 flex 子项收缩到小于内容宽度，
- *       内部子元素保持 min-width: max-content 不换行，
+ *       内部子元素保持 min-width 不换行，
  *       当内容超出容器宽度时触发水平滚动条
  */
 .tree-content {

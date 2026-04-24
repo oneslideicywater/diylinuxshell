@@ -8,9 +8,15 @@
 
 <template>
   <div class="scanning-placeholder-row">
-    <!-- 复选框占位列 -->
+    <!-- 复选框列（支持选中/取消，与正常任务行为一致） -->
     <div class="column checkbox-column">
-      <span class="checkbox-placeholder"></span>
+      <input
+        type="checkbox"
+        :checked="isSelected"
+        @change="$emit('toggle-selection')"
+        :disabled="!taskId"
+        title="选择任务"
+      />
     </div>
     <!-- 名称列 -->
     <div class="column name-column">
@@ -63,9 +69,22 @@ import type { TransferTask } from '@shared/types/sftp'
 interface Props {
   /** 来自 TransferTask.scanningNode 的占位数据 */
   node: NonNullable<TransferTask['scanningNode']>
+  /** 任务 ID（用于选中/取消操作） */
+  taskId: string
+  /** 当前任务是否被选中 */
+  isSelected: boolean
 }
 
-defineProps<Props>()
+withDefaults(defineProps<Props>(), {
+  taskId: '',
+  isSelected: false
+})
+
+/** 定义组件事件 */
+defineEmits<{
+  /** 复选框选中状态变化事件 */
+  (e: 'toggle-selection'): void
+}>()
 </script>
 
 <style scoped>
@@ -92,10 +111,16 @@ defineProps<Props>()
   justify-content: center;
 }
 
-.checkbox-placeholder {
-  display: inline-block;
+.checkbox-column input[type="checkbox"] {
   width: 14px;
   height: 14px;
+  cursor: pointer;
+  accent-color: var(--primary-color, #409eff);
+}
+
+.checkbox-column input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .name-column {

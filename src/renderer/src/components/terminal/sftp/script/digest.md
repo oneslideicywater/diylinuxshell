@@ -70,7 +70,8 @@
 | `downloadSingleFile` | 内部 | `node: TransferNode, sftpConnectionId: string, taskId: string` | `Promise<void>` | 下载单个文件（核心函数），通过 Store API 更新状态，支持进度回调 |
 | `downloadFolderContent` | 内部 | `node: TransferNode, sftpConnectionId: string, taskId: string` | `Promise<void>` | 递归下载文件夹内容（利用 Pinia reactive 特性） |
 | `downloadFile` | 导出 | `remotePath: string, sftpConnectionId: string, sessionId?: string, localPath?: string \| { value: string }` | `Promise<void>` | 下载单个文件（导出函数，安全架构 v4） |
-| `downloadFolder` | 导出 | `remotePath: string, sftpConnectionId: string, sessionId?: string, localPath?: string \| { value: string }` | `Promise<void>` | 下载文件夹主函数（安全架构 v4） |
+| `downloadFolder` | 导出 | `remotePath: string, sftpConnectionId: string, sessionId?: string, localPath?: string \| { value: string }` | `Promise<void>` | 下载文件夹主函数（安全架构 v4，含扫描占位节点） |
+| `downloadBatch` | 导出 | `paths: string[], sftpConnectionId: string, sessionId?: string, localPath?: string \| { value: string }` | `Promise<void>` | 批量下载主函数（支持混合选择文件和文件夹） |
 
 ### 设计特点
 - 直接使用 sftpConnectionId，不再接收 session 对象
