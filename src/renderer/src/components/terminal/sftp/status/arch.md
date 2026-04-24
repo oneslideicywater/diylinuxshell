@@ -30,46 +30,48 @@ SftpStatusContainer.vue          ← 多任务列表容器（外层）
 
 表格列数多（11列），当容器宽度不足时需要水平滚动。但表头和内容是**两个独立 DOM 元素**，必须保持水平位置同步。
 
-> 详细实现（CSS 决策、方案对比、关键代码）见 [code.md](./code.md#excel-式表头-内容同步滚动)。
+> 详细实现见 [code.md](./code.md#表头-内容同步滚动)。
 
 ### 架构方案
 
-采用 **「外层水平滚动 + 内层竖向滚动 + 表头 transform 跟随」** 模式（Excel 式布局）：
+采用 **「内容区持有滚动条 + 表头 transform 跟随」** 模式：
 
 ```
-┌─ SftpTaskStatus (overflow-x: auto) ────────────────────────────┐ ★ 水平滚动条
-│                                                                 │
-│  ┌─ SftpStatusHeader (.tree-header, translateX) ──────────┐    │
-│  │  ☑ │ 名称 │ 状态 │ 进度 │ 大小 │ 本地路径 │ ...         │    │
-│  └────────────────────────────────────────────────────────┘    │
-│                                                                 │
-│  ┌─ .tree-content (overflow-y: auto; overflow-x: hidden) ──┐   │
-│  │  ☑ AAA-test-upload │ 已完成 │ 100% │ 233.8MB │ ...      │   │ ← 仅竖向
-│  │    ├── file1.txt                                         │   │
-│  │    └── file2.txt                                         │   │
+┌─ SftpTaskStatus (.sftp-task-status, overflow: hidden) ─────────────┐
+│                                                                     │
+│  ┌─ SftpStatusHeader (.sftp-transfer-tree) ───────────────────┐    │
+│  │  ┌─ .tree-header (transform: translateX(-Npx)) ─────────┐  │    │
+│  │  │  ☑ │ 名称 │ 状态 │ 进度 │ 大小 │ 本地路径 │ ...      │  │    │
+│  │  └─────────────────────────────────────────────────────┘  │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│  ┌─ .tree-content (overflow: auto) ← ★ 滚动条持有者 ──────────┐   │
+│  │  ☑ AAA-test-upload (0/6) │ 已完成 │ 100% │ 233.8MB │ ...  │   │
+│  │    ├── file1.txt  │ ...                                 │   │
+│  │    └── file2.txt  │ ...                                 │   │
 │  └──────────────────────────────────────────────────────────┘   │
+│                                              ▲── 水平+竖向滚动条  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ### 数据流
 
 ```
-用户拖动外层水平滚动条（表头下方）
-  → .sftp-task-status @scroll → handleHorizontalScroll(event)
-    → headerScrollLeft.value = -target.scrollLeft  （响应式更新）
+用户在 .tree-content 区域滚动（水平或竖向）
+  → @scroll.passive="handleContentScroll" 触发
+    → headerScrollLeft.value = -target.scrollLeft  （仅同步水平偏移）
       → SftpStatusHeader 接收 prop :header-scroll-left
         → .tree-header 应用 style="{ transform: translateX(${headerScrollLeft}px) }"
-          → 表头视觉上跟随外层容器同步移动
+          → 表头视觉上跟随内容区水平移动
 ```
 
 ### 设计优势
 
-1. **滚动条位置正确**：水平滚动条紧贴表头下方（Excel 式），符合用户预期
-2. **无循环触发风险**：单向数据流（外层→表头），不需要 `syncingScroll` 防护标志
+1. **实现简单**：单层 DOM 结构，无额外嵌套
+2. **无循环触发风险**：单向数据流（内容→表头），不需要 `syncingScroll` 防护标志
 3. **性能好**：`transform` 触发 GPU 合成层，不触发布局重排
-4. **表头始终可见**：表头在外层、不在竖向滚动区内，竖向滚动时固定不动
 
-> 完整的 CSS 决策和方案对比见 [code.md](./code.md)。
+> 完整的 CSS 决策和关键代码见 [code.md](./code.md)。
 
 ## 数据来源
 

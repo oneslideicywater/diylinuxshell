@@ -5,60 +5,35 @@
 
 ---
 
-## Excel 式表头-内容同步滚动
+## 表头-内容同步滚动
 
 ### 问题
 
 SFTP 传输状态表格有 **11 列**（复选框、名称、状态、进度、大小、本地路径、箭头、远程路径、速度、估计剩余、经过时间），当容器宽度不足时需要水平滚动。但表头和内容是两个独立 DOM 元素，必须保持水平位置同步。
 
-同时用户期望水平滚动条出现在 **表头正下方**（类似 Excel / Google Sheets），而非整个表格的最底部。
+用户期望水平滚动条出现在 **表头正下方**（类似 Excel / Google Sheets）。
 
-### 方案：外层水平 + 内层竖向 分层滚动
+### 当前方案：单层 overflow + 表头 transform 跟随
 
 ```
-┌─ .sftp-task-status (overflow-x: auto) ───────────────────────┐ ★ 水平滚动条在这里
+┌─ .sftp-task-status (overflow: hidden) ────────────────────────┐
 │                                                                 │
-│  ┌─ .sftp-transfer-tree ────────────────────────────────┐     │
-│  │  ┌─ .tree-header (transform: translateX(-Npx)) ───┐  │     │
-│  │  │ ☑ │ 名称 │ 状态 │ 进度 │ 大小 │ 本地路径 │ ...  │  │     │
-│  │  └─────────────────────────────────────────────────┘  │     │
-│  └───────────────────────────────────────────────────────┘     │
+│  ┌─ SftpStatusHeader (.tree-header, translateX) ───────────┐  │
+│  │  ☑ │ 名称 │ 状态 │ 进度 │ 大小 │ 本地路径 │ ...          │  │
+│  └──────────────────────────────────────────────────────────┘  │
 │                                                                 │
-│  ┌─ .tree-content (overflow-y: auto; overflow-x: hidden) ──┐  │
-│  │  ☑ AAA-test-upload (0/6) │ 已完成 │ 100% │ 233.8MB │ ..│  │ ← 仅竖向滚动条
+│  ┌─ .tree-content (overflow: auto) ← ★ 滚动条持有者 ───────┐  │
+│  │  ☑ AAA-test-upload (0/6) │ 已完成 │ 100% │ 233.8MB │ .. │  │
 │  │    ├── file1.txt                                    │  │
 │  │    └── file2.txt                                    │  │
 │  └───────────────────────────────────────────────────────┘  │
+│                                              ▲── 滚动条在底部   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**核心设计决策：将水平和竖向滚动分离到不同层**
-
-| 层级 | 元素 | overflow | 职责 |
-|------|------|----------|------|
-| 外层 | `.sftp-task-status` | `overflow-x: auto; overflow-y: hidden` | 水平滚动 + 滚动条显示 |
-| 内层 | `.tree-content` | `overflow-y: auto; overflow-x: hidden` | 仅竖向滚动 |
-
-### 为什么这样设计
-
-**方案 A（已废弃）：单层 overflow: auto**
-```
-.sftp-task-status (overflow: hidden)
-├── Header (transform)
-└── .tree-content (overflow: auto)  ← 滚动条在底部 ✗
-```
-问题：水平和竖向滚动条都在 `.tree-content` 底部，水平滚动条远离表头，用户体验差。
-
-**方案 B（当前实现）：分层滚动** ★
-```
-.sftp-task-status (overflow-x: auto)  ← 滚动条紧贴表头下方 ✓
-├── Header (transform)
-└── .tree-content (overflow-y: auto; overflow-x: hidden)  ← 仅竖向
-```
-优势：
-1. 水平滚动条在表头和内容之间，符合直觉（Excel 式）
-2. 表头始终可见（不会被竖向滚动遮挡）
-3. 表头水平跟随自然流畅
+> **关于滚动条位置**：CSS 原生**不支持**将水平滚动条定位到容器顶部。浏览器规范规定水平滚动条始终出现在 overflow 容器的底部，竖向滚动条始终在右侧。这是浏览器引擎的硬性行为。
+>
+> 曾尝试「外层水平 + 内层竖向」分层方案（Excel 式），可将水平滚动条移至表头下方，但引入了额外的 DOM 嵌套和滚动同步复杂度，已回退至当前单层方案。
 
 ---
 
@@ -67,8 +42,8 @@ SFTP 传输状态表格有 **11 列**（复选框、名称、状态、进度、�
 ### 触发链路
 
 ```
-用户拖动外层水平滚动条
-  → .sftp-task-status @scroll.passive="handleHorizontalScroll" 触发
+用户在 .tree-content 区域滚动（水平或竖向）
+  → @scroll.passive="handleContentScroll" 触发
     → event.target.scrollLeft 获取偏移量
       → headerScrollLeft.value = -scrollLeft  （Vue 响应式更新）
         → SftpStatusHeader 接收 prop :header-scroll-left="headerScrollLeft"
@@ -78,27 +53,29 @@ SFTP 传输状态表格有 **11 列**（复选框、名称、状态、进度、�
 
 ### 关键代码
 
-**[SftpTaskStatus.vue](./SftpTaskStatus.vue)** — 外层滚动监听与状态传递：
+**[SftpTaskStatus.vue](./SftpTaskStatus.vue)** — 内容区滚动监听与状态传递：
 
 ```ts
-/** 表头水平偏移量（同步外层容器 scrollLeft） */
+/** 表头水平偏移量（同步内容区 scrollLeft） */
 const headerScrollLeft = ref(0)
 
 /**
- * 处理外层容器水平滚动事件
- * 外层容器持有水平滚动条，滚动时同步表头 translateX
+ * 处理内容区域滚动事件
+ * 内容区同时拥有水平和竖向滚动能力：
+ * - 竖向：内容区自身处理（overflow-y: auto）
+ * - 水平：内容区自身处理（overflow-x: auto），同时同步表头的 translateX
  */
-function handleHorizontalScroll(event: Event): void {
+function handleContentScroll(event: Event): void {
   const target = event.target as HTMLElement
   headerScrollLeft.value = -target.scrollLeft
 }
 ```
 
 ```vue
-<!-- 外层容器：持有水平滚动条 -->
-<div class="sftp-task-status" @scroll.passive="handleHorizontalScroll">
+<!-- 单层结构：表头在滚动容器外部 -->
+<div class="sftp-task-status">
   <SftpStatusHeader :header-scroll-left="headerScrollLeft" />
-  <div class="tree-content">
+  <div class="tree-content" @scroll.passive="handleContentScroll">
     <!-- 内容节点 -->
   </div>
 </div>
@@ -120,27 +97,23 @@ function handleHorizontalScroll(event: Event): void {
 .sftp-task-status {
   display: flex;
   flex-direction: column;
-  overflow-x: auto;   /* ★ 水平滚动：触发溢出时显示滚动条 */
-  overflow-y: hidden;   /* 竖向隐藏：由内层处理 */
+  border-bottom: 2px solid var(--border-color, #333);
+  overflow: hidden; /* 裁剪溢出，不参与滚动 */
 }
 ```
 
-`overflow-x: auto` 让外层成为水平滚动的「视口」，当内部内容宽度超出容器宽度时出现水平滚动条。由于表头是外层的第一个子元素，滚动条自然出现在表头正下方。
-
-#### 内容区 `.tree-content`
+#### 内容区 `.tree-content`（滚动条持有者）
 
 ```css
 .tree-content {
   flex: 1;
-  overflow-y: auto;   /* 仅竖向滚动 */
-  overflow-x: hidden;  /* 水平已由外层处理 */
-  min-width: max-content; /* 防止子节点被压缩换行 */
+  overflow: auto;       /* 同时持有水平和竖向滚动 */
+  background: var(--bg-color, #1e1e1e);
+  min-width: 0;         /* 允许 flex 子项收缩到小于内容宽度 */
 }
 ```
 
-**`min-width: max-content` 的作用**：让 `.tree-content` 的宽度撑到其内容所需的宽度（所有列的 min-width 之和）。这样当内容总宽度 > 外层容器宽度时，外层的 `overflow-x: auto` 就会触发水平滚动条。
-
-如果去掉 `min-width: max-content` 或使用 `min-width: 0`，flex 子项会被压缩到容器宽度内，永远不会溢出，水平滚动条就不会出现。
+**`min-width: 0` 的作用**：在 flex 容器中，子元素默认 `min-width: auto`（即内容最小宽度），这会阻止子元素收缩到比其内容更窄。设置为 `0` 后，当容器宽度不足时 `.tree-content` 可以收缩，内部内容溢出触发滚动条。
 
 #### 表头 `.tree-header`
 
@@ -165,8 +138,7 @@ function handleHorizontalScroll(event: Event): void {
 
 | 特性 | 实现方式 | 价值 |
 |------|---------|------|
-| **滚动条位置正确** | 外层 `overflow-x: auto` | 水平滚动条紧贴表头下方（Excel 式），符合用户预期 |
-| **单向数据流** | 外层 scroll → headerScrollLeft ref → header transform | 无循环触发风险，不需要 `syncingScroll` 防护标志 |
+| **实现简单** | 单层 DOM 结构 | 无额外嵌套，易于维护 |
+| **单向数据流** | 内容 scroll → headerScrollLeft ref → header transform | 无循环触发风险 |
 | **性能好** | `transform` 触发 GPU 合成层 | 不触发布局重排（reflow），仅触发合成（composite） |
-| **表头始终可见** | 表头在外层、不在竖向滚动区内 | 竖向滚动时表头固定不动 |
 | **列宽稳定** | `flex-shrink: 0` + `min-width` | 各列不被压缩，表格结构不变形 |
