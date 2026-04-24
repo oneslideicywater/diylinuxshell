@@ -11,32 +11,6 @@
     class="x-terminal"
     @contextmenu.prevent="handleContextMenu"
   >
-    <!-- 右键菜单 -->
-    <div 
-      v-show="contextMenuVisible" 
-      ref="contextMenu"
-      class="context-menu"
-      :style="{ left: contextMenuPosition.x + 'px', top: contextMenuPosition.y + 'px' }"
-    >
-      <!-- 复制菜单项 -->
-      <div class="context-menu-item" @click="handleCopy">
-        <span>复制</span>
-      </div>
-      <!-- 粘贴菜单项 -->
-      <div class="context-menu-item" @click="handlePaste">
-        <span>粘贴</span>
-      </div>
-      <!-- 分隔线 -->
-      <div class="context-menu-divider"></div>
-      <!-- 全选菜单项 -->
-      <div class="context-menu-item" @click="handleSelectAll">
-        <span>全选</span>
-      </div>
-      <!-- 审查元素菜单项 -->
-      <div class="context-menu-item" @click="handleInspectElement">
-        <span>审查元素</span>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -47,7 +21,7 @@ import { FitAddon } from 'xterm-addon-fit'
 import { WebLinksAddon } from 'xterm-addon-web-links'
 import { useTerminalStore } from '@/stores/terminal'
 import { useSettingsStore } from '@/stores/settings'
-import { useContextMenuStore } from '@/stores/contextMenu'
+import { useContextMenuStore, type ContextMenuItem } from '@/stores/contextMenu'
 import type { Tab, TerminalSize } from '@shared/types'
 
 import 'xterm/css/xterm.css'
@@ -59,16 +33,6 @@ const props = defineProps<{
 
 // 终端容器引用
 const terminalContainer = ref<HTMLDivElement | null>(null)
-
-// 右键菜单引用
-const contextMenu = ref<HTMLDivElement | null>(null)
-
-// 右键菜单状态
-const contextMenuVisible = ref(false)
-const contextMenuPosition = ref({ x: 0, y: 0 })
-
-// 右键点击的全局坐标（用于审查元素）
-const contextMenuGlobalPosition = ref({ x: 0, y: 0 })
 
 // 终端实例
 let terminal: Terminal | null = null
@@ -259,119 +223,73 @@ const delayedFit = () => {
 
 /**
  * 处理右键菜单显示
- * 在终端中右键点击时显示上下文菜单
+ * 通过全局 Store 管理菜单状态，确保全局唯一性
+ * 菜单左上角 = 鼠标右击位置
  */
 const handleContextMenu = (event: MouseEvent): void => {
   event.preventDefault()
 
-  // 保存右键点击的全局坐标（相对于窗口，用于审查元素）
-  contextMenuGlobalPosition.value = { x: event.clientX, y: event.clientY }
+  const x = event.clientX
+  const y = event.clientY
 
-  // 计算菜单位置，确保不超出容器边界
-  const containerRect = terminalContainer.value?.getBoundingClientRect()
-  if (!containerRect) return
+  /** 终端右键菜单项定义 */
+  const menuItems: ContextMenuItem[] = [
+    { action: 'copy', title: '复制', description: '复制选中的终端文本' },
+    { action: 'paste', title: '粘贴', description: '从剪贴板粘贴文本到终端' },
+    { action: 'selectAll', title: '全选', description: '选中终端所有内容' },
+    { action: 'inspectElement', title: '审查元素', description: '打开开发者工具检查元素' }
+  ]
 
-  let x = event.clientX - containerRect.left
-  let y = event.clientY - containerRect.top
-
-  // 确保菜单不超出容器右边界
-  const menuWidth = 160
-  if (x + menuWidth > containerRect.width) {
-    x = containerRect.width - menuWidth - 10
+  /**
+   * 复制操作：将终端中选中的文本复制到剪贴板
+   */
+  const doCopy = async (): Promise<void> => {
+    if (!terminal) return
+    const selection = terminal.getSelection()
+    if (selection) {
+      try {
+        await navigator.clipboard.writeText(selection)
+      } catch (error) {
+        console.error('复制失败:', error)
+      }
+    }
   }
 
-  // 确保菜单不超出容器下边界
-  const menuHeight = 120
-  if (y + menuHeight > containerRect.height) {
-    y = containerRect.height - menuHeight - 10
-  }
-
-  // 通过 Store 注册终端菜单所有权（自动关闭其他组件的菜单）
-  contextMenuStore.showContextMenu('terminal', { x: event.clientX, y: event.clientY }, [])
-  
-  contextMenuPosition.value = { x, y }
-  contextMenuVisible.value = true
-}
-
-/**
- * 处理复制操作
- * 将终端中选中的文本复制到剪贴板
- */
-const handleCopy = async (): Promise<void> => {
-  if (!terminal) return
-  
-  const selection = terminal.getSelection()
-  if (selection) {
+  /**
+   * 粘贴操作：从剪贴板读取文本并粘贴到终端
+   */
+  const doPaste = async (): Promise<void> => {
+    if (!terminal) return
     try {
-      await navigator.clipboard.writeText(selection)
+      const text = await navigator.clipboard.readText()
+      if (text) {
+        terminal.paste(text)
+      }
     } catch (error) {
-      console.error('复制失败:', error)
+      console.error('粘贴失败:', error)
     }
   }
-  
-  // 隐藏菜单
-  contextMenuVisible.value = false
-}
 
-/**
- * 处理粘贴操作
- * 从剪贴板读取文本并粘贴到终端
- */
-const handlePaste = async (): Promise<void> => {
-  if (!terminal) return
-  
-  try {
-    const text = await navigator.clipboard.readText()
-    if (text) {
-      terminal.paste(text)
+  // 通过全局 Store 显示右键菜单（自动关闭其他组件的菜单）
+  contextMenuStore.showContextMenu('terminal', { x, y }, menuItems, async (action: string) => {
+    switch (action) {
+      case 'copy':
+        await doCopy()
+        break
+      case 'paste':
+        await doPaste()
+        break
+      case 'selectAll':
+        terminal?.selectAll()
+        break
+      case 'inspectElement':
+        // 在 Electron 中打开开发者工具并检查指定位置的元素
+        if (window.electron && window.electron.ipcRenderer) {
+          window.electron.ipcRenderer.send('open-devtools', { x, y })
+        }
+        break
     }
-  } catch (error) {
-    console.error('粘贴失败:', error)
-  }
-  
-  // 隐藏菜单
-  contextMenuVisible.value = false
-}
-
-/**
- * 处理全选操作
- * 选中终端中的所有内容
- */
-const handleSelectAll = (): void => {
-  if (!terminal) return
-  
-  // 使用 xterm.js 的 selectAll 方法选中所有内容
-  terminal.selectAll()
-  
-  // 隐藏菜单
-  contextMenuVisible.value = false
-}
-
-/**
- * 处理审查元素操作
- * 打开开发者工具并检查元素
- */
-const handleInspectElement = (): void => {
-  // 在 Electron 中打开开发者工具并检查指定位置的元素
-  // 通过 window.electron API 发送 IPC 消息，传递右键点击的坐标
-  if (window.electron && window.electron.ipcRenderer) {
-    window.electron.ipcRenderer.send('open-devtools', {
-      x: contextMenuGlobalPosition.value.x,
-      y: contextMenuGlobalPosition.value.y
-    })
-  }
-  
-  // 隐藏菜单
-  contextMenuVisible.value = false
-}
-
-/**
- * 点击菜单外部关闭菜单
- */
-const handleClickOutside = (event: MouseEvent): void => {
-  if (contextMenu.value && !contextMenu.value.contains(event.target as Node)) {
-    contextMenuVisible.value = false
-  }
+  })
 }
 
 // 监听 tab 变化
@@ -401,13 +319,11 @@ watch(
   }
 )
 
-// 监听菜单状态变化，确保菜单互斥
+// 监听主题变化
 watch(
-  () => contextMenuStore.visible,
-  (isVisible) => {
-    if (isVisible && contextMenuStore.ownerId !== 'terminal') {
-      contextMenuVisible.value = false
-    }
+  () => settingsStore.theme,
+  () => {
+    applyTerminalSettings()
   }
 )
 
@@ -417,9 +333,6 @@ onMounted(() => {
 
   // 监听窗口大小变化
   window.addEventListener('resize', handleResize)
-  
-  // 监听点击事件，用于关闭右键菜单
-  document.addEventListener('click', handleClickOutside)
 
   // 使用 ResizeObserver 监听容器尺寸变化（处理 v-show 切换后的 resize）
   if (terminalContainer.value && typeof ResizeObserver !== 'undefined') {
@@ -458,7 +371,6 @@ onUnmounted(() => {
   cleanupCloseListener?.()
   cleanupErrorListener?.()
   window.removeEventListener('resize', handleResize)
-  document.removeEventListener('click', handleClickOutside)
 
   // 清理 ResizeObserver
   if (resizeObserver) {
@@ -497,46 +409,4 @@ onUnmounted(() => {
 [data-theme="light"] .x-terminal :deep(.xterm-decoration-top) {
   background-color: var(--selection-bg, rgba(55, 58, 56, 0.322)) !important;
 }
-
-/* 右键菜单样式 */
-.context-menu {
-  position: absolute;
-  background-color: var(--card-bg, #2d2d2d);
-  border: 1px solid var(--border-color, #3d3d3d);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  z-index: 1000;
-  min-width: 160px;
-  padding: 6px 0;
-  backdrop-filter: blur(10px);
-}
-
-.context-menu-item {
-  display: flex;
-  align-items: center;
-  padding: 8px 20px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  color: var(--text-color, #e0e0e0);
-  font-size: 13px;
-  user-select: none;
-}
-
-.context-menu-item:hover {
-  background-color: var(--primary-color, #0e639c);
-  color: #ffffff;
-}
-
-.context-menu-item:active {
-  background-color: var(--primary-hover, #1177bb);
-}
-
-/* 分隔线样式 */
-.context-menu-divider {
-  height: 1px;
-  background-color: var(--border-color, #3d3d3d);
-  margin: 4px 0;
-}
-
-/* 移除旧的 menu-icon 样式 */
 </style>
