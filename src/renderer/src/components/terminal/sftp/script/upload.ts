@@ -545,7 +545,8 @@ export async function uploadBatch(
               name: fileName,
               type: 'upload',
               localPath: filePath,
-              remotePath: remoteBasePath
+              remotePath: remoteBasePath,
+              status: 'pending'
             }
           })
 
@@ -619,7 +620,8 @@ export async function uploadBatch(
               name: fileName,
               type: 'upload',
               localPath: filePath,
-              remotePath: remoteBasePath
+              remotePath: remoteBasePath,
+              status: 'pending'
             }
           })
 

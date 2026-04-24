@@ -441,7 +441,8 @@ export async function downloadFolder(
         name: folderName,
         type: 'download',
         localPath: scanningLocalPath,
-        remotePath: remotePath
+        remotePath: remotePath,
+        status: 'pending'
       }
     })
 
@@ -607,7 +608,8 @@ export async function downloadBatch(
               name: fileName,
               type: 'download',
               localPath: scanningLocalPath,
-              remotePath: remoteFilePath
+              remotePath: remoteFilePath,
+              status: 'pending'
             }
           })
 
@@ -680,7 +682,8 @@ export async function downloadBatch(
               name: fileName,
               type: 'download',
               localPath: localBasePath ? `${localBasePath}${fileName}` : '',
-              remotePath: remoteFilePath
+              remotePath: remoteFilePath,
+              status: 'pending'
             }
           })
 

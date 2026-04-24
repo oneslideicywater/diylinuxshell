@@ -654,8 +654,12 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   }
 
   /**
-   * 取消所有选中的任务（仅限 pending 和 transferring 状态）
+   * 取消所有选中的任务（仅限 pending、scanning 和 transferring 状态）
    * 将选中的可取消任务及其所有子节点状态更新为 cancelled
+   * 
+   * 覆盖两种场景：
+   * - 有 root（真实节点树）：递归标记所有子节点为 cancelled
+   * - 无 root（扫描中占位）：标记 scanningNode.status 为 cancelled
    */
   function cancelSelectedTasks(): void {
     const taskIdsToCancel = Array.from(selectedTaskIds.value)
@@ -668,12 +672,15 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
       
       // 取消可取消的任务：pending（待开始）、scanning（扫描中）、transferring（传输中）
       if (task.status === 'pending' || task.status === 'scanning' || task.status === 'transferring') {
-        // 更新任务状态
+        // 更新任务状态为 cancelled
         updateTaskStatus(taskId, 'cancelled')
         
-        // 递归标记所有子节点为 cancelled
         if (task.root) {
+          // 场景1：有真实节点树 → 递归标记所有子节点为 cancelled
           markAllNodesCancelled(task.root, taskId)
+        } else if (task.scanningNode) {
+          // 场景2：扫描中无 root → 标记占位节点为 cancelled（让 UI 显示已取消状态）
+          updateTask(taskId, { scanningNode: { ...task.scanningNode, status: 'cancelled' } })
         }
         
         console.log(`[sftpTransfer] 🚫 已取消任务: ${taskId} (含所有子节点)`)

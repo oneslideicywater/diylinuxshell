@@ -96,8 +96,9 @@ export interface TransferTask {
    * 扫描占位节点（仅用于 UI 展示，创建任务时设置一次）
    * 当 root 为空且任务处于 scanning 状态时，用此字段显示基础信息（name/type/localPath/remotePath）
    * 扫描完成后 root 设置后此字段不再使用
+   * 含 status 字段：支持取消操作将占位节点标记为 cancelled
    */
-  scanningNode?: Pick<TransferNode, 'name' | 'type' | 'localPath' | 'remotePath'>
+  scanningNode?: Pick<TransferNode, 'name' | 'type' | 'localPath' | 'remotePath' | 'status'>
   /** 当前正在传输的节点 ID（对应 Pinia Store 中 TransferNode.id），用于高亮/定位活跃节点 */
   activeNodeId?: string
   

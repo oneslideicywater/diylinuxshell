@@ -29,15 +29,18 @@
       <span class="file-name" :title="node.name">{{ node.name }}</span>
     </div>
     <!-- 状态列 -->
-    <div class="column status-column">
-      <span class="status-scanning">扫描中...</span>
+    <div class="status-column">
+      <span :class="isCancelled ? 'status-cancelled' : 'status-scanning'">
+        {{ isCancelled ? '已取消' : '扫描中...' }}
+      </span>
     </div>
     <!-- 进度列 -->
-    <div class="column progress-column">
-      <div class="scanning-indicator">
+    <div class="progress-column">
+      <div v-if="!isCancelled" class="scanning-indicator">
         <span class="scanning-dot"></span>
         <span>扫描中</span>
       </div>
+      <span v-else class="cancelled-text">—</span>
     </div>
     <!-- 大小列（扫描中未知） -->
     <div class="column size-column">-</div>
@@ -61,10 +64,17 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { TransferTask } from '@shared/types/sftp'
+import { useSftpTransferStore } from '@/stores/sftpTransfer'
 
 /**
- * 扫描占位节点数据（Pick 子集，仅含 UI 展示所需的 4 个字段）
+ * 使用 SFTP 传输任务 Store（用于读取任务状态）
+ */
+const sftpTransferStore = useSftpTransferStore()
+
+/**
+ * 扫描占位节点数据（Pick 子集，含 status 字段支持取消状态展示）
  */
 interface Props {
   /** 来自 TransferTask.scanningNode 的占位数据 */
@@ -75,7 +85,7 @@ interface Props {
   isSelected: boolean
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   taskId: '',
   isSelected: false
 })
@@ -85,6 +95,16 @@ defineEmits<{
   /** 复选框选中状态变化事件 */
   (e: 'toggle-selection'): void
 }>()
+
+/**
+ * 判断当前占位节点是否已被取消
+ * 优先读取 scanningNode.status（取消操作直接写入该字段）
+ * 兜底从 Store 获取任务状态（防止极端时序问题）
+ */
+const isCancelled = computed((): boolean => {
+  return props.node.status === 'cancelled' ||
+    sftpTransferStore.getTask(props.taskId)?.status === 'cancelled'
+})
 </script>
 
 <style scoped>
@@ -153,6 +173,16 @@ defineEmits<{
 
 .status-scanning {
   color: var(--warning-color, #e6a23c);
+}
+
+/** 已取消状态 */
+.status-cancelled {
+  color: var(--danger-color, #f56c6c);
+}
+
+.cancelled-text {
+  font-size: 11px;
+  color: var(--text-color-secondary, #999999);
 }
 
 .progress-column {

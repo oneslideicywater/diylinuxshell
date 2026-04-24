@@ -525,7 +525,7 @@ function collapseAllNodes(): void {
 }
 
 /**
- * 是否有选中的可取消任务（pending 或 transferring 状态）
+ * 是否有选中的可取消任务（pending、scanning 或 transferring 状态）
  */
 const hasSelectedCancellableTasks = computed((): boolean => {
   if (selectedTaskIds.value.size === 0) return false
@@ -533,7 +533,7 @@ const hasSelectedCancellableTasks = computed((): boolean => {
   // 检查选中的任务中是否有可取消的任务
   for (const taskId of selectedTaskIds.value) {
     const task = transferTasks.value.find(t => t.id === taskId)
-    if (task && (task.status === 'pending' || task.status === 'transferring')) {
+    if (task && (task.status === 'pending' || task.status === 'scanning' || task.status === 'transferring')) {
       return true
     }
   }

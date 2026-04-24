@@ -154,8 +154,8 @@ export function createTransferTask(config: {
   type: TransferType
   /** 根节点（文件或文件夹，扫描中可为 undefined） */
   root?: TransferNode
-  /** 扫描占位节点（仅用于 UI 展示扫描中的基础信息） */
-  scanningNode?: Pick<TransferNode, 'name' | 'type' | 'localPath' | 'remotePath'>
+  /** 扫描占位节点（仅用于 UI 展示扫描中的基础信息，含 status 支持取消状态） */
+  scanningNode?: Pick<TransferNode, 'name' | 'type' | 'localPath' | 'remotePath' | 'status'>
   /** SFTP 连接标识符 */
   sftpConnectionId: string
   /** 会话 ID（可选，用于 UI 显示） */
