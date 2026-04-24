@@ -6,8 +6,8 @@
 
 <template>
   <div class="sftp-transfer-tree">
-    <!-- 表头 -->
-    <div class="tree-header">
+    <!-- 表头（水平位置跟随内容区滚动） -->
+    <div class="tree-header" :style="{ transform: `translateX(${headerScrollLeft}px)` }">
       <!-- 复选框列 -->
       <div class="header-column checkbox-column">
         <input 
@@ -43,11 +43,14 @@ interface Props {
   taskId?: string
   /** 是否被选中 */
   isSelected: boolean
+  /** 表头水平偏移量（由父组件传入，用于同步内容区水平滚动） */
+  headerScrollLeft?: number
 }
 
 withDefaults(defineProps<Props>(), {
   taskId: '',
-  isSelected: false
+  isSelected: false,
+  headerScrollLeft: 0
 })
 
 /**
@@ -77,7 +80,7 @@ function handleToggle(): void {
   background: var(--bg-color, #1e1e1e);
   border-top: 1px solid var(--border-color, #333);
   font-size: 12px;
-  overflow: hidden;
+  min-width: max-content;
 }
 
 /* 表头 - 使用 --header-bg 变量以支持主题切换 */

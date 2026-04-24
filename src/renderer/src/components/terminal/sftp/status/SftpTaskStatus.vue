@@ -11,20 +11,30 @@
 
 <template>
   <div class="sftp-task-status">
-    <!-- 任务表头 -->
-    <SftpStatusHeader :task-id="taskId" :is-selected="isSelectedComputed" @toggle-selection="handleToggleSelection" />
+    <!-- 任务表头（水平位置由 JS 同步内容区滚动） -->
+    <SftpStatusHeader 
+      :task-id="taskId" 
+      :is-selected="isSelectedComputed" 
+      @toggle-selection="handleToggleSelection" 
+      :header-scroll-left="headerScrollLeft"
+    />
 
-    <!-- 扫描中占位行（root 为空且存在 scanningNode 时显示） -->
-    <div v-if="!rootNodeId && scanningNodeData" class="tree-content">
-      <ScanningPlaceholderRow :node="scanningNodeData" />
+    <!-- 扫描中占位行（root 为空且存在 scanningNode 时显示，支持选中/取消） -->
+    <div v-if="!rootNodeId && scanningNodeData" class="tree-content" @scroll.passive="handleContentScroll">
+      <ScanningPlaceholderRow
+        :node="scanningNodeData"
+        :task-id="taskId"
+        :is-selected="isSelectedComputed"
+        @toggle-selection="handleToggleSelection"
+      />
     </div>
 
     <!-- 传输树节点（从根节点开始渲染，所有数据从 Store 获取） -->
-    <div v-if="rootNodeId" class="tree-content">
+    <div v-if="rootNodeId" class="tree-content" @scroll.passive="handleContentScroll">
       <SftpTransferTreeNode
         :task-id="taskId"
         :node-id="rootNodeId"
-        :level="0"
+        :level=0
         :hide-idle-nodes="hideIdleNodes"
         @update:node-expanded="handleNodeExpanded"
       />
@@ -33,7 +43,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import SftpTransferTreeNode from './SftpTransferTreeNode.vue'
 import SftpStatusHeader from './SftpStatusHeader.vue'
@@ -107,6 +117,20 @@ function handleToggleSelection(): void {
     sftpTransferStore.toggleTaskSelection(props.taskId)
   }
 }
+
+/** 表头水平偏移量（同步内容区 scrollLeft） */
+const headerScrollLeft = ref(0)
+
+/**
+ * 处理内容区域滚动事件
+ * 内容区同时拥有水平和竖向滚动能力：
+ * - 竖向：内容区自身处理（overflow-y: auto）
+ * - 水平：内容区自身处理（overflow-x: auto），同时同步表头的 translateX
+ */
+function handleContentScroll(event: Event): void {
+  const target = event.target as HTMLElement
+  headerScrollLeft.value = -target.scrollLeft
+}
 </script>
 
 <style scoped>
@@ -115,14 +139,30 @@ function handleToggleSelection(): void {
   display: flex;
   flex-direction: column;
   border-bottom: 2px solid var(--border-color, #333);
+  overflow: hidden;
 }
 
-/* 树形内容区域 */
+/**
+ * 树形内容区域 — 滚动条持有者
+ * 同时拥有水平滚动（overflow-x: auto）和竖向滚动（overflow-y: auto）
+ * 水平滚动时通过 @scroll 事件同步表头 translateX，实现表头跟随效果
+ *
+ * 注意：CSS 原生不支持将水平滚动条定位到容器顶部。
+ * 浏览器规范规定水平滚动条始终出现在 overflow 容器的底部，
+ * 竖向滚动条始终在右侧。这是浏览器引擎的硬性行为，无法通过 CSS 属性改变。
+ *
+ * 如需将水平滚动条移至表头下方，需要采用分层方案（外层管水平、内层管竖向），
+ * 但该方案会引入额外的 DOM 嵌套和滚动同步复杂度。
+ *
+ * 关键：min-width: 0 允许 flex 子项收缩到小于内容宽度，
+ *       内部子元素保持 min-width: max-content 不换行，
+ *       当内容超出容器宽度时触发水平滚动条
+ */
 .tree-content {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: auto;
   background: var(--bg-color, #1e1e1e);
+  min-width: 0;
 }
 
 /* 滚动条样式 */
