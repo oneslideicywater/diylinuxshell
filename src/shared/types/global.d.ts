@@ -79,6 +79,7 @@ export interface CustomAPI {
     getDrives: () => Promise<{ success: boolean; data?: any[]; error?: string }>
     getPlatform: () => Promise<{ success: boolean; data?: string; error?: string }>
     dirname: (filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>
+    basename: (filePath: string) => Promise<{ success: boolean; data?: string; error?: string }>
     pathJoin: (...segments: string[]) => Promise<{ success: boolean; data?: string; error?: string }>
     getHomeDir: () => Promise<{ success: boolean; data?: string; error?: string }>
     deleteLocalFile: (taskId: string, node: TransferNode) => Promise<{ success: boolean; error?: string }>

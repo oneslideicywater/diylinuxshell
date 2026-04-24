@@ -1,6 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { TransferTask, TransferNode } from '@shared/types/sftp'
+import { formatSize } from '@/components/terminal/sftp/script/utils'
+import { transferTaskFSM } from '@/components/terminal/sftp/fsm/TaskStateMachine'
+import { transferNodeFSM } from '@/components/terminal/sftp/fsm/NodeStateMachine'
 
 /**
  * SFTP 传输任务状态管理 Store
@@ -90,19 +93,16 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   const MAX_COMPLETED_TASKS = 100
 
   /**
-   * 添加传输任务
+   * 添加传输任务（只做 push，不建索引）
    * 
-   * 注意：此处不构建节点索引！
-   * 正确的索引时机是：扫描完成后子节点填充完毕，调用 rebuildNodeIndex 统一重建。
-   * 如果在 addTask 时对空根节点建索引，后续扫描填充子节点后需要补丁式 indexSubTree，
-   * 容易导致 Proxy 引用混乱（普通对象 vs reactive Proxy 混用）→ 响应式更新失效。
+   * 索引时机：单文件任务在 addTask 后由调用方调 initNodeIndex；
+   * 文件夹任务在扫描完成、设置 root 后调 initNodeIndex。
    * 
-   * @param task 任务数据（root 可以为空 children 的占位节点）
+   * @param task 任务数据
    */
   function addTask(task: TransferTask): void {
     cleanupCompletedTasks()
     transferTasks.value.push(task)
-    // 不在此处 buildNodeIndex，等扫描完成后由调用方触发 rebuildNodeIndex
   }
 
   /**
@@ -142,30 +142,72 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   function updateTask(taskId: string, updates: Partial<TransferTask>): void {
     const task = transferTasks.value.find(t => t.id === taskId)
     if (!task) return
-    
-    // 如果 root 被整体替换（两阶段策略：占位节点 → 真实树），必须重建索引
-    if (updates.root && task.root !== updates.root) {
-      // 清除该任务的所有旧索引
-      for (const key of Array.from(nodeIndexMap.keys())) {
-        if (key.startsWith(`${taskId}::`)) {
-          nodeIndexMap.delete(key)
-        }
-      }
-      // 用新 root 重建索引
-      buildNodeIndex(taskId, updates.root)
-      console.log(`[sftpTransfer] 🔄 任务 ${taskId} 索引已重建（root 替换）`)
-    }
-
     Object.assign(task, updates)
   }
 
   /**
-   * 更新任务状态
+   * 状态机守卫：查询任务当前状态，判断是否允许转换到目标状态
+   *
+   * @param taskId 任务 ID
+   * @param targetStatus 目标状态
+   * @param callerName 调用方名称（用于日志定位）
+   * @returns true = 允许执行，false = 拒绝并打印 warn
+   */
+  function shouldAllowTransition(
+    taskId: string,
+    targetStatus: string,
+    callerName: string = ''
+  ): boolean {
+    const task = transferTasks.value.find(t => t.id === taskId)
+    if (!task) return true
+
+    if (!transferTaskFSM.canTransition(task.status, targetStatus)) {
+      console.warn(
+        `[sftpTransfer] 🚫 ${callerName ? callerName + ' ' : ''}状态机拒绝: ` +
+        `任务 ${taskId} "${task.status}" → "${targetStatus}" 不在合法转换表中`
+      )
+      return false
+    }
+
+    return true
+  }
+
+  /**
+   * 更新任务状态（带状态机保护）
+   *
    * @param taskId 任务 ID
    * @param status 新状态
    */
   function updateTaskStatus(taskId: string, status: TransferTask['status']): void {
+    if (!shouldAllowTransition(taskId, status)) return
     updateTask(taskId, { status })
+  }
+
+  /**
+   * 判断节点状态转换是否合法（使用 Node FSM）
+   *
+   * 与 shouldAllowTransition 的区别：
+   * - shouldAllowTransition → 使用 Task FSM，校验**任务**状态（7 状态）
+   * - shouldAllowNodeTransition → 使用 Node FSM，校验**节点**状态（5 状态）
+   *
+   * @param node 当前节点
+   * @param targetStatus 目标状态
+   * @param callerName 调用方名称（用于日志定位）
+   * @returns true = 允许执行，false = 拒绝并打印 warn
+   */
+  function shouldAllowNodeTransition(
+    node: TransferNode,
+    targetStatus: string,
+    callerName: string = ''
+  ): boolean {
+    if (!transferNodeFSM.canTransition(node.status, targetStatus)) {
+      console.warn(
+        `[sftpTransfer] 🚫 ${callerName ? callerName + ' ' : ''}节点状态机拒绝: ` +
+        `节点 ${node.name}(${node.id}) "${node.status}" → "${targetStatus}" 不在 Node FSM 合法转换表中`
+      )
+      return false
+    }
+    return true
   }
 
   /**
@@ -208,13 +250,15 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
 
   /**
    * 更新指定节点的状态并沿祖先链传播属性
-   * 
+   *
+   * 设计说明：deltaBytes 由函数内部自动计算（newValue - oldValue），
+   * 调用方只需传入绝对值 transferredBytes，无需关心增量计算。
+   *
    * @param taskId 任务 ID
    * @param nodeId 节点 ID
    * @param updates 要更新的字段（Partial<TransferNode>）
-   * @param deltaBytes 本次回调的增量传输字节数（仅对文件/叶子节点有意义）
    */
-  function mutateNode(taskId: string, nodeId: string, updates: Partial<TransferNode>, deltaBytes?: number): void {
+  function mutateNode(taskId: string, nodeId: string, updates: Partial<TransferNode>): void {
     const node = nodeIndexMap.get(`${taskId}::${nodeId}`)
     if (!node) {
       console.warn(`[sftpTransfer] ⚠️ mutateNode 未找到节点: taskId=${taskId} nodeId=${nodeId}（索引可能未重建）`)
@@ -224,49 +268,67 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
     // 递增版本号 → 触发所有依赖 version 的 computed 重算
     version.value++
 
-    const isFile = !node.isDirectory
+    // 记录旧值（用于计算 delta 和日志）
+    const oldTransferredBytes = node.transferredBytes || 0
 
-    // ========== 更新当前节点 ==========
-    if (isFile && typeof deltaBytes === 'number' && deltaBytes > 0) {
-      // 文件节点：transferredBytes 为累计值 = 旧值 + 增量
-      updates.transferredBytes = (node.transferredBytes || 0) + deltaBytes
+    // 日志：每次 mutateNode 打印节点完整状态变化（不区分根/非根）
+    const oldState = {
+      status: node.status,
+      progress: node.progress,
+      speed: node.speed,
+      transferredBytes: node.transferredBytes,
+      startTime: node.startTime,
+      endTime: node.endTime,
+      completedFiles: node.completedFiles
     }
+
+    // 保护 startTime/endTime 不被重复覆盖：
+    // 祖先传播逻辑（下方）对祖先节点做了 ancestor.startTime 检查，
+    // 但 Object.assign 对当前节点自身无保护。
+    // 场景：子节点开始传输时传入新的 startTime，会覆盖根节点已有的原始 startTime
+    if (node.startTime != null && 'startTime' in updates) {
+      delete (updates as Record<string, unknown>).startTime
+    }
+    if (node.endTime != null && 'endTime' in updates) {
+      delete (updates as Record<string, unknown>).endTime
+    }
+
+    /** 终态保护：使用 Node FSM 校验节点状态转换合法性 */
+    if ('status' in updates && !shouldAllowNodeTransition(node, (updates as any).status, 'mutateNode')) {
+      return
+    }
+
     Object.assign(node, updates)
 
-    // 获取祖先链 [自身, 父, 祖父, ..., 根]
+    // 自动计算 deltaBytes（用于向上传播给父节点）
+    const deltaBytes = (node.transferredBytes || 0) - oldTransferredBytes
+
+    console.log(
+      `[sftpTransfer] 🕐 mutateNode | ` +
+      `节点: ${node.name} (${node.isDirectory ? '目录' : '文件'}) path=${node.remotePath || node.localPath || '-'} | ` +
+      `updates: ${JSON.stringify(Object.keys(updates))} deltaBytes=${deltaBytes > 0 ? deltaBytes : 0} | ` +
+      `status: ${oldState.status} → ${node.status} | ` +
+      `progress: ${oldState.progress} → ${node.progress}% | ` +
+      `speed: ${oldState.speed} → ${node.speed} B/s | ` +
+      `transferredBytes: ${oldState.transferredBytes} → ${node.transferredBytes} | ` +
+      `startTime: ${oldState.startTime ?? 'null'} → ${node.startTime ?? 'null'} | ` +
+      `endTime: ${oldState.endTime ?? 'null'} → ${node.endTime ?? 'null'}`
+    )
+
     const chain = getAncestorChain(taskId, nodeId)
-    if (chain.length <= 1) return  // 无祖先节点，无需传播
 
-    // ========== 第一遍：正向遍历（根 → 自身），传播 startTime ==========
-    const hasStartTime = typeof updates.startTime === 'number'
-    if (hasStartTime) {
-      for (let i = chain.length - 1; i >= 0; i--) {
-        const ancestor = nodeIndexMap.get(`${taskId}::${chain[i]}`)
-        if (!ancestor) continue
-        if (!ancestor.startTime) {
-          Object.assign(ancestor, { startTime: updates.startTime! })
-        }
-      }
-    }
+    if (chain.length <= 1) return
 
-    // ========== 第二遍：反向遍历（自身 → 根），向上传播传输字节增量 ==========
-    // 计算本次对父节点的有效增量
-    let effectiveDelta = 0
-    if (isFile && typeof deltaBytes === 'number' && deltaBytes > 0) {
-      // 文件节点：使用传入的增量字节
-      effectiveDelta = deltaBytes
-    } else if (!isFile && typeof updates.transferredBytes === 'number' && updates.transferredBytes > 0) {
-      // 目录节点完成时：transferredBytes = 文件夹总大小，增量 = 最终值 - 旧值
-      effectiveDelta = updates.transferredBytes - (node.transferredBytes || 0)
-    }
-    if (effectiveDelta <= 0) return
+    // ========== 反向遍历（自身 → 根），向上传播传输字节增量 ==========
+    // 统一使用自动计算的 deltaBytes（文件和目录都用差值，无需区分）
+    if (deltaBytes <= 0) return
 
     for (let i = 1; i < chain.length; i++) {
       const parent = nodeIndexMap.get(`${taskId}::${chain[i]}`)
       if (!parent) continue
 
       const folderSize = parent.size || 0
-      const newParentTransferred = (parent.transferredBytes || 0) + effectiveDelta
+      const newParentTransferred = (parent.transferredBytes || 0) + deltaBytes
 
       let folderSpeed = 0
       if (newParentTransferred > 0 && parent.startTime) {
@@ -274,39 +336,32 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
         folderSpeed = elapsed > 0 ? Math.round(newParentTransferred / elapsed) : 0
       }
 
+      console.log(
+          `[sftpTransfer] [version= ${version.value }]🕐 祖先传播 transferBytes | ` +
+          `path=${parent.remotePath} ` +
+          `transferredBytes=${newParentTransferred} ` +
+          `chain=${chain.length}`
+        )
       Object.assign(parent, {
         transferredBytes: newParentTransferred,
-        progress: folderSize > 0 ? Math.round((newParentTransferred / folderSize) * 100) : 0,
+        progress: folderSize > 0 ? Math.round((newParentTransferred / folderSize * 100)) : 0,
         speed: folderSpeed
       })
     }
   }
 
   /**
-   * 重建任务的完整节点索引（扫描完成后必须调用）
-   * 
-   * 使用时机：addTask 时根节点是空 children（scanning 状态），
-   * 异步扫描完成并填充子节点后，调用此方法一次性重建整棵树的索引。
-   * 此时 task.root 及其所有子节点都已在 reactive 数组中，
-   * buildNodeIndex 取到的全部是 Vue Proxy → mutateNode 的 Object.assign 能正确触发 Proxy.set。
+   * 初始化任务节点索引（扫描完成后、设置 root 后调用一次即可）
    * 
    * @param taskId 任务 ID
    */
-  function rebuildNodeIndex(taskId: string): void {
+  function initNodeIndex(taskId: string): void {
     const task = transferTasks.value.find(t => t.id === taskId)
     if (!task || !task.root) return
 
-    // 先清除该任务的所有旧索引（防止重复）
-    for (const key of Array.from(nodeIndexMap.keys())) {
-      if (key.startsWith(`${taskId}::`)) {
-        nodeIndexMap.delete(key)
-      }
-    }
-
-    // 重建完整树索引（此时子节点已填充完毕，全部是 reactive Proxy）
     buildNodeIndex(taskId, task.root)
 
-    console.log(`[sftpTransfer] 🔨 重建索引完成: taskId=${taskId}, 根节点="${task.root.name}"`)
+    console.log(`[sftpTransfer] 🔨 索引初始化完成: taskId=${taskId}, 根节点="${task.root.name}"`)
   }
 
   /**
@@ -330,8 +385,10 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
     
     const task = transferTasks.value[taskIndex]
     
+    if (!task.root) return
+    
     // 在树中查找并更新目标节点
-    const updated = updateNodeInTree(task.root, nodeId, updates)
+    const updated = updateNodeInTree(task.root, nodeId, updates, taskId)
     
     if (updated) {
       // 通过重新赋值整个任务来强制触发响应式更新
@@ -350,9 +407,14 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   function updateNodeInTree(
     node: TransferNode, 
     nodeId: string, 
-    updates: Partial<TransferNode>
+    updates: Partial<TransferNode>,
+    taskId: string
   ): boolean {
     if (node.id === nodeId) {
+      /** 终态保护：使用 Node FSM 校验节点状态转换合法性 */
+      if ('status' in updates && !shouldAllowNodeTransition(node, (updates as any).status, 'updateNodeInTree')) {
+        return false
+      }
       // 找到目标节点，应用更新
       Object.assign(node, updates)
       return true
@@ -361,7 +423,7 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
     // 递归搜索子节点
     if (node.children && node.children.length > 0) {
       for (const child of node.children) {
-        if (updateNodeInTree(child, nodeId, updates)) {
+        if (updateNodeInTree(child, nodeId, updates, taskId)) {
           return true
         }
       }
@@ -433,7 +495,9 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
    */
   function setAllNodesExpanded(expanded: boolean): void {
     transferTasks.value.forEach(task => {
-      setNodeExpandedRecursive(task.root, expanded)
+      if (task.root) {
+        setNodeExpandedRecursive(task.root, expanded)
+      }
     })
   }
 
@@ -446,6 +510,132 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
     node.expanded = expanded
     if (node.children && node.children.length > 0) {
       node.children.forEach(child => setNodeExpandedRecursive(child, expanded))
+    }
+  }
+
+  /**
+   * 打印树形结构（调试用，输出到控制台）
+   * 
+   * 以缩进树形格式打印任务的所有节点信息，
+   * 包括节点名称、类型、状态、进度、大小等关键属性
+   * 
+   * @param taskId 任务 ID（不传则打印所有任务的树）
+   * @param maxDepth 最大递归深度，防止过深树导致输出过长，默认 10
+   */
+  function printTree(taskId?: string, maxDepth: number = 10): void {
+    const tasksToPrint = taskId 
+      ? transferTasks.value.filter(t => t.id === taskId)
+      : transferTasks.value.filter(t => t.root)
+
+    for (const task of tasksToPrint) {
+      console.log(`%c📦 任务: ${task.id} | 状态=${task.status} | 类型=${task.type}`, 'color: #2196F3; font-weight: bold')
+      if (task.root) {
+        printNodeRecursive(task.root, '', 0, maxDepth)
+      } else {
+        console.log('   (root 为空，可能正在扫描中)')
+      }
+      console.log('')
+    }
+  }
+
+  /**
+   * 递归打印单个节点的树形结构
+   * @param node 当前节点
+   * @param prefix 缩进前缀字符串
+   * @param depth 当前深度
+   * @param maxDepth 最大允许深度
+   */
+  function printNodeRecursive(node: TransferNode, prefix: string, depth: number, maxDepth: number): void {
+    if (depth > maxDepth) {
+      console.log(`${prefix}... (depth > ${maxDepth}, 截断)`)
+      return
+    }
+
+    const icon = node.isDirectory ? '📁' : '📄'
+    const statusIcon: Record<string, string> = {
+      pending: '⏳',
+      scanning: '🔍',
+      transferring: '🔄',
+      completed: '✅',
+      error: '❌',
+      cancelled: '🚫'
+    }
+    
+    const sizeStr = node.size != null ? formatSize(node.size) : '-'
+    const transferredStr = node.transferredBytes != null ? formatSize(node.transferredBytes) : '-'
+    const progressStr = node.progress != null ? `${node.progress}%` : '-'
+
+    console.log(
+      `${prefix}${icon} ${node.name} ` +
+      `[${statusIcon[node.status] || node.status}] ` +
+      `progress=${progressStr} ` +
+      `size=${sizeStr} ` +
+      `transferred=${transferredStr}`
+    )
+
+    if (node.children && node.children.length > 0) {
+      const childPrefix = prefix + '│  '
+      const lastPrefix = prefix + '└── '
+      const midPrefix = prefix + '├── '
+      
+      node.children.forEach((child, index) => {
+        const isLast = index === node.children!.length - 1
+        const currentPrefix = isLast ? lastPrefix : midPrefix
+        const nextPrefix = isLast ? childPrefix.replace('│', ' ') : childPrefix
+        
+        // 临时替换前缀来打印当前子行，然后用 nextPrefix 继续递归
+        printNodeRecursiveWithPrefix(child, currentPrefix, nextPrefix, depth + 1, maxDepth)
+      })
+    }
+  }
+
+  /**
+   * 带自定义前缀的递归打印辅助函数
+   * @param node 当前节点
+   * @param displayPrefix 显示前缀（当前行的缩进）
+   * @param childPrefix 子节点前缀（下一层级的缩进）
+   * @param depth 当前深度
+   * @param maxDepth 最大允许深度
+   */
+  function printNodeRecursiveWithPrefix(
+    node: TransferNode, 
+    displayPrefix: string, 
+    childPrefix: string,
+    depth: number, 
+    maxDepth: number
+  ): void {
+    if (depth > maxDepth) {
+      console.log(`${displayPrefix}... (depth > ${maxDepth})`)
+      return
+    }
+
+    const icon = node.isDirectory ? '📁' : '📄'
+    const statusIcon: Record<string, string> = {
+      pending: '⏳',
+      scanning: '🔍',
+      transferring: '🔄',
+      completed: '✅',
+      error: '❌',
+      cancelled: '🚫'
+    }
+    
+    const sizeStr = node.size != null ? formatSize(node.size) : '-'
+    const transferredStr = node.transferredBytes != null ? formatSize(node.transferredBytes) : '-'
+    const progressStr = node.progress != null ? `${node.progress}%` : '-'
+
+    console.log(
+      `${displayPrefix}${icon} ${node.name} ` +
+      `[${statusIcon[node.status] || node.status}] ` +
+      `progress=${progressStr} size=${sizeStr} transferred=${transferredStr}`
+    )
+
+    if (node.children && node.children.length > 0) {
+      node.children.forEach((child, index) => {
+        const isLast = index === node.children!.length - 1
+        const nextDisplayPrefix = childPrefix + (isLast ? '└── ' : '├── ')
+        const nextChildPrefix = childPrefix + (isLast ? '    ' : '│   ')
+        printNodeRecursiveWithPrefix(child, nextDisplayPrefix, nextChildPrefix, depth + 1, maxDepth)
+      })
     }
   }
 
@@ -541,8 +731,8 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
     updateTaskRoot,
     // 节点状态更新方法（核心）
     mutateNode,             // O(1) 直接变异 + 响应式触发（配合 parent 链使用）
-    rebuildNodeIndex,       // 扫描完成后重建整棵树索引（必须调用）
-    getAncestorChain,       // 获取从指定节点到根节点的祖先链 ID（含自身）
+    initNodeIndex,          // 扫描后初始化节点索引（只需调用一次）
+
     updateNodeStatus,       // 兼容旧接口（树遍历查找）
     // 其他方法
     removeTask,
@@ -551,6 +741,7 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
     getTask,
     getNode,                // 获取指定任务的指定节点最新状态（实时数据）
     setAllNodesExpanded,
+    printTree,              // 打印树形结构（调试用）
     // ========== 任务选中相关方法 ==========
     toggleTaskSelection,     // 切换任务选中状态
     cancelSelectedTasks,     // 取消选中的任务

@@ -349,6 +349,13 @@ export function registerSFTPIpcHandlers(): void {
   })
 
   /**
+   * 获取路径的文件名部分（使用 Node.js path.basename，屏蔽系统差异）
+   */
+  ipcMain.handle('sftp:basename', async (_event, filePath: string) => {
+    return { success: true, data: path.basename(filePath) }
+  })
+
+  /**
    * 选择本地文件
    */
   ipcMain.handle('sftp:selectLocalFile', async (_event, options: { selectFolder?: boolean }) => {

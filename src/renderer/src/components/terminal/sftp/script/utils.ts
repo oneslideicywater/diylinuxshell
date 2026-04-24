@@ -9,7 +9,7 @@
  * @module sftp/utils
  */
 
-import type { TransferTask, TransferNode, TransferStatus, TransferType } from '@shared/types/sftp'
+import type { TransferTask, TransferNode, NodeStatus, TransferType } from '@shared/types/sftp'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
 
 /**
@@ -70,8 +70,8 @@ export function createTransferNode(config: {
   remotePath?: string
   /** 文件大小（字节，可选） */
   size?: number
-  /** 节点状态（可选，默认 'pending'） */
-  status?: TransferStatus
+  /** 节点状态（可选，默认 'pending'，使用 NodeStatus） */
+  status?: NodeStatus
   /** 错误信息（可选，用于 error 状态） */
   error?: string
   /** 子节点列表（可选，用于文件夹根节点） */
@@ -152,8 +152,10 @@ export function formatSize(bytes: number): string {
 export function createTransferTask(config: {
   /** 任务类型 */
   type: TransferType
-  /** 根节点（文件或文件夹） */
-  root: TransferNode
+  /** 根节点（文件或文件夹，扫描中可为 undefined） */
+  root?: TransferNode
+  /** 扫描占位节点（仅用于 UI 展示扫描中的基础信息） */
+  scanningNode?: Pick<TransferNode, 'name' | 'type' | 'localPath' | 'remotePath'>
   /** SFTP 连接标识符 */
   sftpConnectionId: string
   /** 会话 ID（可选，用于 UI 显示） */
@@ -166,6 +168,7 @@ export function createTransferTask(config: {
     type: config.type,
     status: 'pending',
     root: config.root,
+    scanningNode: config.scanningNode,
     sftpConnectionId: config.sftpConnectionId,
     sessionId: config.sessionId,
     totalBytes: config.totalBytes || 0,

@@ -5,6 +5,7 @@
  * 重构说明：
  * - 不再接收 taskRoot 对象 prop
  * - 仅通过 taskId 从 Store 获取任务数据，根节点 ID 由 Store 推导
+ * - 扫描状态时使用 ScanningPlaceholderRow 组件展示占位信息
  * @module components/session/sftp/SftpTaskStatus
  */
 
@@ -13,12 +14,18 @@
     <!-- 任务表头 -->
     <SftpStatusHeader :task-id="taskId" :is-selected="isSelectedComputed" @toggle-selection="handleToggleSelection" />
 
+    <!-- 扫描中占位行（root 为空且存在 scanningNode 时显示） -->
+    <div v-if="!rootNodeId && scanningNodeData" class="tree-content">
+      <ScanningPlaceholderRow :node="scanningNodeData" />
+    </div>
+
     <!-- 传输树节点（从根节点开始渲染，所有数据从 Store 获取） -->
     <div v-if="rootNodeId" class="tree-content">
       <SftpTransferTreeNode
         :task-id="taskId"
         :node-id="rootNodeId"
         :level="0"
+        :hide-idle-nodes="hideIdleNodes"
         @update:node-expanded="handleNodeExpanded"
       />
     </div>
@@ -30,6 +37,7 @@ import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import SftpTransferTreeNode from './SftpTransferTreeNode.vue'
 import SftpStatusHeader from './SftpStatusHeader.vue'
+import ScanningPlaceholderRow from './ScanningPlaceholderRow.vue'
 import { useSftpTransferStore } from '@/stores/sftpTransfer'
 
 /**
@@ -43,10 +51,13 @@ const sftpTransferStore = useSftpTransferStore()
 interface Props {
   /** 任务 ID */
   taskId: string
+  /** 是否隐藏空闲节点（pending/completed/cancelled，error 始终显示） */
+  hideIdleNodes?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  taskId: ''
+  taskId: '',
+  hideIdleNodes: false
 })
 
 /**
@@ -65,6 +76,12 @@ const isSelectedComputed = computed((): boolean => {
 const rootNodeId = computed((): string | undefined => {
   const task = sftpTransferStore.transferTasks.find(t => t.id === props.taskId)
   return task?.root?.id
+})
+
+/** 扫描占位节点数据（root 为空时用于 UI 展示基础信息） */
+const scanningNodeData = computed(() => {
+  const task = sftpTransferStore.transferTasks.find(t => t.id === props.taskId)
+  return task?.scanningNode ?? null
 })
 
 /**

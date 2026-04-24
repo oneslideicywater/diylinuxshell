@@ -730,9 +730,9 @@ export class SFTPService {
    * 扫描本地文件树（用于上传前的文件扫描）
    * 
    * v5 优化：直接返回 TransferNode 对象（无循环引用，可安全通过 IPC 序列化）
-   * 使用 path.join 屏蔽操作系统路径分隔符差异
+   * 支持单文件和文件夹（含空目录）
    * 
-   * @param folderPath 要扫描的本地文件夹路径
+   * @param folderPath 要扫描的本地路径（文件或文件夹）
    * @param remoteBasePath 远程基础路径（用于生成远程路径）
    * @returns 扫描结果（包含 TransferNode 根节点和统计信息）
    */
@@ -743,8 +743,31 @@ export class SFTPService {
     const normalizedFolderPath = path.normalize(folderPath)
     const folderName = path.basename(normalizedFolderPath)
 
-    // 创建根节点（使用 TransferNode 类型，无 parent 字段避免循环引用）
-    const rootNode: TransferNode = {
+    try {
+      // 验证路径存在
+      const stat = await fs.promises.stat(normalizedFolderPath)
+
+      // 单文件：直接返回文件节点作为根
+      if (stat.isFile()) {
+        const fileNode: TransferNode = {
+          id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: folderName,
+          isDirectory: false,
+          type: 'upload',
+          status: 'pending',
+          progress: 0,
+          size: stat.size,
+          localPath: normalizedFolderPath,
+          remotePath: path.posix.join(remoteBasePath, folderName),
+          speed: 0,
+          transferredBytes: 0
+        }
+        console.log(`[scanLocalTree] 单文件扫描完成: ${folderName}, 大小 ${stat.size} 字节`)
+        return { success: true, root: fileNode, totalFiles: 1, totalBytes: stat.size }
+      }
+
+      // 文件夹：创建根节点并递归扫描
+      const rootNode: TransferNode = {
       id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: folderName,
       isDirectory: true,
@@ -759,14 +782,7 @@ export class SFTPService {
       children: []
     }
 
-    try {
-      // 验证路径存在且是目录
-      const stat = await fs.promises.stat(normalizedFolderPath)
-      if (!stat.isDirectory()) {
-        throw new Error('路径不是文件夹')
-      }
-
-      // 递归扫描函数（内部辅助函数）
+    // 递归扫描函数（内部辅助函数）
       async function scanDir(
         currentPath: string,
         currentNode: TransferNode,
@@ -902,8 +918,9 @@ export class SFTPService {
    * 
    * v5 优化：直接返回 TransferNode 对象（无循环引用，可安全通过 IPC 序列化）
    * 远程路径统一使用 / 分隔符（SFTP 标准），本地路径使用 path.join 屏蔽系统差异
+   * 支持单文件和文件夹（含空目录）
    * 
-   * @param remotePath 要扫描的远程文件夹路径
+   * @param remotePath 要扫描的远程路径（文件或文件夹）
    * @param localBasePath 本地基础路径（可选，下载时用于生成本地路径）
    * @returns 扫描结果（包含 TransferNode 根节点和统计信息）
    */
@@ -913,8 +930,41 @@ export class SFTPService {
   ): Promise<{ success: boolean; root?: TransferNode; totalFiles?: number; totalBytes?: number; error?: string }> {
     const remoteName = remotePath.split('/').pop() || remotePath
 
-    // 创建根节点
-    const rootNode: TransferNode = {
+    try {
+      // 验证 SFTP 连接状态
+      if (!this.sftpHandle) {
+        throw new Error('SFTP 未连接')
+      }
+
+      // 判断远程路径是文件还是目录（Promise 包装 callback 风格的 stat）
+      const stats = await new Promise<any>((resolve, reject) => {
+        this.sftpHandle!.stat(remotePath, (err: Error, s: any) => {
+          if (err) reject(err)
+          else resolve(s)
+        })
+      })
+
+      // 单文件：直接返回文件节点作为根
+      if (!stats.isDirectory()) {
+        const fileNode: TransferNode = {
+          id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          name: remoteName,
+          isDirectory: false,
+          type: localBasePath ? 'download' : 'delete',
+          status: 'pending',
+          progress: 0,
+          size: stats.size || 0,
+          localPath: localBasePath ? path.normalize(path.join(localBasePath, remoteName)) : '',
+          remotePath: remotePath,
+          speed: 0,
+          transferredBytes: 0
+        }
+        console.log(`[scanRemoteTree] 单文件扫描完成: ${remoteName}, 大小 ${stats.size || 0} 字节`)
+        return { success: true, root: fileNode, totalFiles: 1, totalBytes: stats.size || 0 }
+      }
+
+      // 文件夹：创建根节点并递归扫描
+      const rootNode: TransferNode = {
       id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       name: remoteName,
       isDirectory: true,
@@ -929,13 +979,7 @@ export class SFTPService {
       children: []
     }
 
-    try {
-      // 验证 SFTP 连接状态
-      if (!this.sftpHandle) {
-        throw new Error('SFTP 未连接')
-      }
-
-      // 递归扫描函数（内部辅助函数）
+    // 递归扫描函数（内部辅助函数）
       async function scanRemoteDir(
         this: SFTPService,
         currentRemotePath: string,

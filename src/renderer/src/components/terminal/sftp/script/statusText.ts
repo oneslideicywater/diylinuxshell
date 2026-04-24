@@ -12,6 +12,7 @@ const STATUS_TEXT_MAP: Record<TransferStatus, string> = {
   pending: '等待中',
   scanning: '扫描中',
   transferring: '传输中',
+  transferringPartialError: '传输中(部分出错)',
   completed: '已完成',
   error: '错误',
   cancelled: '已取消'
@@ -22,6 +23,7 @@ const DELETE_STATUS_TEXT_MAP: Record<TransferStatus, string> = {
   pending: '等待中',
   scanning: '扫描中',
   transferring: '删除中',
+  transferringPartialError: '删除中(部分出错)',
   completed: '已删除',
   error: '错误',
   cancelled: '已取消'

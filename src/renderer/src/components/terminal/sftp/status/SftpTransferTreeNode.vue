@@ -10,7 +10,8 @@
  */
 
 <template>
-  <div v-if="node" class="tree-node">
+  <!-- hideIdleNodes 开启且节点为空闲态时隐藏（error 始终显示） -->
+  <div v-if="node && !shouldHide" class="tree-node">
     <!-- 节点内容 -->
     <div class="node-row" :class="{ 'is-folder': node.isDirectory, 'is-error': liveStatus === 'error' }">
       <!-- 复选框占位列（与表头对齐） -->
@@ -63,10 +64,6 @@
         <div v-if="liveStatus === 'transferring' || liveStatus === 'pending'" class="progress-bar">
           <div class="progress-fill" :style="{ width: liveProgress + '%' }"></div>
         </div>
-        <div v-else-if="liveStatus === 'scanning'" class="scanning-indicator">
-          <span class="scanning-dot"></span>
-          <span>扫描中...</span>
-        </div>
         <span v-else-if="liveStatus === 'completed'" class="progress-percent">100%</span>
         <span v-else class="progress-percent">-</span>
       </div>
@@ -115,6 +112,7 @@
         :task-id="taskId"
         :node-id="child.id"
         :level="level + 1"
+        :hide-idle-nodes="hideIdleNodes"
         @update:node-expanded="handleChildExpanded"
       />
     </div>
@@ -146,9 +144,16 @@ interface Props {
   nodeId: string
   /** 缩进层级 */
   level: number
+  /** 是否隐藏空闲节点（pending/completed/cancelled，error 始终显示） */
+  hideIdleNodes?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  taskId: '',
+  nodeId: '',
+  level: 0,
+  hideIdleNodes: false
+})
 
 const sftpTransferStore = useSftpTransferStore()
 
@@ -161,37 +166,103 @@ const node = computed((): TransferNode | undefined => {
   return sftpTransferStore.getNode(props.taskId, props.nodeId)
 })
 
-/** 实时速度 */
-const liveSpeed = computed(() => node.value?.speed ?? 0)
+/**
+ * 是否隐藏当前节点
+ * 条件：hideIdleNodes 开启 + 节点状态为 pending/completed/cancelled（非活跃态）+ 任务状态为 transferring
+ * 注意：error 节点始终显示，不参与隐藏
+ */
+const shouldHide = computed((): boolean => {
+  if (!props.hideIdleNodes) return false
+  const n = node.value
+  if (!n) return false
+  /** 仅隐藏空闲终态（pending / completed / cancelled），error 始终可见 */
+  if (n.status !== 'pending' && n.status !== 'completed' && n.status !== 'cancelled') return false
+  const task = sftpTransferStore.getTask(props.taskId)
+  return task?.status === 'transferring'
+})
+
+/** 实时速度
+ *  统一逻辑（文件和目录一致）：
+ *    - 进行中（transferring）：显示活跃节点实时速度
+ *    - 已完成（completed）：显示平均速度 = 总大小 / 传输耗时
+ */
+const liveSpeed = computed(() => {
+  void sftpTransferStore.version
+
+  const n = node.value
+  if (!n) return 0
+  if (!n.startTime) return n.speed ?? 0
+
+  // 已完成：显示平均速度 = 总大小 / (endTime - startTime)
+  if (n.status === 'completed' && n.endTime && n.size > 0) {
+    const elapsedSec = (n.endTime - n.startTime) / 1000
+    return elapsedSec > 0 ? Math.round(n.size / elapsedSec) : 0
+  }
+
+  // 进行中：目录取活跃子节点速度，文件取自身速度
+  if (n.isDirectory) {
+    const task = sftpTransferStore.getTask(props.taskId)
+    const activeNode = task?.activeNodeId ? sftpTransferStore.getNode(props.taskId, task.activeNodeId) : undefined
+    return activeNode?.speed ?? 0
+  }
+
+  return n.speed ?? 0
+})
 
 /** 实时进度百分比 */
-const liveProgress = computed(() => node.value?.progress ?? 0)
+const liveProgress = computed(() => {
+  void sftpTransferStore.version
+
+  console.log('liveProgress 重新计算', node?.value?.localPath, node.value?.progress ?? 0, node.value?.transferredBytes,node.value?.size)
+  return node.value?.progress ?? 0
+})
 
 /** 实时状态 */
-const liveStatus = computed(() => node.value?.status ?? 'pending')
+const liveStatus = computed(() => {
+  void sftpTransferStore.version
 
-/** 实时剩余时间（根据 size/transferredBytes/speed 计算） */
+  return node.value?.status ?? 'pending'
+})
+
+/** 实时剩余时间
+ *  进行中：(总大小-已传输字节) / 当前速度
+ *  已完成 / 无速度：显示 00:00:00 或 x
+ */
 const liveRemaining = computed(() => {
+  void sftpTransferStore.version
+
   const n = node.value
   if (!n) return ''
   if (n.status === 'completed') return '00:00:00'
 
-  const { size = 0, transferredBytes = 0, speed = 0 } = n
+  const { size = 0, transferredBytes = 0 } = n
+  // 使用 liveSpeed 的值（已包含目录/文件、进行中/完成的统一逻辑）
+  const speed = liveSpeed.value
+
   if (speed <= 0 || size <= transferredBytes) return 'x'
   return formatTime(Math.ceil((size - transferredBytes) / speed))
 })
 
-/** 实时经过时间（优先用 endTime - startTime 计算实际耗时，进行中则用 Date.now - startTime） */
+/** 实时经过时间
+ *  显式依赖 store.version：确保任何节点的 mutateNode 都会触发所有节点重算
+ *  原因：Date.now() 不是 Vue 响应式依赖，不添加 version 的话非活跃节点不会自动刷新
+ */
 const liveElapsed = computed(() => {
+  void sftpTransferStore.version
+
   const n = node.value
   if (!n) return ''
   // 已结束（completed/error/cancelled）：用 endTime - startTime 得到精确实际耗时
   if (n.status === 'completed' && n.endTime && n.startTime) {
+    console.log('liveElapsed 重新计算', node.value.localPath, formatTime(Math.round((n.endTime - n.startTime) / 1000)))
     return formatTime(Math.round((n.endTime - n.startTime) / 1000))
   }
   // 进行中：实时计算
-  if (n.startTime) return formatTime(Math.round((Date.now() - n.startTime) / 1000))
-
+  if (n.startTime) {
+    console.log('liveElapsed 重新计算', node.value.localPath, formatTime(Math.round((Date.now() - n.startTime) / 1000)))
+    return formatTime(Math.round((Date.now() - n.startTime) / 1000))
+  }
+  console.log('liveElapsed 重新计算', node.value.localPath, formatTime(0))
   return formatTime(0)
 })
 

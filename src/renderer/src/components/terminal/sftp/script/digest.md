@@ -18,6 +18,24 @@
 
 ---
 
+## 📁 FSM 目录（独立于 script）
+
+> 状态机代码位于 `../fsm/` 目录，与业务脚本分离。
+
+| 文件名 | 模块名称 | 主要职责 |
+|--------|----------|----------|
+| [TaskStateMachine.ts](../fsm/TaskStateMachine.ts) | 传输任务状态机 (Task FSM) | 定义任务级别（7 状态）合法转换规则 |
+| [NodeStateMachine.ts](../fsm/NodeStateMachine.ts) | 传输节点状态机 (Node FSM) | 定义节点级别（5 状态）合法转换规则 |
+| [stateMachine.test.ts](../fsm/__tests__/stateMachine.test.ts) | 状态机单元测试 | 57 个用例覆盖两个 FSM 的全部转换矩阵 + 终态保护 + isTerminal |
+
+### Mermaid 绘图规范
+
+1. **终态标注**：直接在节点名后用括号文字标注，如 `completed(终态)`。**禁止使用单独 `note` 框**。
+2. **状态命名**：camelCase，与代码字面量一致。
+3. **转换标签**：简明说明触发条件。
+
+---
+
 ## 1. delete.ts - SFTP 删除功能模块（安全架构 v4）
 
 **模块说明**：支持单文件、文件夹、批量删除，使用统一的树形组件显示删除进度。
@@ -146,6 +164,7 @@ interface RemoteFileState {
 | pending | 等待中 |
 | scanning | 扫描中 |
 | transferring | 传输中 |
+| transferringPartialError | 传输中(部分出错) |
 | completed | 已完成 |
 | error | 错误 |
 | cancelled | 已取消 |
@@ -156,6 +175,7 @@ interface RemoteFileState {
 | pending | 等待中 |
 | scanning | 扫描中 |
 | transferring | 删除中 |
+| transferringPartialError | 删除中(部分出错) |
 | completed | 已删除 |
 | error | 错误 |
 | cancelled | 已取消 |
@@ -168,7 +188,25 @@ interface RemoteFileState {
 
 ---
 
-## 6. upload.ts - SFTP 上传功能模块（安全架构 v4）
+## 6. TaskStateMachine.ts / NodeStateMachine.ts — 状态机
+
+> 📄 完整状态定义、转换矩阵、Mermaid 图、聚合规则 → [sftp-transfer-state-machine.md](../../../docs/relation/sftp-transfer-state-machine.md)
+
+| 文件 | 管理对象 | 状态数 | 导出 |
+|------|---------|:------:|------|
+| [TaskStateMachine.ts](../fsm/TaskStateMachine.ts) | 传输**任务**（整个批次） | 7 | `transferTaskFSM` |
+| [NodeStateMachine.ts](../fsm/NodeStateMachine.ts) | 传输**节点**（单个文件/文件夹） | 5 | `transferNodeFSM` |
+| [stateMachine.test.ts](../fsm/__tests__/stateMachine.test.ts) | 单元测试 | 57 用例 | — |
+
+### Mermaid 绘图规范
+
+1. **终态标注**：直接在节点名后用括号文字标注，如 `completed(终态)`。**禁止使用单独 `note` 框**。
+2. **状态命名**：camelCase，与代码字面量一致。
+3. **转换标签**：简明说明触发条件。
+
+---
+
+## 7. upload.ts - SFTP 上传功能模块（安全架构 v4）
 
 **模块说明**：支持单文件、文件夹、批量上传，使用统一的树形组件显示上传进度。
 
@@ -192,7 +230,7 @@ interface RemoteFileState {
 
 ---
 
-## 7. utils.ts - 公共工具函数模块
+## 8. utils.ts - 公共工具函数模块
 
 **模块说明**：统一管理所有 SFTP 操作的公共工具函数，消除代码重复，提高可维护性。
 
@@ -208,119 +246,16 @@ interface RemoteFileState {
 | `aggregateChildProgress` | 导出 | `node: TransferNode` | `{ progress, completedFiles, speed, transferredBytes, totalBytes }` | 从子节点聚合计算文件夹节点的进度信息（基于字节数加权，统一版本） |
 | `propagateViaParentChain` | 导出 | `taskId, startNode, store` | `void` | 通过 parent 引用链向上传播进度到所有祖先节点（O(depth)复杂度，统一版本） |
 
-### 使用场景说明
+### 使用场景
 
-#### formatTime
-- 用于显示已用时间、剩余时间等
+| 函数 | 调用方 |
+|------|--------|
+| `formatTime` | UI 显示已用/剩余时间 |
+| `createTransferNode` | upload/download/delete 扫描阶段创建节点 |
+| `formatSize` | UI 显示文件大小 |
+| `createTransferTask` | uploadBatch/deleteBatch/download 创建任务入 Store |
+| `isTaskCancelled` | 传输前/循环内/回调中/完成后 检测取消状态 |
+| `aggregateChildProgress` | 被 `propagateViaParentChain` 内部调用，字节数加权聚合子节点进度 |
+| `propagateViaParentChain` | 进度回调中沿 parent 链向上传播（O(depth)） |
 
-#### createTransferNode
-- 支持上传、下载、删除三种操作类型
-- 支持普通节点、错误节点、根节点等多种场景
-- 消除各模块中手动创建 TransferNode 的重复代码
-
-#### formatSize
-- 用于显示文件大小、总大小等
-
-#### createTransferTask
-- 关联 Pinia Store 进行状态管理
-- 消除各模块中手动创建 TransferTask 的重复代码
-
-#### isTaskCancelled
-- 文件上传/下载开始前检查
-- 文件夹递归处理前检查
-- for 循环每个子节点处理前检查
-- 进度回调中检查（停止 UI 更新）
-- 操作完成后检查（防止状态覆盖）
-
-#### aggregateChildProgress
-- 被 `propagateViaParentChain` 内部调用
-- 基于字节数加权计算文件夹总进度、速度、剩余时间等
-- 递归处理嵌套子文件夹
-
-#### propagateViaParentChain
-- 上传/下载/删除进度回调中调用
-- 利用 TransferNode.parent 字段沿父指针上溯
-- 无需从根节点遍历整棵树，复杂度 O(树深度)
-- 配合 SftpTransferTreeNode.vue 的 500ms 定时器实现实时 UI 更新
-
----
-
-## 🔗 模块依赖关系
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        utils.ts                              │
-│  (formatTime, formatSize, createTransferNode,               │
-│   createTransferTask, isTaskCancelled,                      │
-│   aggregateChildProgress, propagateViaParentChain)          │
-└───────────┬──────────────┬──────────────┬───────────────────┘
-            │              │              │
-    ┌───────▼───────┐ ┌────▼─────┐ ┌─────▼──────┐
-    │   upload.ts   │ │download.ts│ │  delete.ts │
-    │ (上传功能)     │ │(下载功能) │ │ (删除功能)  │
-    └───────┬───────┘ └────┬─────┘ └─────┬──────┘
-            │              │              │
-            └──────────────┼──────────────┘
-                           │
-                  ┌────────▼────────┐
-                  │   statusText.ts  │
-                  │  (状态文本工具)   │
-                  └─────────────────┘
-
-    ┌─────────────────────────────────┐
-    │           local.ts              │
-    │      (本地文件操作)              │
-    └─────────────────────────────────┘
-
-    ┌─────────────────────────────────┐
-    │          remote.ts              │
-    │      (远程文件操作)              │
-    └─────────────────────────────────┘
-```
-
----
-
-## 📊 统计信息
-
-| 模块 | 导出函数数 | 内部函数数 | 总函数数 |
-|------|-----------|-----------|---------|
-| delete.ts | 3 | 2 | 5 |
-| download.ts | 2 | 3 | 5 |
-| local.ts | 9 | 0 | 9 |
-| remote.ts | 8 | 0 | 8 |
-| statusText.ts | 1 | 0 | 1 |
-| upload.ts | 3 | 3 | 6 |
-| utils.ts | 7 | 0 | 7 |
-| **总计** | **33** | **8** | **41** |
-
----
-
-## 🏗️ 架构设计原则
-
-### 安全架构 v4
-1. **不再依赖 session 对象**：避免在渲染进程传递敏感信息
-2. **直接使用 sftpConnectionId**：SFTP 连接已在 TerminalTab 初始化时建立
-3. **可选接收 sessionId**：仅用于通过 SessionStore 获取会话名称等非敏感信息显示
-
-### 两阶段策略（适用于文件夹操作）
-1. **阶段 1**：先创建占位根节点，立即入 Store（UI 可即时显示）
-2. **阶段 2**：异步递归扫描子项，完成后更新 Store 中的 root 节点
-
-### 取消机制
-- 使用 `isTaskCancelled()` 在关键节点检查任务状态
-- 支持在以下时机检测取消：
-  - 文件传输开始前
-  - 文件夹递归处理前
-  - 循环每个子节点处理前
-  - 进度回调中
-  - 操作完成后（防止状态覆盖）
-
-### 响应式状态管理
-- 利用 Pinia reactive 特性
-- 通过 Store API 更新状态，自动触发视图响应式更新
-- 实时显示传输进度、速度、剩余时间等信息
-
----
-
-*文档生成时间：2026-04-20*
-*模块路径：src/renderer/src/components/terminal/sftp/script/*
+> � 架构设计（分层/数据流/依赖图）→ 见 [arch.md](./arch.md)

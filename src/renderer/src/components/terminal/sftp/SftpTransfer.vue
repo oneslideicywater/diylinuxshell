@@ -268,10 +268,6 @@ const currentSftpConnectionId = computed(() => {
  * 删除状态
  */
 
-const deletingCurrentPath = ref('')
-const deleteProgressCleanup = ref<(() => void) | null>(null)
-
-
 /**
  * 新建文件夹对话框状态
  */
@@ -557,8 +553,9 @@ async function handleDeleteLocalBatch(paths: string[]): Promise<void> {
     return
   }
 
-  // 构建确认对话框信息（显示所有待删除项）
-  const fileNames = paths.map(p => p.split(/[/\\]/).pop() || p)
+  // 调用主进程接口获取文件名列表（使用 Node.js path.basename，屏蔽系统差异）
+  const fileNamesResults = await Promise.all(paths.map(p => window.api.sftp.basename(p)))
+  const fileNames = fileNamesResults.map((r, i) => r.data || paths[i])
   const confirmMessage = `确定要删除以下 ${paths.length} 个文件/文件夹吗？\n\n${fileNames.map((name, i) => `${i + 1}. 📄 ${name}`).join('\n')}\n\n此操作不可撤销。`
 
   const confirmed = await showConfirmDialog('确认删除', confirmMessage)
@@ -611,8 +608,9 @@ async function handleDeleteRemoteBatch(paths: string[]): Promise<void> {
     return
   }
 
-  // 构建确认对话框信息（显示所有待删除项）
-  const fileNames = paths.map(p => p.split('/').pop() || p)
+  // 调用主进程接口获取文件名列表（使用 Node.js path.basename，屏蔽系统差异）
+  const fileNamesResults = await Promise.all(paths.map(p => window.api.sftp.basename(p)))
+  const fileNames = fileNamesResults.map((r, i) => r.data || paths[i])
   const confirmMessage = `确定要删除以下 ${paths.length} 个文件/文件夹吗？\n\n${fileNames.map((name, i) => `${i + 1}. 📄 ${name}`).join('\n')}\n\n此操作不可撤销。`
 
   const confirmed = await showConfirmDialog('确认删除', confirmMessage)
@@ -670,16 +668,6 @@ onMounted(async () => {
   document.addEventListener('click', closeContextMenu, true)
   document.addEventListener('contextmenu', closeContextMenu, true)
   
-  // 监听删除进度
-  if (currentSession.value) {
-    const connectionId = currentSftpConnectionId.value
-    deleteProgressCleanup.value = window.api.sftp.onDeleteProgress((data) => {
-      if (data.sessionId === connectionId) {
-        deletingCurrentPath.value = data.currentPath
-      }
-    })
-  }
-  
   // 初始化本地默认目录（用户 home 目录）
   if (props.sftpConnectionId) {
     await sftpBrowserStore.initLocalDefaultDir(props.sftpConnectionId)
@@ -697,10 +685,6 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu, true)
   document.removeEventListener('contextmenu', closeContextMenu, true)
-  // 清理删除进度监听器
-  if (deleteProgressCleanup.value) {
-    deleteProgressCleanup.value()
-  }
 })
 
 /**

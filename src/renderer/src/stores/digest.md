@@ -380,8 +380,10 @@ selectionMap (Map<string, string[]>)
 | `updateTask` | `taskId: string, updates: Partial<TransferTask>` | `void` | 更新传输任务的顶层属性（**当 root 被替换时自动重建 nodeIndexMap**） |
 | `updateTaskStatus` | `taskId: string, status: TransferTask['status']` | `void` | 更新任务状态 |
 | `updateTaskRoot` | `taskId: string, rootUpdates: Partial<TransferNode>` | `void` | 更新根节点的属性（利用 reactive 特性） |
-| `mutateNode` | `taskId: string, nodeId: string, updates: Partial<TransferNode>` | `void` | **O(1) 直接变异节点**：从 nodeIndexMap 查找 → Object.assign 变异 reactive Proxy（自动触发 Proxy.set 驱动响应式更新，无需手动替换 Task 对象） |
-| `rebuildNodeIndex` | `taskId: string` | `void` | **扫描完成后必须调用**：清除旧索引 + 对 task.root 整棵树递归 buildNodeIndex（所有节点均为 reactive Proxy） |
+| `mutateNode` | `taskId: string, nodeId: string, updates: Partial<TransferNode>` | `void` | **O(1) 直接变异节点**：从 nodeIndexMap 查找 → 保护 startTime/endTime 不被重复覆盖 → Object.assign 变异 reactive Proxy（自动触发 Proxy.set 驱动响应式更新）→ 沿祖先链反向传播 transferredBytes 增量 |
+| `initNodeIndex` | `taskId: string` | `void` | **扫描完成后必须调用**：清除旧索引 + 对 task.root 整棵树递归 buildNodeIndex（所有节点均为 reactive Proxy） |
+| `getAncestorChain` | `taskId: string, nodeId: string` | `string[]` | 获取从指定节点到根节点的祖先链 ID 列表（含自身），用于 mutateNode 的属性传播 |
+| `printTree` | `taskId?: string, maxDepth?: number` | `void` | 打印树形结构到控制台（调试用），显示节点名称/类型/状态/进度/大小等 |
 | `getNode` | `taskId: string, nodeId: string` | `TransferNode | undefined` | **O(1) 获取节点**：从 nodeIndexMap 查找，配合 UI 定时器实现实时数据读取 |
 | `updateNodeStatus` | `taskId: string, nodeId: string, updates: Partial<TransferNode>` | `void` | 兼容旧接口：递归遍历树查找节点并更新（O(N)，已被 mutateNode 取代） |
 | `removeTask` | `taskId: string` | `void` | 移除传输任务 |

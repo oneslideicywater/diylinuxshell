@@ -3,9 +3,22 @@
  */
 
 /**
- * 传输节点状态
+ * 传输任务状态（Task FSM，7 个状态）
+ *
+ * 用于整个传输任务（上传/下载/删除批次）的状态管理。
+ * 包含 scanning（扫描阶段）和 transferringPartialError（部分出错）等任务级状态。
  */
-export type TransferStatus = 'pending' | 'scanning' | 'transferring' | 'completed' | 'error' | 'cancelled'
+export type TransferStatus = 'pending' | 'scanning' | 'transferring' | 'transferringPartialError' | 'completed' | 'error' | 'cancelled'
+
+/**
+ * 传输节点状态（Node FSM，5 个状态）
+ *
+ * 用于单个传输节点（文件/文件夹）的状态管理。
+ * 节点无 scanning 和 transferringPartialError 状态：
+ * - scanning 是任务级操作，节点由扫描结果直接创建为 pending
+ * - transferringPartialError 是任务级聚合结果，单个节点只有 error（全部失败）
+ */
+export type NodeStatus = 'pending' | 'transferring' | 'completed' | 'error' | 'cancelled'
 
 /**
  * 传输类型
@@ -31,8 +44,8 @@ export interface TransferNode {
   isDirectory: boolean
   /** 传输类型 */
   type: TransferType
-  /** 传输状态 */
-  status: TransferStatus
+  /** 传输状态（节点级，使用 NodeStatus） */
+  status: NodeStatus
   /** 传输进度 (0-100) */
   progress: number
   /** 文件大小（字节） */
@@ -77,8 +90,14 @@ export interface TransferTask {
   type: TransferType
   /** 任务状态（符合 TransferStatus 标准） */
   status: TransferStatus
-  /** 传输根节点 */
-  root: TransferNode
+  /** 传输根节点（扫描完成后设置，扫描中为 undefined） */
+  root?: TransferNode
+  /**
+   * 扫描占位节点（仅用于 UI 展示，创建任务时设置一次）
+   * 当 root 为空且任务处于 scanning 状态时，用此字段显示基础信息（name/type/localPath/remotePath）
+   * 扫描完成后 root 设置后此字段不再使用
+   */
+  scanningNode?: Pick<TransferNode, 'name' | 'type' | 'localPath' | 'remotePath'>
   /** 当前正在传输的节点 ID（对应 Pinia Store 中 TransferNode.id），用于高亮/定位活跃节点 */
   activeNodeId?: string
   

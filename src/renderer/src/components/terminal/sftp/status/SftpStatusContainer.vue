@@ -73,8 +73,9 @@
             </svg>
           </button>
           
-          <!-- 下拉菜单内容：显示全部5种状态 -->
+          <!-- 下拉菜单内容：显示全部6种状态 -->
           <div v-show="showFilterDropdown" class="dropdown-menu">
+            <!-- 待开始（排第一） -->
             <div 
               class="dropdown-item"
               :class="{ 'is-active': taskFilter === 'pending' }"
@@ -83,6 +84,16 @@
               <span class="item-icon">⏸️</span>
               <span class="item-text">待开始</span>
               <span class="item-count">{{ pendingCount }}</span>
+            </div>
+            <!-- 扫描中 -->
+            <div 
+              class="dropdown-item"
+              :class="{ 'is-active': taskFilter === 'scanning' }"
+              @click="setTaskFilter('scanning')"
+            >
+              <span class="item-icon">🔍</span>
+              <span class="item-text">扫描中</span>
+              <span class="item-count">{{ scanningCount }}</span>
             </div>
             <div 
               class="dropdown-item"
@@ -122,6 +133,16 @@
             </div>
           </div>
         </div>
+
+        <!-- 隐藏空闲节点滑动开关（仅传输中状态时有效，error 节点始终显示） -->
+        <div class="toggle-switch-wrapper" :title="hideIdleNodes ? '显示全部节点' : '隐藏空闲节点'">
+          <span class="toggle-label" :class="{ 'is-muted': hideIdleNodes }">全部</span>
+          <label class="toggle-switch">
+            <input type="checkbox" v-model="hideIdleNodes" />
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label" :class="{ 'is-active': hideIdleNodes }">进行中</span>
+        </div>
       </div>
       
       <!-- 传输任务列表（使用 filteredTasks 显示过滤后的任务） -->
@@ -131,6 +152,7 @@
           v-for="task in filteredTasks"
           :key="task.id"
           :task-id="task.id"
+          :hide-idle-nodes="hideIdleNodes"
           @update:node-expanded="handleNodeExpanded"
         />
         
@@ -201,11 +223,14 @@ const currentConnectionTasks = computed(() => {
 /** 已完成任务最大保留数量 */
 const MAX_COMPLETED_TASKS = 100
 
+/** 是否隐藏空闲节点（pending/completed/cancelled，仅 transferring 状态的任务生效，error 始终显示） */
+const hideIdleNodes = ref(false)
+
 /**
  * 任务过滤器类型（符合 TransferStatus 标准）
- * 支持5种状态：pending、transferring、completed、error、cancelled
+ * 支持6种状态：scanning、pending、transferring、completed、error、cancelled
  */
-type TaskFilterType = 'pending' | 'transferring' | 'completed' | 'error' | 'cancelled'
+type TaskFilterType = 'scanning' | 'pending' | 'transferring' | 'completed' | 'error' | 'cancelled'
 
 /** 当前选中的过滤器类型（默认显示"传输中"状态） */
 const taskFilter = ref<TaskFilterType>('transferring')
@@ -221,6 +246,7 @@ const filterDropdownRef = ref<HTMLDivElement | null>(null)
  */
 const currentFilterLabel = computed(() => {
   const labelMap: Record<TaskFilterType, string> = {
+    'scanning': '扫描中',
     'pending': '待开始',
     'transferring': '传输中',
     'completed': '已完成',
@@ -257,6 +283,13 @@ const transferringCount = computed(() => {
 })
 
 /**
+ * 扫描中任务的数量
+ */
+const scanningCount = computed(() => {
+  return currentConnectionTasks.value.filter(task => task.status === 'scanning').length
+})
+
+/**
  * 已完成任务的数量
  */
 const completedCount = computed(() => {
@@ -282,6 +315,7 @@ const cancelledCount = computed(() => {
  */
 const emptyStateIcon = computed((): string => {
   const iconMap: Record<TaskFilterType, string> = {
+    'scanning': '🔍',
     'pending': '⏸️',
     'transferring': '⏳',
     'completed': '✅',
@@ -296,6 +330,7 @@ const emptyStateIcon = computed((): string => {
  */
 const emptyStateText = computed((): string => {
   const textMap: Record<TaskFilterType, string> = {
+    'scanning': '暂无扫描中的任务',
     'pending': '暂无待开始的任务',
     'transferring': '暂无传输中的任务',
     'completed': '暂无已完成的任务',
@@ -703,6 +738,78 @@ function handleCancelSelectedTasks(): void {
 /* 过滤按钮 */
 .filter-btn {
   position: relative;
+}
+
+/* 滑动开关容器 */
+.toggle-switch-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 8px;
+}
+
+/* 开关标签 */
+.toggle-label {
+  font-size: 11px;
+  color: var(--text-color-secondary, #888);
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+
+.toggle-label.is-muted {
+  opacity: 0.5;
+}
+
+.toggle-label.is-active {
+  color: var(--primary-color, #409eff);
+  font-weight: 500;
+}
+
+/* 滑动开关本体 */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+/* 滑轨 */
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background-color: var(--border-color, #444);
+  border-radius: 11px;
+  transition: background-color 0.25s ease;
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  width: 16px;
+  height: 16px;
+  background-color: #fff;
+  border-radius: 50%;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/* 开启状态：滑轨变色 + 滑块右移 */
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--primary-color, #409eff);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(18px);
 }
 
 /* 下拉箭头 */

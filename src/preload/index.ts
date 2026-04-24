@@ -8,7 +8,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { IPC_CHANNELS } from '@shared/constants/ipc-channels'
 import type { CustomAPI } from '@shared/types/global'
-import type { TransferType, TransferStatus, TransferNode } from '../shared/types/sftp'
+import type { TransferType, NodeStatus, TransferNode } from '../shared/types/sftp'
 import type { Session, SessionGroup, AppConfig, TerminalSize } from '@shared/types'
 
 /**
@@ -277,6 +277,10 @@ const api: CustomAPI = {
     dirname: (filePath: string): Promise<{ success: boolean; data?: string; error?: string }> =>
       ipcRenderer.invoke('sftp:dirname', filePath),
     
+    // 获取路径的文件名部分（使用 Node.js path.basename，屏蔽系统差异）
+    basename: (filePath: string): Promise<{ success: boolean; data?: string; error?: string }> =>
+      ipcRenderer.invoke('sftp:basename', filePath),
+    
     // 路径拼接（使用 Node.js path.join，屏蔽操作系统差异）
     pathJoin: (...segments: string[]): Promise<{ success: boolean; data?: string; error?: string }> =>
       ipcRenderer.invoke('sftp:pathJoin', ...segments),
@@ -312,7 +316,7 @@ const api: CustomAPI = {
         name: string
         isDirectory: boolean
         type: TransferType
-        status: TransferStatus
+        status: NodeStatus
         progress: number
         size: number
         localPath?: string
@@ -343,7 +347,7 @@ const api: CustomAPI = {
         name: string
         isDirectory: boolean
         type: TransferType
-        status: TransferStatus
+        status: NodeStatus
         progress: number
         size: number
         localPath?: string
