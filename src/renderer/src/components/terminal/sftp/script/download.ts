@@ -426,12 +426,23 @@ export async function downloadFolder(
     
     console.log(`[download] 创建文件夹下载任务: ${folderName}`)
 
+    // 构建扫描占位节点的本地路径（使用 pathJoin 屏蔽系统差异）
+    const scanningLocalPath = localBasePath
+      ? (await window.api.sftp.pathJoin(localBasePath, folderName)).data || ''
+      : ''
+
     // 先创建 task（root 暂时为 undefined，扫描中显示占位信息）
     const task = createTransferTask({
       type: 'download',
       sftpConnectionId: sftpConnectionId,
       sessionId: sessionId,
-      totalBytes: 0
+      totalBytes: 0,
+      scanningNode: {
+        name: folderName,
+        type: 'download',
+        localPath: scanningLocalPath,
+        remotePath: remotePath
+      }
     })
 
     sftpTransferStore.addTask(task)
@@ -449,6 +460,12 @@ export async function downloadFolder(
       
       if (!dlScanResult.success || !dlScanResult.root) {
         throw new Error(dlScanResult.error || '扫描远程文件夹失败')
+      }
+
+      // 扫描完成后检查是否已被用户取消（避免取消后仍进入传输阶段）
+      if (sftpTransferStore.getTask(task.id)?.status === 'cancelled') {
+        console.log(`[download] 任务已被用户取消，跳过传输: ${folderName}`)
+        return
       }
       
       console.log(`[download] 扫描完成：${dlScanResult.totalFiles} 个文件，总计 ${(dlScanResult.totalBytes || 0 / 1024 / 1024).toFixed(2)} MB`)
@@ -575,6 +592,11 @@ export async function downloadBatch(
         if (isDirectory) {
           console.log(`[download] 创建文件夹下载任务: ${remoteFilePath}`)
 
+          // 构建扫描占位节点的本地路径（使用 pathJoin 屏蔽系统差异，修复缺少路径分隔符的 bug）
+          const scanningLocalPath = localBasePath
+            ? (await window.api.sftp.pathJoin(localBasePath, fileName)).data || ''
+            : ''
+
           // 先创建 task（root 暂时为 undefined，扫描中显示占位信息）
           const task = createTransferTask({
             type: 'download',
@@ -584,7 +606,7 @@ export async function downloadBatch(
             scanningNode: {
               name: fileName,
               type: 'download',
-              localPath: localBasePath ? `${localBasePath}${fileName}` : '',
+              localPath: scanningLocalPath,
               remotePath: remoteFilePath
             }
           })
@@ -605,6 +627,12 @@ export async function downloadBatch(
             
             if (!dlBatchScanResult.success || !dlBatchScanResult.root) {
               throw new Error(dlBatchScanResult.error || '扫描远程文件夹失败')
+            }
+
+            // 扫描完成后检查是否已被用户取消（避免取消后仍进入传输阶段）
+            if (sftpTransferStore.getTask(task.id)?.status === 'cancelled') {
+              console.log(`[download] 批量下载任务已被用户取消，跳过传输: ${fileName}`)
+              continue
             }
             
             console.log(`[download] 远程文件夹扫描完成: ${dlBatchScanResult.totalFiles} 个文件, ${formatSize(dlBatchScanResult.totalBytes || 0)}`)

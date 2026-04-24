@@ -566,6 +566,12 @@ export async function uploadBatch(
             if (!batchScanResult.success || !batchScanResult.root) {
               throw new Error(batchScanResult.error || '扫描文件夹失败')
             }
+
+            // 扫描完成后检查是否已被用户取消（避免取消后仍进入传输阶段）
+            if (sftpTransferStore.getTask(task.id)?.status === 'cancelled') {
+              console.log(`[upload] 批量上传任务已被用户取消，跳过传输: ${fileName}`)
+              continue
+            }
             
             console.log(`[upload] 文件夹扫描完成: ${batchScanResult.totalFiles} 个文件, ${formatSize(batchScanResult.totalBytes || 0)}`)
             
@@ -630,6 +636,12 @@ export async function uploadBatch(
             
             if (!batchScanResult.success || !batchScanResult.root) {
               throw new Error(batchScanResult.error || '扫描失败')
+            }
+
+            // 扫描完成后检查是否已被用户取消（避免取消后仍进入传输阶段）
+            if (sftpTransferStore.getTask(task.id)?.status === 'cancelled') {
+              console.log(`[upload] 上传任务已被用户取消，跳过传输: ${fileName}`)
+              continue
             }
             
             console.log(`[upload] 文件扫描完成: ${formatSize(batchScanResult.totalBytes || 0)}`)

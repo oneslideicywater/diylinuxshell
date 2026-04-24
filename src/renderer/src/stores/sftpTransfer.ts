@@ -666,8 +666,8 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
       
       const task = transferTasks.value[taskIndex]
       
-      // 只取消待开始或传输中的任务
-      if (task.status === 'pending' || task.status === 'transferring') {
+      // 取消可取消的任务：pending（待开始）、scanning（扫描中）、transferring（传输中）
+      if (task.status === 'pending' || task.status === 'scanning' || task.status === 'transferring') {
         // 更新任务状态
         updateTaskStatus(taskId, 'cancelled')
         

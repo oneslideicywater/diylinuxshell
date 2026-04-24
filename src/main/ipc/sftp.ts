@@ -356,6 +356,13 @@ export function registerSFTPIpcHandlers(): void {
   })
 
   /**
+   * 路径拼接（使用 Node.js path.join，屏蔽操作系统差异）
+   */
+  ipcMain.handle('sftp:pathJoin', async (_event, ...segments: string[]) => {
+    return { success: true, data: path.join(...segments) }
+  })
+
+  /**
    * 选择本地文件
    */
   ipcMain.handle('sftp:selectLocalFile', async (_event, options: { selectFolder?: boolean }) => {

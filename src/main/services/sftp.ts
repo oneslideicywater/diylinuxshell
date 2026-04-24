@@ -1085,8 +1085,10 @@ export class SFTPService {
       }
 
       // 开始递归扫描（绑定 this 上下文）
+      // 注意：currentLocalBase 必须传入 rootNode.localPath（含文件夹名），
+      //       而非原始 localBasePath，否则子节点的 localPath 会缺少父目录层级
       const boundScanRemoteDir = scanRemoteDir.bind(this)
-      await boundScanRemoteDir(remotePath, rootNode, localBasePath || '')
+      await boundScanRemoteDir(remotePath, rootNode, rootNode.localPath || '')
 
       console.log(`[scanRemoteTree] 扫描完成：${rootNode.totalFiles} 个文件，总大小 ${rootNode.size} 字节`)
 
