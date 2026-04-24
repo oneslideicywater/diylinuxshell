@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div
-      v-if="contextMenuStore.visible"
+      v-if="contextMenuStore.visible && visibleItems.length > 0"
       class="global-context-menu"
       :style="menuStyle"
       @click.stop
