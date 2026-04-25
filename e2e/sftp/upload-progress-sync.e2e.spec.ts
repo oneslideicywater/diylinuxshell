@@ -204,7 +204,7 @@ test.describe('SFTP 文件夹上传进度同步功能', () => {
       const elapsedCol = rootNode.locator('.elapsed-column')
 
 
-      let detectedInfo = { speed: false, remaining: false, elapsed: false, anyChildInfo: false }
+      const detectedInfo = { speed: false, remaining: false, elapsed: false, anyChildInfo: false }
 
       for (let i = 0; i < 15; i++) {
         await page.waitForTimeout(1000)

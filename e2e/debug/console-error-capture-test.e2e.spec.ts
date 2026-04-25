@@ -180,7 +180,7 @@ test.describe('控制台报错捕获测试', () => {
     
     // 验证拖拽功能正常
     const sessionList = page.locator('.session-list')
-    const width = await sessionList.evaluate((el: any) => el.offsetWidth)
+    const width = await sessionList.evaluate((el: HTMLElement) => el.offsetWidth)
     console.log('拖拽后侧边栏宽度:', width)
     
     expect(width).toBeGreaterThan(0)

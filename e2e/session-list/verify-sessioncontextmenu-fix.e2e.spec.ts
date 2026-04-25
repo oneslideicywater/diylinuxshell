@@ -69,7 +69,7 @@ test.describe('Dev 模式 - 验证 handleSessionContextMenu 修复', () => {
                     
                     // 注入错误拦截器
                     await page.evaluate(() => {
-                      ;(window as any).__CAPTURED_ERRORS__ = []
+                      (window as any).__CAPTURED_ERRORS__ = []
                       
                       const origWarn = console.warn.bind(console)
                       console.warn = function(...args: any[]) {

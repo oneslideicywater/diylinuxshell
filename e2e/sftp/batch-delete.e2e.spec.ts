@@ -542,7 +542,7 @@ test.describe('批量删除功能测试（本地 + 远程）', () => {
     console.log('\n[Step 1] 选择 5 个本地项目（3 文件 + 2 文件夹）...')
     await multiSelectLocalFiles(page, ['file1.txt', 'folder-A', 'file2.txt', 'folder-B', 'file3.txt'])
     
-    let selectedCount = await page.locator('.file-panel.local .file-item.selected').count()
+    const selectedCount = await page.locator('.file-panel.local .file-item.selected').count()
     console.log(`  ✓ 选中了 ${selectedCount} 个项目`)
     expect(selectedCount).toBeGreaterThanOrEqual(5)
     
@@ -561,7 +561,7 @@ test.describe('批量删除功能测试（本地 + 远程）', () => {
     console.log('\n[Step 3] 监控 TransferTask 创建过程...')
     
     let maxTaskCount = 0
-    let taskCreationLogs: string[] = []
+    const taskCreationLogs: string[] = []
     
     for (let i = 0; i < 20; i++) {
       await page.waitForTimeout(1000)
@@ -634,7 +634,7 @@ test.describe('批量删除功能测试（本地 + 远程）', () => {
     console.log('\n[Step 1] 选择 5 个远程项目（3 文件 + 2 文件夹）...')
     await multiSelectRemoteFiles(page, ['remote-file1.txt', 'remote-folder-A', 'remote-file2.txt', 'remote-folder-B', 'remote-file3.txt'])
     
-    let selectedCount = await page.locator('.file-panel.remote .file-item.selected').count()
+    const selectedCount = await page.locator('.file-panel.remote .file-item.selected').count()
     console.log(`  ✓ 选中了 ${selectedCount} 个项目`)
     expect(selectedCount).toBeGreaterThanOrEqual(5)
     
@@ -653,7 +653,7 @@ test.describe('批量删除功能测试（本地 + 远程）', () => {
     console.log('\n[Step 3] 监控 TransferTask 创建过程...')
     
     let maxTaskCount = 0
-    let taskCreationLogs: string[] = []
+    const taskCreationLogs: string[] = []
     
     for (let i = 0; i < 20; i++) {
       await page.waitForTimeout(1000)

@@ -23,7 +23,7 @@ test.describe('增强版 - 全面捕获 GroupHeader 右键菜单控制台报错'
     // 🔥 核心策略：在页面加载完成后立即注入多层级的错误捕获器
     await page.evaluate(() => {
       // 创建全局错误存储对象
-      ;(window as any).__ALL_ERRORS__ = {
+      (window as any).__ALL_ERRORS__ = {
         consoleErrors: [],
         consoleWarnings: [],
         consoleLogs: [],
@@ -65,7 +65,7 @@ test.describe('增强版 - 全面捕获 GroupHeader 右键菜单控制台报错'
 
         // 特别标记 Vue 相关的警告
         if (msg.includes('[Vue warn]') || msg.includes('Unhandled error')) {
-          ;(window as any).__ALL_ERRORS__.vueWarnings.push({
+          (window as any).__ALL_ERRORS__.vueWarnings.push({
             message: msg,
             timestamp: Date.now()
           })
@@ -92,7 +92,7 @@ test.describe('增强版 - 全面捕获 GroupHeader 右键菜单控制台报错'
       // 4️⃣ 全局 window.onerror（捕获 ReferenceError 等）
       const originalOnError = window.onerror
       window.onerror = function(message, source, lineno, colno, error) {
-        ;(window as any).__ALL_ERRORS__.windowErrors.push({
+        (window as any).__ALL_ERRORS__.windowErrors.push({
           type: 'window.onerror',
           message: String(message),
           source: source,
@@ -112,7 +112,7 @@ test.describe('增强版 - 全面捕获 GroupHeader 右键菜单控制台报错'
 
       // 5️⃣ 未处理的 Promise rejection
       window.addEventListener('unhandledrejection', (event) => {
-        ;(window as any).__ALL_ERRORS__.unhandledRejections.push({
+        (window as any).__ALL_ERRORS__.unhandledRejections.push({
           reason: event.reason?.message || String(event.reason),
           reasonName: event.reason?.name,
           reasonStack: event.reason?.stack,

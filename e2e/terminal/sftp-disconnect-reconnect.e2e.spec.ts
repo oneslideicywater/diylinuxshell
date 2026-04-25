@@ -529,7 +529,7 @@ test.describe('SFTP 标签页 - 断开/重连', () => {
     console.log('===== 开始测试：完整状态流转 =====')
 
     const disconnectedOverlay = page.locator('.disconnected-overlay')
-    let fileItems = page.locator('.file-panel.remote .file-item')
+    const fileItems = page.locator('.file-panel.remote .file-item')
 
     // === 阶段1：确保断连状态 ===
     console.log('\n--- 阶段1：断连状态 ---')

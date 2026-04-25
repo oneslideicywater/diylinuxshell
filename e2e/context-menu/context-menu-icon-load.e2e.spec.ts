@@ -85,7 +85,7 @@ test.describe('右键菜单图标加载测试', () => {
     expect(count).toBeGreaterThan(0)
 
     let iconRenderedCount = 0
-    let failedIcons: string[] = []
+    const failedIcons: string[] = []
 
     /* 检查每个菜单项的图标 */
     for (let i = 0; i < count; i++) {
@@ -168,7 +168,7 @@ test.describe('右键菜单图标加载测试', () => {
     console.log(`SessionItem 菜单项数量: ${count}`)
 
     let iconRenderedCount = 0
-    let failedIcons: string[] = []
+    const failedIcons: string[] = []
 
     for (let i = 0; i < count; i++) {
       const item = menuItems.nth(i)

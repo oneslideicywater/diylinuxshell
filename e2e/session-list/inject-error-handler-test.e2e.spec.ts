@@ -27,7 +27,7 @@ test.describe('GroupHeader 右键菜单 - 注入 Vue ErrorHandler', () => {
     // 🔑 关键：注入自定义的 window.onerror 和 unhandledrejection 处理器
     await page.evaluate(() => {
       // 存储错误到 window 对象，方便后续读取
-      ;(window as any).__capturedErrors__ = []
+      (window as any).__capturedErrors__ = []
 
       // 捕获全局 JavaScript 错误（包括 ReferenceError）
       window.onerror = function(message, source, lineno, colno, error) {

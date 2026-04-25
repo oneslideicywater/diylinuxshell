@@ -3,15 +3,32 @@
  * 验证能否获取控制台报错信息
  */
 
-import { test, expect, ElectronApplication } from '@playwright/test'
+import { test, expect, ElectronApplication, Page } from '@playwright/test'
 import { startApp, closeApp, waitForAppReady } from '../helpers/electron-app'
 
 let electronApp: ElectronApplication
-let page: any
+let page: Page
+
+/** 控制台消息结构 */
+interface ConsoleMessageInfo {
+  type: string
+  text: string
+  location?: {
+    url?: string
+    lineNumber?: number
+    columnNumber?: number
+  }
+}
+
+/** 页面错误结构 */
+interface PageInfoError {
+  message: string
+  stack?: string
+}
 
 // 存储所有控制台消息和错误
-const allMessages: any[] = []
-const allErrors: any[] = []
+const allMessages: ConsoleMessageInfo[] = []
+const allErrors: PageInfoError[] = []
 
 test.describe('复现 errorDialogSessionId 报错', () => {
   test.beforeAll(async () => {
@@ -25,8 +42,8 @@ test.describe('复现 errorDialogSessionId 报错', () => {
     allErrors.length = 0
     
     // 监听所有控制台消息（包括 warning）
-    page.on('console', (msg: any) => {
-      const message = {
+    page.on('console', (msg) => {
+      const message: ConsoleMessageInfo = {
         type: msg.type(),
         text: msg.text(),
         location: msg.location(),
@@ -43,8 +60,8 @@ test.describe('复现 errorDialogSessionId 报错', () => {
     })
     
     // 监听页面错误（JavaScript 错误）
-    page.on('pageerror', (error: any) => {
-      const err = {
+    page.on('pageerror', (error) => {
+      const err: PageInfoError = {
         message: error.message,
         stack: error.stack,
         name: error.name

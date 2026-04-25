@@ -228,7 +228,7 @@ test.describe('Dev 模式 - SessionItem SFTP 按钮报错捕获', () => {
    */
   async function injectErrorCapturers(): Promise<void> {
     await page.evaluate(() => {
-      ;(window as any).__CAPTURED_ERRORS__ = []
+      (window as any).__CAPTURED_ERRORS__ = []
 
       // 拦截 console.error
       const origError = console.error.bind(console)
@@ -253,7 +253,7 @@ test.describe('Dev 模式 - SessionItem SFTP 按钮报错捕获', () => {
 
       // 拦截 window.onerror（ReferenceError）
       window.onerror = function(msg, src, line, col, err) {
-        ;(window as any).__CAPTURED_ERRORS__.push({
+        (window as any).__CAPTURED_ERRORS__.push({
           type: 'WINDOW_ERROR',
           message: String(msg),
           details: err ? `${err.name}: ${err.message}` : '',
@@ -290,7 +290,7 @@ test.describe('Dev 模式 - SessionItem SFTP 按钮报错捕获', () => {
     console.log('='.repeat(80))
 
     // 清空记录
-    await page.evaluate(() => { ;(window as any).__CAPTURED_ERRORS__ = [] })
+    await page.evaluate(() => { (window as any).__CAPTURED_ERRORS__ = [] })
 
     // 步骤1：检查并展开分组
     console.log('\n📂 步骤1：检查并展开分组...')
@@ -313,7 +313,7 @@ test.describe('Dev 模式 - SessionItem SFTP 按钮报错捕获', () => {
     // 步骤2：查找会话项（多次重试）
     console.log('\n📋 步骤2：查找会话项...')
     
-    let sessionItems = page.locator('.session-item')
+    const sessionItems = page.locator('.session-item')
     let sessionCount = 0
     
     // 重试最多 5 次，每次间隔 1 秒

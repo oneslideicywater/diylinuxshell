@@ -195,7 +195,7 @@ test.describe('SFTP 本地文件浏览器刷新功能', () => {
       console.log('✅ 在文件系统创建新文件:', newFilePath)
       
       // 6. 此时 UI 中不应该显示这个新文件
-      let filesBeforeRefresh = await initialFileItems.allTextContents()
+      const filesBeforeRefresh = await initialFileItems.allTextContents()
       const foundBeforeRefresh = filesBeforeRefresh.some(file => file.includes(newFileName))
       expect(foundBeforeRefresh).toBe(false)
       console.log('✅ 刷新前 UI 中未显示新文件（符合预期）')

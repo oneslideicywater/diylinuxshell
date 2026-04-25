@@ -105,7 +105,7 @@ describe('编辑会话时密码显示调试', () => {
     console.log('=== 创建调试函数 ===')
     await page.evaluate(() => {
       // 在 window 上暴露一个调试函数
-      ;(window as any).debugGetFormData = function() {
+      (window as any).debugGetFormData = function() {
         // 查找 Vue 组件实例，获取 formData
         const formEl = document.querySelector('.session-form')
         if (!formEl) {

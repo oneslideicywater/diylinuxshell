@@ -46,7 +46,7 @@ test.describe('Dev 模式 - GroupHeader 右键菜单报错捕获', () => {
 
     // 注入错误拦截器
     await page.evaluate(() => {
-      ;(window as any).__DEV_ERRORS__ = []
+      (window as any).__DEV_ERRORS__ = []
 
       const origErr = console.error.bind(console)
       console.error = function(...args: any[]) {
@@ -66,7 +66,7 @@ test.describe('Dev 模式 - GroupHeader 右键菜单报错捕获', () => {
       }
 
       window.onerror = function(msg, src, line, col, err) {
-        ;(window as any).__DEV_ERRORS__.push({
+        (window as any).__DEV_ERRORS__.push({
           type: 'WINDOW_ERROR',
           message: String(msg),
           details: err ? `${err.name}: ${err.message}` : '',
@@ -90,7 +90,7 @@ test.describe('Dev 模式 - GroupHeader 右键菜单报错捕获', () => {
     console.log('='.repeat(80))
 
     // 清空记录
-    await page.evaluate(() => { ;(window as any).__DEV_ERRORS__ = [] })
+    await page.evaluate(() => { (window as any).__DEV_ERRORS__ = [] })
 
     // 查找元素
     const headers = page.locator('.group-header')

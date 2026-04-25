@@ -98,7 +98,7 @@ test.describe('应用侧边栏拖拽调整功能', () => {
     const resizeHandle = page.locator('.sidebar-resize-handle')
     
     // 获取当前宽度
-    let currentWidth = await sidebar.evaluate((el: any) => el.offsetWidth)
+    const currentWidth = await sidebar.evaluate((el: any) => el.offsetWidth)
     console.log('当前宽度:', currentWidth)
     
     // 获取拖拽手柄位置
@@ -139,7 +139,7 @@ test.describe('应用侧边栏拖拽调整功能', () => {
     const resizeHandle = page.locator('.sidebar-resize-handle')
     
     // 获取当前宽度
-    let currentWidth = await sidebar.evaluate((el: any) => el.offsetWidth)
+    const currentWidth = await sidebar.evaluate((el: any) => el.offsetWidth)
     console.log('当前宽度:', currentWidth)
     
     // 获取拖拽手柄位置

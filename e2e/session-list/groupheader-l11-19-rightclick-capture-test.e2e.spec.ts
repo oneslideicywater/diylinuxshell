@@ -24,7 +24,7 @@ test.describe('专门测试 - GroupHeader#L11-19 右击控制台报错', () => {
     // 在任何 Vue 组件挂载之前就设置好
     await page.evaluate(() => {
       // 创建全局存储
-      ;(window as any).__CAPTURED_ERRORS__ = []
+      (window as any).__CAPTURED_ERRORS__ = []
 
       // 拦截 console.error（使用 Object.defineProperty）
       const originalError = console.error.bind(console)
@@ -74,7 +74,7 @@ test.describe('专门测试 - GroupHeader#L11-19 右击控制台报错', () => {
 
       // 全局错误处理器
       window.onerror = function(message, source, lineno, colno, error) {
-        ;(window as any).__CAPTURED_ERRORS__.push({
+        (window as any).__CAPTURED_ERRORS__.push({
           type: 'WINDOW_ERROR',
           message: `${message}`,
           details: error ? `${error.name}: ${error.message}` : '',
@@ -86,7 +86,7 @@ test.describe('专门测试 - GroupHeader#L11-19 右击控制台报错', () => {
 
       // 未处理的 Promise rejection
       window.addEventListener('unhandledrejection', (event) => {
-        ;(window as any).__CAPTURED_ERRORS__.push({
+        (window as any).__CAPTURED_ERRORS__.push({
           type: 'UNHANDLED_REJECTION',
           message: event.reason ? `${event.reason.name || 'Error'}: ${event.reason.message || event.reason}` : 'Unknown',
           timestamp: Date.now()
@@ -114,7 +114,7 @@ test.describe('专门测试 - GroupHeader#L11-19 右击控制台报错', () => {
 
     // 清空之前的记录
     await page.evaluate(() => {
-      ;(window as any).__CAPTURED_ERRORS__ = []
+      (window as any).__CAPTURED_ERRORS__ = []
     })
 
     console.log('✅ 已清空错误记录')

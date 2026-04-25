@@ -29,7 +29,7 @@ test.describe('验证：能否捕获 ReferenceError', () => {
     try {
       await page.evaluate(() => {
         // 故意调用一个不存在的函数
-        ;(window as any).undefinedFunction123()
+        (window as any).undefinedFunction123()
       })
       console.log('❌ 没有抛出异常')
     } catch (error: any) {
@@ -109,11 +109,11 @@ test.describe('验证：能否捕获 ReferenceError', () => {
 
     // 注入全局错误捕获器
     await page.evaluate(() => {
-      ;(window as any).__testErrors__ = []
+      (window as any).__testErrors__ = []
 
       const originalConsoleError = console.error
       console.error = function(...args) {
-        ;(window as any).__testErrors__.push({
+        (window as any).__testErrors__.push({
           type: 'console.error',
           args: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)),
           time: Date.now()
@@ -123,7 +123,7 @@ test.describe('验证：能否捕获 ReferenceError', () => {
 
       const originalConsoleWarn = console.warn
       console.warn = function(...args) {
-        ;(window as any).__testErrors__.push({
+        (window as any).__testErrors__.push({
           type: 'console.warn',
           args: args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)),
           time: Date.now()

@@ -16,7 +16,7 @@ interface MockSSHServerConfig {
 export class MockSSHServer extends EventEmitter {
   private server: Server | null = null
   private config: MockSSHServerConfig
-  private connections: Set<any> = new Set()
+  private connections: Set<import('net').Socket> = new Set()
 
   constructor(config: MockSSHServerConfig) {
     super()

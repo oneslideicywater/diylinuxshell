@@ -441,7 +441,7 @@ test.describe('批量上传深度测试 - TransferTask 验证', () => {
     await singleFile.click({ force: true })
     await page.waitForTimeout(300)
     
-    let singleSelectedCount = await page.locator('.file-panel.local .file-item.selected').count()
+    const singleSelectedCount = await page.locator('.file-panel.local .file-item.selected').count()
     console.log(`  单选后选中项: ${singleSelectedCount} 个`)
     expect(singleSelectedCount).toBe(1)
     
@@ -451,7 +451,7 @@ test.describe('批量上传深度测试 - TransferTask 验证', () => {
     await secondFile.click({ modifiers: ['Control'], force: true })
     await page.waitForTimeout(300)
     
-    let multiSelectedCount = await page.locator('.file-panel.local .file-item.selected').count()
+    const multiSelectedCount = await page.locator('.file-panel.local .file-item.selected').count()
     console.log(`  多选后选中项: ${multiSelectedCount} 个`)
     expect(multiSelectedCount).toBeGreaterThanOrEqual(2)
     
@@ -461,7 +461,7 @@ test.describe('批量上传深度测试 - TransferTask 验证', () => {
     await thirdFile.click({ force: true })
     await page.waitForTimeout(300)
     
-    let resetSelectedCount = await page.locator('.file-panel.local .file-item.selected').count()
+    const resetSelectedCount = await page.locator('.file-panel.local .file-item.selected').count()
     console.log(`  重置后选中项: ${resetSelectedCount} 个`)
     expect(resetSelectedCount).toBe(1)
     

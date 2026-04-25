@@ -279,7 +279,7 @@ test.describe('批量上传完整功能测试（Bug 修复 + 架构验证）', (
     console.log('\n[Step 1] 使用 Ctrl+Click 选择 3 个文件...')
     await multiSelectFiles(page, ['file1.txt', 'file2.txt', 'file3.txt'])
     
-    let selectionCountAfterMultiSelect = await page.locator('.file-panel.local .file-item.selected').count()
+    const selectionCountAfterMultiSelect = await page.locator('.file-panel.local .file-item.selected').count()
     console.log(`  ✓ 多选后选中项数: ${selectionCountAfterMultiSelect}`)
     expect(selectionCountAfterMultiSelect).toBeGreaterThanOrEqual(3)
     
@@ -290,7 +290,7 @@ test.describe('批量上传完整功能测试（Bug 修复 + 架构验证）', (
     await page.waitForTimeout(500)
     
     // 步骤 3：验证右键菜单弹出后，选中状态是否被破坏
-    let selectionCountAfterRightClick = await page.locator('.file-panel.local .file-item.selected').count()
+    const selectionCountAfterRightClick = await page.locator('.file-panel.local .file-item.selected').count()
     console.log(`  ✓ 右键菜单打开后选中项数: ${selectionCountAfterRightClick}`)
     
     // ✅ 核心断言：右键菜单不应该改变选中状态！
@@ -353,7 +353,7 @@ test.describe('批量上传完整功能测试（Bug 修复 + 架构验证）', (
     console.log('\n[Step 1] 混合选择 5 个项目（3 文件 + 2 文件夹）...')
     await multiSelectFiles(page, ['file1.txt', 'folder-A', 'file2.txt', 'folder-B', 'file3.txt'])
     
-    let selectedCount = await page.locator('.file-panel.local .file-item.selected').count()
+    const selectedCount = await page.locator('.file-panel.local .file-item.selected').count()
     console.log(`  ✓ 选中了 ${selectedCount} 个项目`)
     expect(selectedCount).toBeGreaterThanOrEqual(5)
     

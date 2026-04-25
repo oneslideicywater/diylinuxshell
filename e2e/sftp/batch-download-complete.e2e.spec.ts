@@ -568,7 +568,7 @@ test.describe('批量下载完整功能测试（downloadBatch 架构验证）', 
     console.log('\n[Step 1] 使用 Ctrl+Click 选择 3 个远程文件...')
     await multiSelectRemoteFiles(page, ['remote-file1.txt', 'remote-file2.txt', 'remote-file3.txt'])
     
-    let selectionCountAfterMultiSelect = await page.locator('.file-panel.remote .file-item.selected').count()
+    const selectionCountAfterMultiSelect = await page.locator('.file-panel.remote .file-item.selected').count()
     console.log(`  ✓ 多选后选中项数: ${selectionCountAfterMultiSelect}`)
     expect(selectionCountAfterMultiSelect).toBeGreaterThanOrEqual(3)
     
@@ -577,7 +577,7 @@ test.describe('批量下载完整功能测试（downloadBatch 架构验证）', 
     await firstSelectedFile.click({ button: 'right', force: true })
     await page.waitForTimeout(500)
     
-    let selectionCountAfterRightClick = await page.locator('.file-panel.remote .file-item.selected').count()
+    const selectionCountAfterRightClick = await page.locator('.file-panel.remote .file-item.selected').count()
     console.log(`  ✓ 右键菜单打开后选中项数: ${selectionCountAfterRightClick}`)
     
     expect(selectionCountAfterRightClick).toBeGreaterThanOrEqual(3)
@@ -633,7 +633,7 @@ test.describe('批量下载完整功能测试（downloadBatch 架构验证）', 
       'remote-file3.txt'
     ])
     
-    let selectedCount = await page.locator('.file-panel.remote .file-item.selected').count()
+    const selectedCount = await page.locator('.file-panel.remote .file-item.selected').count()
     console.log(`  ✓ 选中了 ${selectedCount} 个远程项目`)
     expect(selectedCount).toBeGreaterThanOrEqual(5)
     
