@@ -90,7 +90,7 @@ export function ProductShowcase() {
           className="relative mb-8"
         >
           <div className="rounded-2xl overflow-hidden border border-border-default shadow-card-hover
-                      bg-white dark:bg-[#161A1E]">
+                      bg-surface">
             {/* 浏览器顶栏模拟 */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-border-default bg-surface-subtle">
               <div className="flex gap-2">
@@ -136,7 +136,7 @@ export function ProductShowcase() {
               key={shot.src}
               className="group rounded-xl overflow-hidden border border-border-default
                           shadow-card hover:shadow-card-hover hover:-translate-y-1
-                          transition-all duration-200 cursor-pointer bg-white dark:bg-[#161A1E]"
+                          transition-all duration-200 cursor-pointer bg-surface"
             >
               <div className="relative aspect-[16/10] bg-surface-muted">
                 <SafeImage

@@ -184,7 +184,7 @@ export class SFTPService {
 
           // 创建本地文件
           const writeStream = fs.createWriteStream(localPath)
-          let buffer = Buffer.alloc(32 * 1024) // 32KB buffer
+          const buffer = Buffer.alloc(32 * 1024) // 32KB buffer
 
           const readChunk = () => {
             this.sftpHandle.read(

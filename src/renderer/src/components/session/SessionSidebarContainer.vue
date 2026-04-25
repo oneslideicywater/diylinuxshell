@@ -8,30 +8,65 @@
   <div class="session-list-container">
     <div class="session-list">
       <!-- 加载状态 -->
-      <div v-if="loading" class="loading-state">
+      <div
+        v-if="loading"
+        class="loading-state"
+      >
         <span>加载中...</span>
       </div>
 
       <!-- 空状态：既没有会话也没有分组时显示 -->
-      <div v-else-if="sessions.length === 0 && sessionGroups.length === 0" class="empty-state" @contextmenu.prevent="handleListContextMenu">
+      <div
+        v-else-if="sessions.length === 0 && sessionGroups.length === 0"
+        class="empty-state"
+        @contextmenu.prevent="handleListContextMenu"
+      >
         <p>暂无会话</p>
-        <p class="hint">点击上方 + 按钮创建新会话</p>
+        <p class="hint">
+          点击上方 + 按钮创建新会话
+        </p>
       </div>
 
       <!-- 会话列表 -->
-      <div v-else class="session-groups" @contextmenu.prevent="handleListContextMenu">
+      <div
+        v-else
+        class="session-groups"
+        @contextmenu.prevent="handleListContextMenu"
+      >
         <!-- 未分组会话 -->
-        <div v-if="ungroupedSessions.length > 0" class="session-group" @contextmenu.prevent="handleListContextMenu">
-          <SessionItem v-for="session in ungroupedSessions" :key="session.id" :session="session"
-            :active="session.id === activeSessionId" @click="handleSelect(session)" @dblclick="handleConnect(session)"
-            @connect="handleConnect(session)" @edit="handleEdit(session)" @delete="handleDelete(session)"
-            @duplicate="handleDuplicate(session)" @properties="handleProperties(session)" @sftp="handleSftp(session)"
-            @add-session="(groupId?: string) => handleAddSessionFromItem(groupId, session)" />
+        <div
+          v-if="ungroupedSessions.length > 0"
+          class="session-group"
+          @contextmenu.prevent="handleListContextMenu"
+        >
+          <SessionItem
+            v-for="session in ungroupedSessions"
+            :key="session.id"
+            :session="session"
+            :active="session.id === activeSessionId"
+            @click="handleSelect(session)"
+            @dblclick="handleConnect(session)"
+            @connect="handleConnect(session)"
+            @edit="handleEdit(session)"
+            @delete="handleDelete(session)"
+            @duplicate="handleDuplicate(session)"
+            @properties="handleProperties(session)"
+            @sftp="handleSftp(session)"
+            @add-session="(groupId?: string) => handleAddSessionFromItem(groupId, session)"
+          />
         </div>
 
         <!-- 分组会话（支持嵌套） -->
-        <template v-for="group in sessionGroups" :key="group.id">
-          <div v-if="!group.parentId" class="session-group" :data-group-id="group.id" :data-group-depth="group.depth">
+        <template
+          v-for="group in sessionGroups"
+          :key="group.id"
+        >
+          <div
+            v-if="!group.parentId"
+            class="session-group"
+            :data-group-id="group.id"
+            :data-group-depth="group.depth"
+          >
             <!-- 分组头部 -->
             <GroupHeader
               :group="group"
@@ -46,52 +81,99 @@
             />
 
             <!-- 分组内容（包含子分组和会话） -->
-            <div v-show="expandedGroups.has(group.id)" class="group-content">
+            <div
+              v-show="expandedGroups.has(group.id)"
+              class="group-content"
+            >
               <!-- 递归渲染子分组 -->
-              <SessionGroupTree v-if="hasSubGroups(group.id)" :parent-group-id="group.id" :all-groups="sessionGroups"
-                :sessions="sessions" :expanded-groups="expandedGroups" :active-session-id="activeSessionId"
-                @toggle-group="toggleGroup" @select-session="handleSelect" @connect-session="handleConnect"
-                @edit-session="handleEdit" @delete-session="handleDelete" @duplicate-session="handleDuplicate"
+              <SessionGroupTree
+                v-if="hasSubGroups(group.id)"
+                :parent-group-id="group.id"
+                :all-groups="sessionGroups"
+                :sessions="sessions"
+                :expanded-groups="expandedGroups"
+                :active-session-id="activeSessionId"
+                @toggle-group="toggleGroup"
+                @select-session="handleSelect"
+                @connect-session="handleConnect"
+                @edit-session="handleEdit"
+                @delete-session="handleDelete"
+                @duplicate-session="handleDuplicate"
                 @properties-session="handleProperties"
                 @create-subgroup="handleCreateSubGroup"
                 @add-session-to-group="handleAddSessionToGroup"
-                @delete-group="handleDeleteGroupFromGroupHeader" />
+                @delete-group="handleDeleteGroupFromGroupHeader"
+              />
 
               <!-- 当前分组的会话 -->
               <div class="group-sessions">
-                <SessionItem v-for="session in getDirectGroupSessions(group.id)" :key="session.id" :session="session"
-                  :active="session.id === activeSessionId" @click="handleSelect(session)"
-                  @dblclick="handleConnect(session)" @connect="handleConnect(session)" @edit="handleEdit(session)"
-                  @delete="handleDelete(session)" @duplicate="handleDuplicate(session)"
-                  @properties="handleProperties(session)" @sftp="handleSftp(session)"
-                  @add-session="(groupId?: string) => handleAddSessionFromItem(groupId, session)" />
+                <SessionItem
+                  v-for="session in getDirectGroupSessions(group.id)"
+                  :key="session.id"
+                  :session="session"
+                  :active="session.id === activeSessionId"
+                  @click="handleSelect(session)"
+                  @dblclick="handleConnect(session)"
+                  @connect="handleConnect(session)"
+                  @edit="handleEdit(session)"
+                  @delete="handleDelete(session)"
+                  @duplicate="handleDuplicate(session)"
+                  @properties="handleProperties(session)"
+                  @sftp="handleSftp(session)"
+                  @add-session="(groupId?: string) => handleAddSessionFromItem(groupId, session)"
+                />
               </div>
             </div>
           </div>
         </template>
 
         <!-- 空白占位区域，用于捕获右键点击 -->
-        <div class="session-list-spacer" @contextmenu.prevent="handleListContextMenu"></div>
+        <div
+          class="session-list-spacer"
+          @contextmenu.prevent="handleListContextMenu"
+        />
       </div>
-  </div>
+    </div>
 
     <!-- 分组表单对话框 -->
-    <SessionGroupForm :visible="groupFormVisible" :group="editingGroup" @close="handleCloseGroupForm"
-      @submit="handleSubmitGroupForm" />
+    <SessionGroupForm
+      :visible="groupFormVisible"
+      :group="editingGroup"
+      @close="handleCloseGroupForm"
+      @submit="handleSubmitGroupForm"
+    />
 
     <!-- 会话表单对话框 -->
-    <SessionForm :visible="sessionFormVisible" :session="editingSession" @close="handleCloseSessionForm"
-      @save="handleSubmitSessionForm" />
+    <SessionForm
+      :visible="sessionFormVisible"
+      :session="editingSession"
+      @close="handleCloseSessionForm"
+      @save="handleSubmitSessionForm"
+    />
 
     <!-- 确认对话框 -->
-    <ConfirmDialog :visible="confirmDialogVisible" :title="confirmDialogTitle" :message="confirmDialogMessage"
-      :is-warning="confirmDialogIsWarning" @close="handleConfirmDialogClose" @confirm="handleConfirmDialogConfirm"
-      @cancel="handleConfirmDialogCancel" />
+    <ConfirmDialog
+      :visible="confirmDialogVisible"
+      :title="confirmDialogTitle"
+      :message="confirmDialogMessage"
+      :is-warning="confirmDialogIsWarning"
+      @close="handleConfirmDialogClose"
+      @confirm="handleConfirmDialogConfirm"
+      @cancel="handleConfirmDialogCancel"
+    />
 
     <!-- 连接错误对话框 -->
-    <ErrorDialog :visible="errorDialogVisible" :title="errorDialogTitle" :message="errorDialogMessage"
-      :session-id="errorDialogSessionId" :show-retry="true" :show-edit="true" @close="handleCloseErrorDialog"
-      @retry="handleRetryConnect" @edit="handleEditFromError" />
+    <ErrorDialog
+      :visible="errorDialogVisible"
+      :title="errorDialogTitle"
+      :message="errorDialogMessage"
+      :session-id="errorDialogSessionId"
+      :show-retry="true"
+      :show-edit="true"
+      @close="handleCloseErrorDialog"
+      @retry="handleRetryConnect"
+      @edit="handleEditFromError"
+    />
 
     <!-- 统一提示对话框（替代 alert） -->
     <AlertDialog

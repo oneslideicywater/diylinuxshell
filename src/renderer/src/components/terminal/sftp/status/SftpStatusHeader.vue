@@ -7,30 +7,51 @@
 <template>
   <div class="sftp-transfer-tree">
     <!-- 表头（水平位置跟随内容区滚动） -->
-    <div class="tree-header" :style="{ transform: `translateX(${headerScrollLeft}px)` }">
+    <div
+      class="tree-header"
+      :style="{ transform: `translateX(${headerScrollLeft}px)` }"
+    >
       <!-- 复选框列 -->
       <div class="header-column checkbox-column">
         <input 
           type="checkbox" 
           :checked="isSelected"
-          @change="handleToggle"
           :disabled="!taskId"
           title="选择任务"
-        />
+          @change="handleToggle"
+        >
       </div>
-      <div class="header-column name-column">名称</div>
-      <div class="header-column status-column">状态</div>
-      <div class="header-column progress-column">进度</div>
-      <div class="header-column size-column">大小</div>
-      <div class="header-column local-path-column">本地路径</div>
-      <div class="header-column arrow-column">↔</div>
-      <div class="header-column remote-path-column">远程路径</div>
-      <div class="header-column speed-column">速度</div>
-      <div class="header-column remaining-column">估计剩余</div>
-      <div class="header-column elapsed-column">经过时间</div>
+      <div class="header-column name-column">
+        名称
+      </div>
+      <div class="header-column status-column">
+        状态
+      </div>
+      <div class="header-column progress-column">
+        进度
+      </div>
+      <div class="header-column size-column">
+        大小
+      </div>
+      <div class="header-column local-path-column">
+        本地路径
+      </div>
+      <div class="header-column arrow-column">
+        ↔
+      </div>
+      <div class="header-column remote-path-column">
+        远程路径
+      </div>
+      <div class="header-column speed-column">
+        速度
+      </div>
+      <div class="header-column remaining-column">
+        估计剩余
+      </div>
+      <div class="header-column elapsed-column">
+        经过时间
+      </div>
     </div>
-
-
   </div>
 </template>
 

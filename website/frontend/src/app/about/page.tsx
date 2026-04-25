@@ -6,7 +6,6 @@ import {
   Scale,
   Users,
   ExternalLink,
-  MessageSquare,
   BookOpen,
   Bug,
 } from "lucide-react"

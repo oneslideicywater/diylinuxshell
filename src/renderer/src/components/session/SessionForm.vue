@@ -5,32 +5,80 @@
  */
 
 <template>
-  <div v-if="visible" class="session-form-overlay" @click="handleOverlayClick">
-    <div ref="formRef" class="session-form" :class="{ shaking: isShaking }" @click.stop>
+  <div
+    v-if="visible"
+    class="session-form-overlay"
+    @click="handleOverlayClick"
+  >
+    <div
+      ref="formRef"
+      class="session-form"
+      :class="{ shaking: isShaking }"
+      @click.stop
+    >
       <!-- 装饰性背景 -->
       <div class="form-decoration">
-        <div class="decoration-circle"></div>
-        <div class="decoration-circle"></div>
+        <div class="decoration-circle" />
+        <div class="decoration-circle" />
       </div>
 
       <!-- 表单头部 -->
       <div class="form-header">
         <div class="header-content">
           <div class="header-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M2 17L12 22L22 17" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M2 12L12 17L22 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <path
+                d="M12 2L2 7L12 12L22 7L12 2Z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M2 17L12 22L22 17"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+              <path
+                d="M2 12L12 17L22 12"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
           </div>
           <div class="header-text">
             <h3>{{ isEdit ? '编辑会话' : '新建会话' }}</h3>
-            <p class="header-subtitle">{{ isEdit ? '修改会话配置信息' : '创建新的SSH连接会话' }}</p>
+            <p class="header-subtitle">
+              {{ isEdit ? '修改会话配置信息' : '创建新的SSH连接会话' }}
+            </p>
           </div>
         </div>
-        <button class="close-btn" @click="$emit('close')" title="关闭">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <button
+          class="close-btn"
+          title="关闭"
+          @click="$emit('close')"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+          >
+            <path
+              d="M12 4L4 12M4 4L12 12"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
           </svg>
         </button>
       </div>
@@ -41,9 +89,23 @@
           <!-- 会话名称 -->
           <div class="form-group">
             <label for="name">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M7 7C8.65685 7 10 5.65685 10 4C10 2.34315 8.65685 1 7 1C5.34315 1 4 2.34315 4 4C4 5.65685 5.34315 7 7 7Z" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M1 13C1 10.7909 3.79086 9 7 9C10.2091 9 13 10.7909 13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+              >
+                <path
+                  d="M7 7C8.65685 7 10 5.65685 10 4C10 2.34315 8.65685 1 7 1C5.34315 1 4 2.34315 4 4C4 5.65685 5.34315 7 7 7Z"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+                <path
+                  d="M1 13C1 10.7909 3.79086 9 7 9C10.2091 9 13 10.7909 13 13"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                />
               </svg>
               <span>会话名称</span>
             </label>
@@ -55,7 +117,7 @@
                 placeholder="例如：Web Server"
                 required
                 autocomplete="off"
-              />
+              >
             </div>
           </div>
 
@@ -63,10 +125,33 @@
           <div class="form-row">
             <div class="form-group flex-2">
               <label for="host">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <rect x="1" y="3" width="12" height="8" rx="1" stroke="currentColor" stroke-width="1.5"/>
-                  <circle cx="7" cy="7" r="1.5" fill="currentColor"/>
-                  <path d="M4 11V13M10 11V13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                >
+                  <rect
+                    x="1"
+                    y="3"
+                    width="12"
+                    height="8"
+                    rx="1"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <circle
+                    cx="7"
+                    cy="7"
+                    r="1.5"
+                    fill="currentColor"
+                  />
+                  <path
+                    d="M4 11V13M10 11V13"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
                 </svg>
                 <span>主机地址</span>
               </label>
@@ -78,15 +163,33 @@
                   placeholder="例如：192.168.1.100"
                   required
                   autocomplete="off"
-                />
+                >
               </div>
             </div>
 
             <div class="form-group flex-1">
               <label for="port">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <rect x="2" y="1" width="10" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/>
-                  <path d="M5 4H9M5 7H9M5 10H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                >
+                  <rect
+                    x="2"
+                    y="1"
+                    width="10"
+                    height="12"
+                    rx="2"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <path
+                    d="M5 4H9M5 7H9M5 10H7"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
                 </svg>
                 <span>端口</span>
               </label>
@@ -98,7 +201,7 @@
                   min="1"
                   max="65535"
                   required
-                />
+                >
               </div>
             </div>
           </div>
@@ -106,9 +209,25 @@
           <!-- 用户名 -->
           <div class="form-group">
             <label for="username">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <circle cx="7" cy="4" r="3" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M1 13C1 10.2386 3.68629 8 7 8C10.3137 8 13 10.2386 13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+              >
+                <circle
+                  cx="7"
+                  cy="4"
+                  r="3"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+                <path
+                  d="M1 13C1 10.2386 3.68629 8 7 8C10.3137 8 13 10.2386 13 13"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                />
               </svg>
               <span>用户名</span>
             </label>
@@ -120,15 +239,26 @@
                 placeholder="例如：root"
                 required
                 autocomplete="off"
-              />
+              >
             </div>
           </div>
 
           <!-- 会话分组 -->
           <div class="form-group">
             <label>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M12 11C12 11.8284 11.3284 12.5 10.5 12.5H3.5C2.67157 12.5 2 11.8284 2 10.5V3.5C2 2.67157 2.67157 2 3.5 2H6L7 3.5H10.5C11.3284 3.5 12 4.17157 12 5V11Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+              >
+                <path
+                  d="M12 11C12 11.8284 11.3284 12.5 10.5 12.5H3.5C2.67157 12.5 2 11.8284 2 10.5V3.5C2 2.67157 2.67157 2 3.5 2H6L7 3.5H10.5C11.3284 3.5 12 4.17157 12 5V11Z"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
               </svg>
               <span>会话分组（可选）</span>
             </label>
@@ -145,28 +275,86 @@
           <!-- 认证方式 -->
           <div class="form-group">
             <label>
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M11 6V3C11 1.89543 10.1046 1 9 1H5C3.89543 1 3 1.89543 3 3V6" stroke="currentColor" stroke-width="1.5"/>
-                <rect x="1" y="6" width="12" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="7" cy="9.5" r="1" fill="currentColor"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+              >
+                <path
+                  d="M11 6V3C11 1.89543 10.1046 1 9 1H5C3.89543 1 3 1.89543 3 3V6"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+                <rect
+                  x="1"
+                  y="6"
+                  width="12"
+                  height="7"
+                  rx="1"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+                <circle
+                  cx="7"
+                  cy="9.5"
+                  r="1"
+                  fill="currentColor"
+                />
               </svg>
               <span>认证方式</span>
             </label>
             <div class="radio-group">
-              <label class="radio-label" :class="{ active: formData.authType === 'password' }">
-                <input v-model="formData.authType" type="radio" value="password" />
+              <label
+                class="radio-label"
+                :class="{ active: formData.authType === 'password' }"
+              >
+                <input
+                  v-model="formData.authType"
+                  type="radio"
+                  value="password"
+                >
                 <div class="radio-indicator">
-                  <svg v-if="formData.authType === 'password'" width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <circle cx="6" cy="6" r="3" fill="currentColor"/>
+                  <svg
+                    v-if="formData.authType === 'password'"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                  >
+                    <circle
+                      cx="6"
+                      cy="6"
+                      r="3"
+                      fill="currentColor"
+                    />
                   </svg>
                 </div>
                 <span>密码认证</span>
               </label>
-              <label class="radio-label" :class="{ active: formData.authType === 'key' }">
-                <input v-model="formData.authType" type="radio" value="key" />
+              <label
+                class="radio-label"
+                :class="{ active: formData.authType === 'key' }"
+              >
+                <input
+                  v-model="formData.authType"
+                  type="radio"
+                  value="key"
+                >
                 <div class="radio-indicator">
-                  <svg v-if="formData.authType === 'key'" width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <circle cx="6" cy="6" r="3" fill="currentColor"/>
+                  <svg
+                    v-if="formData.authType === 'key'"
+                    width="12"
+                    height="12"
+                    viewBox="0 0 12 12"
+                    fill="none"
+                  >
+                    <circle
+                      cx="6"
+                      cy="6"
+                      r="3"
+                      fill="currentColor"
+                    />
                   </svg>
                 </div>
                 <span>密钥认证</span>
@@ -176,12 +364,37 @@
 
           <!-- 密码认证 -->
           <transition name="slide-fade">
-            <div v-if="formData.authType === 'password'" class="form-group">
+            <div
+              v-if="formData.authType === 'password'"
+              class="form-group"
+            >
               <label for="password">
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                  <path d="M3 6V4C3 2.34315 4.34315 1 6 1H8C9.65685 1 11 2.34315 11 4V6" stroke="currentColor" stroke-width="1.5"/>
-                  <rect x="1" y="6" width="12" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/>
-                  <circle cx="7" cy="9.5" r="1" fill="currentColor"/>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                >
+                  <path
+                    d="M3 6V4C3 2.34315 4.34315 1 6 1H8C9.65685 1 11 2.34315 11 4V6"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <rect
+                    x="1"
+                    y="6"
+                    width="12"
+                    height="7"
+                    rx="1"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                  />
+                  <circle
+                    cx="7"
+                    cy="9.5"
+                    r="1"
+                    fill="currentColor"
+                  />
                 </svg>
                 <span>密码</span>
               </label>
@@ -193,23 +406,62 @@
                   placeholder="输入密码"
                   :required="formData.authType === 'password'"
                   autocomplete="new-password"
-                />
+                >
                 <button
                   type="button"
                   class="password-toggle"
-                  @click="showPassword = !showPassword"
                   :title="showPassword ? '隐藏密码' : '显示密码'"
+                  @click="showPassword = !showPassword"
                 >
                   <!-- 显示密码图标 - 眼睛 -->
-                  <svg v-if="showPassword" viewBox="0 0 24 24" fill="none" class="password-icon">
-                    <path d="M2 12C2 12 5 5 12 5C19 5 22 12 22 12C22 12 19 19 12 19C5 19 2 12 2 12Z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <circle cx="12" cy="12" r="3.5" stroke="currentColor" stroke-width="2.5"/>
+                  <svg
+                    v-if="showPassword"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    class="password-icon"
+                  >
+                    <path
+                      d="M2 12C2 12 5 5 12 5C19 5 22 12 22 12C22 12 19 19 12 19C5 19 2 12 2 12Z"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="3.5"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                    />
                   </svg>
                   <!-- 隐藏密码图标 - 眼睛被划掉 -->
-                  <svg v-else viewBox="0 0 24 24" fill="none" class="password-icon">
-                    <path d="M2 12C2 12 5 5 12 5C19 5 22 12 22 12C22 12 19 19 12 19C5 19 2 12 2 12Z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                    <circle cx="12" cy="12" r="3.5" stroke="currentColor" stroke-width="2.5"/>
-                    <path d="M4 4L20 20" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                  <svg
+                    v-else
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    class="password-icon"
+                  >
+                    <path
+                      d="M2 12C2 12 5 5 12 5C19 5 22 12 22 12C22 12 19 19 12 19C5 19 2 12 2 12Z"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <circle
+                      cx="12"
+                      cy="12"
+                      r="3.5"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                    />
+                    <path
+                      d="M4 4L20 20"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    />
                   </svg>
                 </button>
               </div>
@@ -218,13 +470,34 @@
 
           <!-- 密钥认证 -->
           <transition name="slide-fade">
-            <div v-if="formData.authType === 'key'" class="key-auth-section">
+            <div
+              v-if="formData.authType === 'key'"
+              class="key-auth-section"
+            >
               <div class="form-group">
                 <label for="keyPath">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M9 1H3C2.44772 1 2 1.44772 2 2V12C2 12.5523 2.44772 13 3 13H11C11.5523 13 12 12.5523 12 12V4L9 1Z" stroke="currentColor" stroke-width="1.5"/>
-                    <path d="M9 1V4H12" stroke="currentColor" stroke-width="1.5"/>
-                    <path d="M5 7H9M5 9H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 14 14"
+                    fill="none"
+                  >
+                    <path
+                      d="M9 1H3C2.44772 1 2 1.44772 2 2V12C2 12.5523 2.44772 13 3 13H11C11.5523 13 12 12.5523 12 12V4L9 1Z"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    />
+                    <path
+                      d="M9 1V4H12"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    />
+                    <path
+                      d="M5 7H9M5 9H7"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                    />
                   </svg>
                   <span>密钥路径</span>
                 </label>
@@ -236,10 +509,24 @@
                     placeholder="选择密钥文件"
                     required
                     autocomplete="off"
-                  />
-                  <button type="button" class="browse-btn" @click="browseKeyFile">
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                      <path d="M3 7H11M7 3V11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  >
+                  <button
+                    type="button"
+                    class="browse-btn"
+                    @click="browseKeyFile"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 14 14"
+                      fill="none"
+                    >
+                      <path
+                        d="M3 7H11M7 3V11"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                      />
                     </svg>
                     <span>浏览</span>
                   </button>
@@ -248,10 +535,32 @@
 
               <div class="form-group">
                 <label for="keyPassphrase">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path d="M3 6V4C3 2.34315 4.34315 1 6 1H8C9.65685 1 11 2.34315 11 4V6" stroke="currentColor" stroke-width="1.5"/>
-                    <rect x="1" y="6" width="12" height="7" rx="1" stroke="currentColor" stroke-width="1.5"/>
-                    <circle cx="7" cy="9.5" r="1" fill="currentColor"/>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 14 14"
+                    fill="none"
+                  >
+                    <path
+                      d="M3 6V4C3 2.34315 4.34315 1 6 1H8C9.65685 1 11 2.34315 11 4V6"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    />
+                    <rect
+                      x="1"
+                      y="6"
+                      width="12"
+                      height="7"
+                      rx="1"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                    />
+                    <circle
+                      cx="7"
+                      cy="9.5"
+                      r="1"
+                      fill="currentColor"
+                    />
                   </svg>
                   <span>密钥密码（可选）</span>
                 </label>
@@ -262,23 +571,62 @@
                     :type="showKeyPassphrase ? 'text' : 'password'"
                     placeholder="输入密钥密码"
                     autocomplete="new-password"
-                  />
+                  >
                   <button
                     type="button"
                     class="password-toggle"
-                    @click="showKeyPassphrase = !showKeyPassphrase"
                     :title="showKeyPassphrase ? '隐藏密码' : '显示密码'"
+                    @click="showKeyPassphrase = !showKeyPassphrase"
                   >
                     <!-- 显示密码图标 - 眼睛 -->
-                    <svg v-if="showKeyPassphrase" viewBox="0 0 24 24" fill="none" class="password-icon">
-                      <path d="M2 12C2 12 5 5 12 5C19 5 22 12 22 12C22 12 19 19 12 19C5 19 2 12 2 12Z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                      <circle cx="12" cy="12" r="3.5" stroke="currentColor" stroke-width="2.5"/>
+                    <svg
+                      v-if="showKeyPassphrase"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      class="password-icon"
+                    >
+                      <path
+                        d="M2 12C2 12 5 5 12 5C19 5 22 12 22 12C22 12 19 19 12 19C5 19 2 12 2 12Z"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="3.5"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                      />
                     </svg>
                     <!-- 隐藏密码图标 - 眼睛被划掉 -->
-                    <svg v-else viewBox="0 0 24 24" fill="none" class="password-icon">
-                      <path d="M2 12C2 12 5 5 12 5C19 5 22 12 22 12C22 12 19 19 12 19C5 19 2 12 2 12Z" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                      <circle cx="12" cy="12" r="3.5" stroke="currentColor" stroke-width="2.5"/>
-                      <path d="M4 4L20 20" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                    <svg
+                      v-else
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      class="password-icon"
+                    >
+                      <path
+                        d="M2 12C2 12 5 5 12 5C19 5 22 12 22 12C22 12 19 19 12 19C5 19 2 12 2 12Z"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                      <circle
+                        cx="12"
+                        cy="12"
+                        r="3.5"
+                        stroke="currentColor"
+                        stroke-width="2.5"
+                      />
+                      <path
+                        d="M4 4L20 20"
+                        stroke="currentColor"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                      />
                     </svg>
                   </button>
                 </div>
@@ -288,43 +636,147 @@
         </div>
 
         <!-- 测试连接结果 -->
-        <div v-if="testResult" class="test-result" :class="testResult.type">
-          <svg v-if="testResult.type === 'success'" width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M5 8L7 10L11 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <div
+          v-if="testResult"
+          class="test-result"
+          :class="testResult.type"
+        >
+          <svg
+            v-if="testResult.type === 'success'"
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+          >
+            <circle
+              cx="8"
+              cy="8"
+              r="7"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <path
+              d="M5 8L7 10L11 6"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </svg>
-          <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M8 4V9M8 11.5V12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <svg
+            v-else
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+          >
+            <circle
+              cx="8"
+              cy="8"
+              r="7"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <path
+              d="M8 4V9M8 11.5V12"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
           </svg>
           <span>{{ testResult.message }}</span>
-          <button class="close-result" @click="testResult = null" title="关闭">
-            <svg width="12" height="12" viewBox="0 0 12 12">
-              <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <button
+            class="close-result"
+            title="关闭"
+            @click="testResult = null"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+            >
+              <path
+                d="M1 1L11 11M11 1L1 11"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
             </svg>
           </button>
         </div>
 
         <!-- 表单底部 -->
         <div class="form-footer">
-          <button type="button" class="btn test" @click="handleTestConnection" :disabled="testing">
-            <svg v-if="!testing" width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M7 1V7M7 1V13M1 7H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <button
+            type="button"
+            class="btn test"
+            :disabled="testing"
+            @click="handleTestConnection"
+          >
+            <svg
+              v-if="!testing"
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+            >
+              <path
+                d="M7 1V7M7 1V13M1 7H13"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
             </svg>
-            <div v-else class="spinner"></div>
+            <div
+              v-else
+              class="spinner"
+            />
             <span>{{ testing ? '连接中...' : '测试连接' }}</span>
           </button>
-          <button type="button" class="btn cancel" @click="$emit('close')">
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M3 7H11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <button
+            type="button"
+            class="btn cancel"
+            @click="$emit('close')"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+            >
+              <path
+                d="M3 7H11"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
             </svg>
             <span>取消</span>
           </button>
-          <button type="submit" class="btn submit" :disabled="submitting">
-            <svg v-if="!submitting" width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M2 7L5 10L12 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <button
+            type="submit"
+            class="btn submit"
+            :disabled="submitting"
+          >
+            <svg
+              v-if="!submitting"
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+            >
+              <path
+                d="M2 7L5 10L12 3"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
-            <div v-else class="spinner"></div>
+            <div
+              v-else
+              class="spinner"
+            />
             <span>{{ submitting ? '保存中...' : '保存' }}</span>
           </button>
         </div>

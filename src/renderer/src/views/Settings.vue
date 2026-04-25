@@ -7,23 +7,49 @@
 <template>
   <div class="settings-container">
     <div class="settings-header">
-      <button class="back-btn" @click="handleBack" title="返回">
-        <svg width="16" height="16" viewBox="0 0 16 16">
-          <path d="M10 3L5 8l5 5" stroke="currentColor" stroke-width="2" fill="none" />
+      <button
+        class="back-btn"
+        title="返回"
+        @click="handleBack"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+        >
+          <path
+            d="M10 3L5 8l5 5"
+            stroke="currentColor"
+            stroke-width="2"
+            fill="none"
+          />
         </svg>
       </button>
       <h2>设置</h2>
     </div>
     <div class="settings-content">
-      <el-tabs v-model="activeTab" tab-position="left">
-        <el-tab-pane label="外观" name="appearance">
+      <el-tabs
+        v-model="activeTab"
+        tab-position="left"
+      >
+        <el-tab-pane
+          label="外观"
+          name="appearance"
+        >
           <div class="settings-section">
             <h3>主题设置</h3>
             <el-form label-width="100px">
               <el-form-item label="主题模式">
-                <el-radio-group v-model="localTheme" @change="handleThemeChange">
-                  <el-radio value="dark">深色</el-radio>
-                  <el-radio value="light">浅色</el-radio>
+                <el-radio-group
+                  v-model="localTheme"
+                  @change="handleThemeChange"
+                >
+                  <el-radio value="dark">
+                    深色
+                  </el-radio>
+                  <el-radio value="light">
+                    浅色
+                  </el-radio>
                 </el-radio-group>
               </el-form-item>
               <el-form-item label="字体大小">
@@ -42,17 +68,32 @@
                   placeholder="选择字体"
                   @change="handleFontFamilyChange"
                 >
-                  <el-option label="Cascadia Code" value="Cascadia Code" />
-                  <el-option label="Fira Code" value="Fira Code" />
-                  <el-option label="Consolas" value="Consolas" />
-                  <el-option label="Monaco" value="Monaco" />
+                  <el-option
+                    label="Cascadia Code"
+                    value="Cascadia Code"
+                  />
+                  <el-option
+                    label="Fira Code"
+                    value="Fira Code"
+                  />
+                  <el-option
+                    label="Consolas"
+                    value="Consolas"
+                  />
+                  <el-option
+                    label="Monaco"
+                    value="Monaco"
+                  />
                 </el-select>
               </el-form-item>
             </el-form>
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="终端" name="terminal">
+        <el-tab-pane
+          label="终端"
+          name="terminal"
+        >
           <div class="settings-section">
             <h3>终端设置</h3>
             <el-form label-width="120px">
@@ -62,9 +103,18 @@
                   placeholder="选择终端类型"
                   @change="handleTerminalTypeChange"
                 >
-                  <el-option label="xterm-256color" value="xterm-256color" />
-                  <el-option label="xterm" value="xterm" />
-                  <el-option label="linux" value="linux" />
+                  <el-option
+                    label="xterm-256color"
+                    value="xterm-256color"
+                  />
+                  <el-option
+                    label="xterm"
+                    value="xterm"
+                  />
+                  <el-option
+                    label="linux"
+                    value="linux"
+                  />
                 </el-select>
               </el-form-item>
               <el-form-item label="光标样式">
@@ -73,9 +123,18 @@
                   placeholder="选择光标样式"
                   @change="handleCursorStyleChange"
                 >
-                  <el-option label="块状" value="block" />
-                  <el-option label="下划线" value="underline" />
-                  <el-option label="竖线" value="bar" />
+                  <el-option
+                    label="块状"
+                    value="block"
+                  />
+                  <el-option
+                    label="下划线"
+                    value="underline"
+                  />
+                  <el-option
+                    label="竖线"
+                    value="bar"
+                  />
                 </el-select>
               </el-form-item>
               <el-form-item label="光标闪烁">
@@ -97,7 +156,10 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="连接" name="connection">
+        <el-tab-pane
+          label="连接"
+          name="connection"
+        >
           <div class="settings-section">
             <h3>连接设置</h3>
             <el-form label-width="120px">
@@ -127,7 +189,10 @@
                   @change="handleAutoReconnectChange"
                 />
               </el-form-item>
-              <el-form-item v-if="settingsStore.autoReconnect" label="重连次数">
+              <el-form-item
+                v-if="settingsStore.autoReconnect"
+                label="重连次数"
+              >
                 <el-input-number
                   v-model="settingsStore.reconnectAttempts"
                   :min="1"
@@ -139,21 +204,41 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="数据" name="data">
+        <el-tab-pane
+          label="数据"
+          name="data"
+        >
           <div class="settings-section">
             <h3>数据管理</h3>
             <el-form label-width="120px">
               <el-form-item label="导出配置">
-                <el-button type="primary" @click="handleExportConfig">导出会话配置</el-button>
+                <el-button
+                  type="primary"
+                  @click="handleExportConfig"
+                >
+                  导出会话配置
+                </el-button>
               </el-form-item>
               <el-form-item label="导入配置">
-                <el-button @click="handleImportConfig">导入会话配置</el-button>
+                <el-button @click="handleImportConfig">
+                  导入会话配置
+                </el-button>
               </el-form-item>
               <el-form-item label="重置设置">
-                <el-button type="warning" @click="handleResetSettings">重置为默认设置</el-button>
+                <el-button
+                  type="warning"
+                  @click="handleResetSettings"
+                >
+                  重置为默认设置
+                </el-button>
               </el-form-item>
               <el-form-item label="清除数据">
-                <el-button type="danger" @click="handleClearData">清除所有数据</el-button>
+                <el-button
+                  type="danger"
+                  @click="handleClearData"
+                >
+                  清除所有数据
+                </el-button>
               </el-form-item>
             </el-form>
           </div>

@@ -11,71 +11,153 @@
  */
 
 <template>
-  <div class="file-panel remote" ref="panelRef">
+  <div
+    ref="panelRef"
+    class="file-panel remote"
+  >
     <div class="panel-header">
       <div class="panel-path">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <rect x="1" y="3" width="12" height="8" rx="1" stroke="currentColor" stroke-width="1.5"/>
-          <circle cx="7" cy="7" r="1.5" fill="currentColor"/>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+        >
+          <rect
+            x="1"
+            y="3"
+            width="12"
+            height="8"
+            rx="1"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <circle
+            cx="7"
+            cy="7"
+            r="1.5"
+            fill="currentColor"
+          />
         </svg>
         <input
           v-model="remotePathValue"
           type="text"
           class="path-input"
           @keyup.enter="handlePathEnter"
-        />
+        >
       </div>
-      <button class="nav-btn" @click="handleUp" title="上级目录">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M11 7H3M3 7l4-4M3 7l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      <button
+        class="nav-btn"
+        title="上级目录"
+        @click="handleUp"
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+        >
+          <path
+            d="M11 7H3M3 7l4-4M3 7l4 4"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+          />
         </svg>
       </button>
     </div>
     <div
       class="file-list"
+      :class="{ 'is-dragging': isDraggingOver }"
       @dblclick="handleDblClick"
       @contextmenu.prevent="handleContextMenu"
       @dragover.prevent="handleDragOver"
       @dragleave.prevent="handleDragLeave"
       @drop.prevent="handleDrop"
-      :class="{ 'is-dragging': isDraggingOver }"
     >
       <!-- 已断连状态提示 -->
-      <div v-if="!props.connected" class="disconnected-overlay">
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" class="disconnected-icon">
-          <path d="M8.5 7.5l15 15m0-15l-15 15M22 4v8m0 0l4-3M22 12l4 3M10 20v8m0 0l-4 3M10 28l-4-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <div
+        v-if="!props.connected"
+        class="disconnected-overlay"
+      >
+        <svg
+          width="32"
+          height="32"
+          viewBox="0 0 32 32"
+          fill="none"
+          class="disconnected-icon"
+        >
+          <path
+            d="M8.5 7.5l15 15m0-15l-15 15M22 4v8m0 0l4-3M22 12l4 3M10 20v8m0 0l-4 3M10 28l-4-3"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
         </svg>
         <span class="disconnected-text">SFTP 连接已断开</span>
         <span class="disconnected-hint">请右键标签页选择「重连会话」</span>
       </div>
       <template v-else>
-      <div
-        v-for="item in remoteFiles"
-        :key="item.path"
-        :data-path="item.path"
-        class="file-item"
-        :class="{ selected: selectedRemotes.includes(item.path) }"
-        @click="handleClick(item.path, $event)"
-      >
-        <svg v-if="item.isDirectory" width="16" height="16" viewBox="0 0 16 16" fill="none" class="file-icon is-folder">
-          <path d="M14 13.5C14 14.3284 13.3284 15 12.5 15H3.5C2.67157 15 2 14.3284 2 13.5V5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V13.5Z" stroke="currentColor" stroke-width="1.5"/>
-        </svg>
-        <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none" class="file-icon">
-          <path d="M9 1H4C2.89543 1 2 1.89543 2 3V13C2 14.1046 2.89543 15 4 15H12C13.1046 15 14 14.1046 14 13V6L9 1Z" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M9 1V6H14" stroke="currentColor" stroke-width="1.5"/>
-        </svg>
-        <span class="file-name">{{ item.name }}</span>
-        <span class="file-size">{{ formatSize(item.size) }}</span>
-      </div>
-    </template>
+        <div
+          v-for="item in remoteFiles"
+          :key="item.path"
+          :data-path="item.path"
+          class="file-item"
+          :class="{ selected: selectedRemotes.includes(item.path) }"
+          @click="handleClick(item.path, $event)"
+        >
+          <svg
+            v-if="item.isDirectory"
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            class="file-icon is-folder"
+          >
+            <path
+              d="M14 13.5C14 14.3284 13.3284 15 12.5 15H3.5C2.67157 15 2 14.3284 2 13.5V5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V13.5Z"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+          </svg>
+          <svg
+            v-else
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            class="file-icon"
+          >
+            <path
+              d="M9 1H4C2.89543 1 2 1.89543 2 3V13C2 14.1046 2.89543 15 4 15H12C13.1046 15 14 14.1046 14 13V6L9 1Z"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <path
+              d="M9 1V6H14"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+          </svg>
+          <span class="file-name">{{ item.name }}</span>
+          <span class="file-size">{{ formatSize(item.size) }}</span>
+        </div>
+      </template>
     </div>
     
     <!-- 远程文件右键菜单（通过 Store 管理全局唯一性） -->
     <!-- 新建文件夹对话框 -->
-    <div v-if="createFolderDialogVisible" class="dialog-overlay" @click.self="closeCreateFolderDialog">
+    <div
+      v-if="createFolderDialogVisible"
+      class="dialog-overlay"
+      @click.self="closeCreateFolderDialog"
+    >
       <div class="dialog">
         <div class="dialog-header">
-          <h3 class="dialog-title">新建文件夹</h3>
+          <h3 class="dialog-title">
+            新建文件夹
+          </h3>
         </div>
         <div class="dialog-body">
           <div class="form-item">
@@ -89,13 +171,29 @@
               placeholder="请输入文件夹名称"
               @keyup.enter="confirmCreateFolder"
               @keyup.esc="closeCreateFolderDialog"
-            />
-            <div v-if="folderNameError" class="form-error">{{ folderNameError }}</div>
+            >
+            <div
+              v-if="folderNameError"
+              class="form-error"
+            >
+              {{ folderNameError }}
+            </div>
           </div>
         </div>
         <div class="dialog-footer">
-          <button class="btn btn-secondary" @click="closeCreateFolderDialog">取消</button>
-          <button class="btn btn-primary" @click="confirmCreateFolder" :disabled="!folderName || !!folderNameError">确定</button>
+          <button
+            class="btn btn-secondary"
+            @click="closeCreateFolderDialog"
+          >
+            取消
+          </button>
+          <button
+            class="btn btn-primary"
+            :disabled="!folderName || !!folderNameError"
+            @click="confirmCreateFolder"
+          >
+            确定
+          </button>
         </div>
       </div>
     </div>

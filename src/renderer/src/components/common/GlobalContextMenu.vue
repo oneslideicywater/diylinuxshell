@@ -2,12 +2,12 @@
   <Teleport to="body">
     <div
       v-if="contextMenuStore.visible && visibleItems.length > 0"
+      ref="menuRef"
       class="global-context-menu"
       :style="menuStyle"
+      tabindex="-1"
       @click.stop
       @contextmenu.stop
-      tabindex="-1"
-      ref="menuRef"
     >
       <div
         v-for="item in visibleItems"

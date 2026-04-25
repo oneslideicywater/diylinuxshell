@@ -5,24 +5,31 @@
  */
 
 <template>
-  <div class="app-layout" @click="handleGlobalClick" @keydown.esc="handleEscKey">
+  <div
+    class="app-layout"
+    @click="handleGlobalClick"
+    @keydown.esc="handleEscKey"
+  >
     <!-- 顶部标题栏 -->
     <header class="app-header">
-      <div class="header-left" :style="{ width: `${sidebarWidth}px` }">
+      <div
+        class="header-left"
+        :style="{ width: `${sidebarWidth}px` }"
+      >
         <span class="app-title">DIY Linux Shell</span>
         <!-- SSH/SFTP 模式切换开关 -->
         <div class="mode-switch">
           <button 
             :class="['mode-btn', { active: currentMode === 'ssh' }]"
-            @click="switchMode('ssh')"
             title="SSH 终端模式"
+            @click="switchMode('ssh')"
           >
             SSH
           </button>
           <button 
             :class="['mode-btn', { active: currentMode === 'sftp' }]"
-            @click="switchMode('sftp')"
             title="SFTP 文件传输模式"
+            @click="switchMode('sftp')"
           >
             SFTP
           </button>
@@ -42,19 +49,60 @@
       <div class="header-right">
         <!-- 窗口控制按钮 -->
         <div class="window-controls">
-          <button class="control-btn minimize" @click="handleMinimize" title="最小化">
-            <svg width="12" height="12" viewBox="0 0 12 12">
-              <rect y="5" width="12" height="2" fill="currentColor" />
+          <button
+            class="control-btn minimize"
+            title="最小化"
+            @click="handleMinimize"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+            >
+              <rect
+                y="5"
+                width="12"
+                height="2"
+                fill="currentColor"
+              />
             </svg>
           </button>
-          <button class="control-btn maximize" @click="handleMaximize" title="最大化">
-            <svg width="12" height="12" viewBox="0 0 12 12">
-              <rect x="1" y="1" width="10" height="10" stroke="currentColor" stroke-width="2" fill="none" />
+          <button
+            class="control-btn maximize"
+            title="最大化"
+            @click="handleMaximize"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+            >
+              <rect
+                x="1"
+                y="1"
+                width="10"
+                height="10"
+                stroke="currentColor"
+                stroke-width="2"
+                fill="none"
+              />
             </svg>
           </button>
-          <button class="control-btn close" @click="handleClose" title="关闭">
-            <svg width="12" height="12" viewBox="0 0 12 12">
-              <path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="2" />
+          <button
+            class="control-btn close"
+            title="关闭"
+            @click="handleClose"
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 12 12"
+            >
+              <path
+                d="M1 1L11 11M11 1L1 11"
+                stroke="currentColor"
+                stroke-width="2"
+              />
             </svg>
           </button>
         </div>
@@ -79,10 +127,10 @@
       <div
         class="sidebar-resize-handle"
         :class="{ 'resizing': isResizing }"
-        @mousedown="handleResizeStart"
         title="拖拽调整侧边栏宽度"
+        @mousedown="handleResizeStart"
       >
-        <div class="resize-line"></div>
+        <div class="resize-line" />
       </div>
 
       <!-- 主内容区 -->
@@ -93,22 +141,37 @@
           <!-- ✅ 修复 BUG: 使用 v-show 替代 v-if/v-else，避免组件销毁导致终端内容丢失 -->
           <div class="terminal-area">
             <!-- SSH 模式：显示 SSH 终端标签页 -->
-            <div v-show="currentMode === 'ssh'" class="mode-container">
-              <template v-for="tab in sshTabs" :key="tab.id">
+            <div
+              v-show="currentMode === 'ssh'"
+              class="mode-container"
+            >
+              <template
+                v-for="tab in sshTabs"
+                :key="tab.id"
+              >
                 <XTerminal
                   v-show="tab.id === activeTabId"
                   :tab="tab"
                 />
               </template>
               <!-- SSH 空状态提示 -->
-              <div v-if="sshTabs.length === 0" class="empty-state">
+              <div
+                v-if="sshTabs.length === 0"
+                class="empty-state"
+              >
                 <p>请选择或创建一个 SSH 会话</p>
               </div>
             </div>
 
             <!-- SFTP 模式：显示 SFTP 文件传输标签页 -->
-            <div v-show="currentMode === 'sftp'" class="mode-container">
-              <template v-for="tab in sftpTabs" :key="tab.id">
+            <div
+              v-show="currentMode === 'sftp'"
+              class="mode-container"
+            >
+              <template
+                v-for="tab in sftpTabs"
+                :key="tab.id"
+              >
                 <SftpTransfer
                   v-show="tab.id === activeTabId"
                   :sftp-window-visible="true"
@@ -119,7 +182,10 @@
                 />
               </template>
               <!-- SFTP 空状态提示 -->
-              <div v-if="sftpTabs.length === 0" class="empty-state">
+              <div
+                v-if="sftpTabs.length === 0"
+                class="empty-state"
+              >
                 <p>请选择或创建一个 SFTP 会话</p>
               </div>
             </div>

@@ -7,13 +7,16 @@
 <template>
   <div class="group-tree-select">
     <!-- 分组列表 -->
-    <template v-for="group in rootGroups" :key="group.id">
+    <template
+      v-for="group in rootGroups"
+      :key="group.id"
+    >
       <!-- 分组选项 -->
       <div
         class="tree-option"
         :class="{ active: modelValue === group.id }"
-        @click="handleOptionClick(group)"
         :style="{ paddingLeft: (group.depth - 1) * 20 + 12 + 'px' }"
+        @click="handleOptionClick(group)"
       >
         <!-- 展开/折叠图标 -->
         <svg
@@ -25,10 +28,26 @@
           viewBox="0 0 12 12"
           @click.stop="handleToggle(group.id)"
         >
-          <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" />
+          <path
+            d="M4 2l4 4-4 4"
+            stroke="currentColor"
+            stroke-width="2"
+            fill="none"
+          />
         </svg>
-        <svg v-else width="12" height="12" viewBox="0 0 12 12" fill="none">
-          <circle cx="6" cy="6" r="2" fill="currentColor" />
+        <svg
+          v-else
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="none"
+        >
+          <circle
+            cx="6"
+            cy="6"
+            r="2"
+            fill="currentColor"
+          />
         </svg>
 
         <!-- 分组名称 -->

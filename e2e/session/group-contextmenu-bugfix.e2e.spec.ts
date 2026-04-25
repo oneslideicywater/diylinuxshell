@@ -56,8 +56,9 @@ test.describe('分组右键菜单 Bug 修复验证', () => {
     
     // ========== 步骤1: 创建顶级分组 A ==========
     console.log('\n=== 步骤1: 创建顶级分组 A 和子分组 B ===')
-    let groupIdA: string = ''
-    let groupIdB: string = ''
+    // 注意：groupIdA 和 groupIdB 用于调试，值已存储到 window 对象
+    let _groupIdA: string = ''
+    let _groupIdB: string = ''
     
     await page.evaluate(async () => {
       // 创建顶级分组 A（无父分组）
@@ -80,9 +81,9 @@ test.describe('分组右键菜单 Bug 修复验证', () => {
       ;(window as any).__test_groupB_id = groupB.id
     })
     
-    // 获取存储的 ID
-    groupIdA = await page.evaluate(() => (window as any).__test_groupA_id)
-    groupIdB = await page.evaluate(() => (window as any).__test_groupB_id)
+    // 获取存储的 ID（用于调试日志）
+    _groupIdA = await page.evaluate(() => (window as any).__test_groupA_id)
+    _groupIdB = await page.evaluate(() => (window as any).__test_groupB_id)
     
     await page.waitForTimeout(500)
     

@@ -5,30 +5,66 @@
  */
 
 <template>
-  <div v-if="visible" class="group-form-overlay" @click="handleOverlayClick">
-    <div ref="formRef" class="group-form" :class="{ shaking: isShaking }" @click.stop>
+  <div
+    v-if="visible"
+    class="group-form-overlay"
+    @click="handleOverlayClick"
+  >
+    <div
+      ref="formRef"
+      class="group-form"
+      :class="{ shaking: isShaking }"
+      @click.stop
+    >
       <!-- 装饰性背景 -->
       <div class="form-decoration">
-        <div class="decoration-circle"></div>
-        <div class="decoration-circle"></div>
+        <div class="decoration-circle" />
+        <div class="decoration-circle" />
       </div>
 
       <!-- 表单头部 -->
       <div class="form-header">
         <div class="header-content">
           <div class="header-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-              <path d="M22 19C22 20.1046 21.1046 21 20 21H4C2.89543 21 2 20.1046 2 19V5C2 3.89543 2.89543 3 4 3H9L11 6H20C21.1046 6 22 6.89543 22 8V19Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+            >
+              <path
+                d="M22 19C22 20.1046 21.1046 21 20 21H4C2.89543 21 2 20.1046 2 19V5C2 3.89543 2.89543 3 4 3H9L11 6H20C21.1046 6 22 6.89543 22 8V19Z"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
           </div>
           <div class="header-text">
             <h3>{{ isEdit ? '编辑分组' : '新建分组' }}</h3>
-            <p class="header-subtitle">{{ isEdit ? '修改分组信息' : '创建新的会话分组' }}</p>
+            <p class="header-subtitle">
+              {{ isEdit ? '修改分组信息' : '创建新的会话分组' }}
+            </p>
           </div>
         </div>
-        <button class="close-btn" @click="handleClose" title="关闭">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <button
+          class="close-btn"
+          title="关闭"
+          @click="handleClose"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+          >
+            <path
+              d="M12 4L4 12M4 4L12 12"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
           </svg>
         </button>
       </div>
@@ -39,31 +75,69 @@
           <!-- 分组名称 -->
           <div class="form-group">
             <label for="groupName">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <path d="M7 7C8.65685 7 10 5.65685 10 4C10 2.34315 8.65685 1 7 1C5.34315 1 4 2.34315 4 4C4 5.65685 5.34315 7 7 7Z" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M1 13C1 10.7909 3.79086 9 7 9C10.2091 9 13 10.7909 13 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+              >
+                <path
+                  d="M7 7C8.65685 7 10 5.65685 10 4C10 2.34315 8.65685 1 7 1C5.34315 1 4 2.34315 4 4C4 5.65685 5.34315 7 7 7Z"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+                <path
+                  d="M1 13C1 10.7909 3.79086 9 7 9C10.2091 9 13 10.7909 13 13"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                />
               </svg>
               <span>分组名称</span>
             </label>
             <div class="input-wrapper">
               <input
                 id="groupName"
+                ref="nameInputRef"
                 v-model="formData.name"
-                @input="validateGroupName"
                 type="text"
                 placeholder="例如：生产环境"
                 required
                 autocomplete="off"
-                ref="nameInputRef"
                 :class="{ 'input-error': validationError }"
-              />
+                @input="validateGroupName"
+              >
             </div>
             <!-- 实时校验错误提示 -->
-            <div v-if="validationError" class="input-error-message">
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M7 4V7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <circle cx="7" cy="9.5" r="0.5" fill="currentColor"/>
+            <div
+              v-if="validationError"
+              class="input-error-message"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 14 14"
+                fill="none"
+              >
+                <circle
+                  cx="7"
+                  cy="7"
+                  r="6"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                />
+                <path
+                  d="M7 4V7"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                />
+                <circle
+                  cx="7"
+                  cy="9.5"
+                  r="0.5"
+                  fill="currentColor"
+                />
               </svg>
               <span>{{ validationError }}</span>
             </div>
@@ -72,10 +146,17 @@
 
         <!-- 表单底部 -->
         <div class="form-footer">
-          <button type="button" class="btn btn-secondary" @click="handleClose">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            @click="handleClose"
+          >
             取消
           </button>
-          <button type="submit" class="btn btn-primary">
+          <button
+            type="submit"
+            class="btn btn-primary"
+          >
             {{ isEdit ? '保存' : '创建' }}
           </button>
         </div>

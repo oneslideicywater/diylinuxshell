@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import Link from "next/link"
 import { BookOpen, GitBranch, FileText, MessageCircle, HelpCircle, ExternalLink } from "lucide-react"
 
 export const metadata: Metadata = {

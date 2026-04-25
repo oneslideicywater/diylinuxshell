@@ -15,12 +15,16 @@
     <SftpStatusHeader 
       :task-id="taskId" 
       :is-selected="isSelectedComputed" 
-      @toggle-selection="handleToggleSelection" 
-      :header-scroll-left="headerScrollLeft"
+      :header-scroll-left="headerScrollLeft" 
+      @toggle-selection="handleToggleSelection"
     />
 
     <!-- 扫描中占位行（root 为空且存在 scanningNode 时显示，支持选中/取消） -->
-    <div v-if="!rootNodeId && scanningNodeData" class="tree-content" @scroll.passive="handleContentScroll">
+    <div
+      v-if="!rootNodeId && scanningNodeData"
+      class="tree-content"
+      @scroll.passive="handleContentScroll"
+    >
       <ScanningPlaceholderRow
         :node="scanningNodeData"
         :task-id="taskId"
@@ -30,11 +34,15 @@
     </div>
 
     <!-- 传输树节点（从根节点开始渲染，所有数据从 Store 获取） -->
-    <div v-if="rootNodeId" class="tree-content" @scroll.passive="handleContentScroll">
+    <div
+      v-if="rootNodeId"
+      class="tree-content"
+      @scroll.passive="handleContentScroll"
+    >
       <SftpTransferTreeNode
         :task-id="taskId"
         :node-id="rootNodeId"
-        :level=0
+        :level="0"
         :hide-idle-nodes="hideIdleNodes"
         @update:node-expanded="handleNodeExpanded"
       />

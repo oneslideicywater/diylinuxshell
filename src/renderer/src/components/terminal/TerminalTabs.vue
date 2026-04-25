@@ -8,13 +8,25 @@
   <div class="terminal-tabs">
     <!-- 新建标签按钮（+号按钮） -->
     <!-- 点击后打开会话列表，用户可以选择一个会话创建新的终端标签页 -->
-    <button class="new-tab-btn" title="新建标签" @click="handleNewTab">
+    <button
+      class="new-tab-btn"
+      title="新建标签"
+      @click="handleNewTab"
+    >
       <!-- SVG 图标：一个加号（+），由一条横线和一条竖线组成 -->
-      <svg width="14" height="14" viewBox="0 0 14 14">
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 14 14"
+      >
         <!-- 横线：M7 1v12 表示从中心点(7,1)画一条到(7,13)的竖线 -->
         <!-- 竖线：M1 7h12 表示从点(1,7)画一条到(13,7)的横线 -->
         <!-- 两条线交叉形成 + 号 -->
-        <path d="M7 1v12M1 7h12" stroke="currentColor" stroke-width="2" />
+        <path
+          d="M7 1v12M1 7h12"
+          stroke="currentColor"
+          stroke-width="2"
+        />
       </svg>
     </button>
 

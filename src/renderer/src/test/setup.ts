@@ -36,7 +36,7 @@ config.global.mocks = {
 
 // 设置全局window对象
 if (typeof window !== 'undefined') {
-  ;(window as any).electron = mockElectronAPI
+  (window as any).electron = mockElectronAPI
   ;(window as any).api = mockCustomAPI
 }
 

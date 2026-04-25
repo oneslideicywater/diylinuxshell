@@ -19,7 +19,8 @@ const TEST_SESSION = {
 
 // 测试用的本地临时目录（D盘，符合规范）
 const TEST_LOCAL_DIR = 'D:/test-batch-upload'
-const TEST_REMOTE_DIR = '/tmp/test-batch-upload'
+// 远程测试目录（保留供后续测试使用）
+const _TEST_REMOTE_DIR = '/tmp/test-batch-upload'
 
 // 用于存储控制台消息和错误
 const consoleMessages: any[] = []

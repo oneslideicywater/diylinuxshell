@@ -25,7 +25,8 @@ const TEST_SESSION = {
 
 // 测试用的本地临时目录（D盘）
 const TEST_LOCAL_DIR = 'D:/test-batch-upload-deep'
-const TEST_REMOTE_BASE = '/tmp/test-batch-deep'
+// 远程测试基础路径（保留供后续测试使用）
+const _TEST_REMOTE_BASE = '/tmp/test-batch-deep'
 
 // 控制台消息收集
 const consoleMessages: any[] = []

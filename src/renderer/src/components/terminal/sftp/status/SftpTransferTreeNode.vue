@@ -11,44 +11,120 @@
 
 <template>
   <!-- hideIdleNodes 开启且节点为空闲态时隐藏（error 始终显示） -->
-  <div v-if="node && !shouldHide" class="tree-node">
+  <div
+    v-if="node && !shouldHide"
+    class="tree-node"
+  >
     <!-- 节点内容 -->
-    <div class="node-row" :class="{ 'is-folder': node.isDirectory, 'is-error': liveStatus === 'error' }">
+    <div
+      class="node-row"
+      :class="{ 'is-folder': node.isDirectory, 'is-error': liveStatus === 'error' }"
+    >
       <!-- 复选框占位列（与表头对齐） -->
       <div class="column checkbox-column">
-        <span class="checkbox-placeholder"></span>
+        <span class="checkbox-placeholder" />
       </div>
 
       <!-- 名称列（根据层级动态调整左侧缩进） -->
-      <div class="column name-column" :style="{ paddingLeft: (level * 20) + 'px' }">
+      <div
+        class="column name-column"
+        :style="{ paddingLeft: (level * 20) + 'px' }"
+      >
         <!-- 文件夹展开/折叠图标 -->
-        <span v-if="node.isDirectory" class="expand-icon" @click="toggleExpand">
-          <svg v-if="isExpanded" width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <span
+          v-if="node.isDirectory"
+          class="expand-icon"
+          @click="toggleExpand"
+        >
+          <svg
+            v-if="isExpanded"
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+          >
+            <path
+              d="M3 4.5L6 7.5L9 4.5"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
           </svg>
-          <svg v-else width="12" height="12" viewBox="0 0 12 12" fill="none">
-            <path d="M4.5 3L7.5 6L4.5 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <svg
+            v-else
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+          >
+            <path
+              d="M4.5 3L7.5 6L4.5 9"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
           </svg>
         </span>
         <!-- 文件的占位图标（不可见，用于保持与文件夹的对齐） -->
-        <span v-else class="expand-placeholder">
-          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"></svg>
+        <span
+          v-else
+          class="expand-placeholder"
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+          />
         </span>
         <!-- 文件类型图标 -->
-        <span class="file-icon" :class="{ 'is-folder': node.isDirectory }">
-          <svg v-if="node.isDirectory" width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M14 13.5C14 14.3284 13.3284 15 12.5 15H3.5C2.67157 15 2 14.3284 2 13.5V5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V13.5Z" stroke="currentColor" stroke-width="1.5"/>
+        <span
+          class="file-icon"
+          :class="{ 'is-folder': node.isDirectory }"
+        >
+          <svg
+            v-if="node.isDirectory"
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+          >
+            <path
+              d="M14 13.5C14 14.3284 13.3284 15 12.5 15H3.5C2.67157 15 2 14.3284 2 13.5V5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V13.5Z"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
           </svg>
-          <svg v-else width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M9 1H4C2.89543 1 2 1.89543 2 3V13C2 14.1046 2.89543 15 4 15H12C13.1046 15 14 14.1046 14 13V6L9 1Z" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M9 1V6H14" stroke="currentColor" stroke-width="1.5"/>
+          <svg
+            v-else
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+          >
+            <path
+              d="M9 1H4C2.89543 1 2 1.89543 2 3V13C2 14.1046 2.89543 15 4 15H12C13.1046 15 14 14.1046 14 13V6L9 1Z"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
+            <path
+              d="M9 1V6H14"
+              stroke="currentColor"
+              stroke-width="1.5"
+            />
           </svg>
         </span>
         <!-- 文件名 -->
-        <span class="file-name" :title="node.name">
+        <span
+          class="file-name"
+          :title="node.name"
+        >
           {{ node.name }}
           <!-- 如果是文件夹且有总文件数信息，显示总体进度 -->
-          <span v-if="node.isDirectory && node.totalFiles !== undefined" class="folder-progress">
+          <span
+            v-if="node.isDirectory && node.totalFiles !== undefined"
+            class="folder-progress"
+          >
             ({{ liveCompletedFiles || 0 }}/{{ node.totalFiles }})
           </span>
         </span>
@@ -61,11 +137,23 @@
 
       <!-- 进度列（从 Store 实时读取） -->
       <div class="column progress-column">
-        <div v-if="liveStatus === 'transferring' || liveStatus === 'pending'" class="progress-bar">
-          <div class="progress-fill" :style="{ width: liveProgress + '%' }"></div>
+        <div
+          v-if="liveStatus === 'transferring' || liveStatus === 'pending'"
+          class="progress-bar"
+        >
+          <div
+            class="progress-fill"
+            :style="{ width: liveProgress + '%' }"
+          />
         </div>
-        <span v-else-if="liveStatus === 'completed'" class="progress-percent">100%</span>
-        <span v-else class="progress-percent">-</span>
+        <span
+          v-else-if="liveStatus === 'completed'"
+          class="progress-percent"
+        >100%</span>
+        <span
+          v-else
+          class="progress-percent"
+        >-</span>
       </div>
 
       <!-- 大小列（从 Store 获取） -->
@@ -74,7 +162,10 @@
       </div>
 
       <!-- 本地路径列（从 Store 获取） -->
-      <div class="column local-path-column" :title="node.localPath">
+      <div
+        class="column local-path-column"
+        :title="node.localPath"
+      >
         {{ node.localPath || '-' }}
       </div>
 
@@ -84,7 +175,10 @@
       </div>
 
       <!-- 远程路径列（从 Store 获取） -->
-      <div class="column remote-path-column" :title="node.remotePath">
+      <div
+        class="column remote-path-column"
+        :title="node.remotePath"
+      >
         {{ node.remotePath || '-' }}
       </div>
 
@@ -105,7 +199,10 @@
     </div>
 
     <!-- 子节点（递归渲染，所有子节点数据均从 Store 获取） -->
-    <div v-if="node.isDirectory && isExpanded && node.children && node.children.length > 0" class="children">
+    <div
+      v-if="node.isDirectory && isExpanded && node.children && node.children.length > 0"
+      class="children"
+    >
       <SftpTransferTreeNode
         v-for="child in node.children"
         :key="child.id"

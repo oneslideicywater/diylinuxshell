@@ -10,8 +10,7 @@
     ref="terminalContainer" 
     class="x-terminal"
     @contextmenu.prevent="handleContextMenu"
-  >
-  </div>
+  />
 </template>
 
 <script setup lang="ts">

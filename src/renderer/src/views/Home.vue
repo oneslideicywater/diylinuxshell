@@ -1,5 +1,9 @@
 <template>
-  <AppLayout @add-session="handleAddSession" @edit-session="handleEditSession" @open-settings="handleOpenSettings" />
+  <AppLayout
+    @add-session="handleAddSession"
+    @edit-session="handleEditSession"
+    @open-settings="handleOpenSettings"
+  />
   
   <!-- 会话表单对话框 -->
   <SessionForm

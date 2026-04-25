@@ -6,19 +6,42 @@
 
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="dialog-overlay" @click.self="handleClose">
-      <div class="alert-dialog" :class="{ 'is-error': isError }">
+    <div
+      v-if="visible"
+      class="dialog-overlay"
+      @click.self="handleClose"
+    >
+      <div
+        class="alert-dialog"
+        :class="{ 'is-error': isError }"
+      >
         <div class="dialog-header">
-          <h3 class="dialog-title">{{ title }}</h3>
-          <button class="close-btn" @click="handleClose">
-            <svg width="14" height="14" viewBox="0 0 14 14">
-              <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <h3 class="dialog-title">
+            {{ title }}
+          </h3>
+          <button
+            class="close-btn"
+            @click="handleClose"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+            >
+              <path
+                d="M1 1l12 12M13 1L1 13"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
             </svg>
           </button>
         </div>
 
         <div class="dialog-content">
-          <div class="content-text">{{ message }}</div>
+          <div class="content-text">
+            {{ message }}
+          </div>
         </div>
 
         <div class="dialog-footer">

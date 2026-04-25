@@ -24,7 +24,8 @@ const TEST_SESSION = {
 
 // 测试目录（D盘）
 const TEST_LOCAL_DIR = 'D:/test-batch-complete'
-const TEST_REMOTE_DIR = '/tmp/test-batch-complete'
+// 远程测试目录（保留供后续测试使用）
+const _TEST_REMOTE_DIR = '/tmp/test-batch-complete'
 
 // 日志收集
 const consoleMessages: any[] = []

@@ -13,20 +13,36 @@
       <input
         type="checkbox"
         :checked="isSelected"
-        @change="$emit('toggle-selection')"
         :disabled="!taskId"
         title="选择任务"
-      />
+        @change="$emit('toggle-selection')"
+      >
     </div>
     <!-- 名称列 -->
     <div class="column name-column">
       <span class="file-icon">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <path d="M9 1H4C2.89543 1 2 1.89543 2 3V13C2 14.1046 2.89543 15 4 15H12C13.1046 15 14 14.1046 14 13V6L9 1Z" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M9 1V6H14" stroke="currentColor" stroke-width="1.5"/>
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+        >
+          <path
+            d="M9 1H4C2.89543 1 2 1.89543 2 3V13C2 14.1046 2.89543 15 4 15H12C13.1046 15 14 14.1046 14 13V6L9 1Z"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
+          <path
+            d="M9 1V6H14"
+            stroke="currentColor"
+            stroke-width="1.5"
+          />
         </svg>
       </span>
-      <span class="file-name" :title="node.name">{{ node.name }}</span>
+      <span
+        class="file-name"
+        :title="node.name"
+      >{{ node.name }}</span>
     </div>
     <!-- 状态列 -->
     <div class="status-column">
@@ -36,16 +52,27 @@
     </div>
     <!-- 进度列 -->
     <div class="progress-column">
-      <div v-if="!isCancelled" class="scanning-indicator">
-        <span class="scanning-dot"></span>
+      <div
+        v-if="!isCancelled"
+        class="scanning-indicator"
+      >
+        <span class="scanning-dot" />
         <span>扫描中</span>
       </div>
-      <span v-else class="cancelled-text">—</span>
+      <span
+        v-else
+        class="cancelled-text"
+      >—</span>
     </div>
     <!-- 大小列（扫描中未知） -->
-    <div class="column size-column">-</div>
+    <div class="column size-column">
+      -
+    </div>
     <!-- 本地路径列 -->
-    <div class="column local-path-column" :title="node.localPath">
+    <div
+      class="column local-path-column"
+      :title="node.localPath"
+    >
       {{ node.localPath || '-' }}
     </div>
     <!-- 箭头列 -->
@@ -53,13 +80,22 @@
       {{ node.type === 'upload' ? '→' : '←' }}
     </div>
     <!-- 远程路径列 -->
-    <div class="column remote-path-column" :title="node.remotePath">
+    <div
+      class="column remote-path-column"
+      :title="node.remotePath"
+    >
       {{ node.remotePath || '-' }}
     </div>
     <!-- 速度/剩余/经过 列（扫描中无数据） -->
-    <div class="column speed-column">-</div>
-    <div class="column remaining-column">-</div>
-    <div class="column elapsed-column">-</div>
+    <div class="column speed-column">
+      -
+    </div>
+    <div class="column remaining-column">
+      -
+    </div>
+    <div class="column elapsed-column">
+      -
+    </div>
   </div>
 </template>
 

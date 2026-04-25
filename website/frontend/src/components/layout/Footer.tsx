@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { Terminal, GitBranch, Heart } from "lucide-react"
+import { Terminal, Heart } from "lucide-react"
 
 /* 页脚组件 */
 export function Footer() {

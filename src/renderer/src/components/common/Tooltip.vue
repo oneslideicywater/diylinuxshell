@@ -10,7 +10,7 @@
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
   >
-    <slot></slot>
+    <slot />
     <Teleport to="body">
       <transition name="tooltip-fade">
         <div 

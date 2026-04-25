@@ -5,12 +5,27 @@
  */
 
 <template>
-  <div v-if="props.sftpWindowVisible" class="sftp-overlay" :class="{ 'embedded-mode': props.embedded }" @click="handleOverlayClick">
-    <div class="sftp-window" :class="{ 'is-maximized': isMaximized, 'embedded-mode': props.embedded }" @click.stop>
+  <div
+    v-if="props.sftpWindowVisible"
+    class="sftp-overlay"
+    :class="{ 'embedded-mode': props.embedded }"
+    @click="handleOverlayClick"
+  >
+    <div
+      class="sftp-window"
+      :class="{ 'is-maximized': isMaximized, 'embedded-mode': props.embedded }"
+      @click.stop
+    >
       <!-- 窗口头部 -->
       <div class="sftp-header">
         <div class="header-left">
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" class="header-icon">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 20 20"
+            fill="none"
+            class="header-icon"
+          >
             <path
               d="M18 16C18 17.1046 17.1046 18 16 18H4C2.89543 18 2 17.1046 2 16V4C2 2.89543 2.89543 2 4 2H8L10 5H16C17.1046 5 18 5.89543 18 7V16Z"
               stroke="currentColor"
@@ -21,24 +36,76 @@
           </svg>
           <div class="header-title">
             <h3>SFTP 文件传输</h3>
-            <p class="header-subtitle">{{ currentSession?.name }} - {{ currentSession?.host }}:{{ currentSession?.port }}</p>
+            <p class="header-subtitle">
+              {{ currentSession?.name }} - {{ currentSession?.host }}:{{ currentSession?.port }}
+            </p>
           </div>
         </div>
         <div class="header-actions">
-          <button class="header-btn" @click="refresh" title="刷新">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M14 8a6 6 0 11-1.17-3.54" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              <path d="M14 2v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <button
+            class="header-btn"
+            title="刷新"
+            @click="refresh"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+            >
+              <path
+                d="M14 8a6 6 0 11-1.17-3.54"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
+              <path
+                d="M14 2v4h-4"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+              />
             </svg>
           </button>
-          <button class="header-btn" @click="toggleMaximize" title="最大化/还原">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="1.5"/>
+          <button
+            class="header-btn"
+            title="最大化/还原"
+            @click="toggleMaximize"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+            >
+              <rect
+                x="2"
+                y="2"
+                width="12"
+                height="12"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
             </svg>
           </button>
-          <button class="header-btn close" @click.stop="close" title="关闭">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="pointer-events: none;">
-              <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <button
+            class="header-btn close"
+            title="关闭"
+            @click.stop="close"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              style="pointer-events: none;"
+            >
+              <path
+                d="M12 4L4 12M4 4L12 12"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
             </svg>
           </button>
         </div>
@@ -47,20 +114,37 @@
       <!-- 主内容区：双栏布局 -->
       <div class="sftp-body">
         <!-- 新建文件夹输入对话框 -->
-        <div v-if="showNewFolderDialog" class="dialog-overlay" @click="cancelNewFolder">
-          <div class="dialog-box" @click.stop>
+        <div
+          v-if="showNewFolderDialog"
+          class="dialog-overlay"
+          @click="cancelNewFolder"
+        >
+          <div
+            class="dialog-box"
+            @click.stop
+          >
             <h4>新建文件夹</h4>
             <input
               v-model="newFolderName"
               type="text"
               class="dialog-input"
               placeholder="请输入文件夹名称"
-              @keyup.enter="confirmNewFolder"
               autofocus
-            />
+              @keyup.enter="confirmNewFolder"
+            >
             <div class="dialog-buttons">
-              <button class="dialog-btn cancel" @click="cancelNewFolder">取消</button>
-              <button class="dialog-btn confirm" @click="confirmNewFolder">确定</button>
+              <button
+                class="dialog-btn cancel"
+                @click="cancelNewFolder"
+              >
+                取消
+              </button>
+              <button
+                class="dialog-btn confirm"
+                @click="confirmNewFolder"
+              >
+                确定
+              </button>
             </div>
           </div>
         </div>
@@ -86,7 +170,6 @@
           @download-batch="handleDownloadBatch"
           @create-folder="confirmNewFolder"
           @delete-batch="handleDeleteRemoteBatch"
-          
         />
       </div>
 

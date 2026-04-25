@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { Download, Monitor, Apple, Cpu, CheckCircle2, ExternalLink } from "lucide-react"
+import { Monitor, Apple, Cpu, CheckCircle2, ExternalLink } from "lucide-react"
 
 export const metadata: Metadata = {
   title: "下载安装",

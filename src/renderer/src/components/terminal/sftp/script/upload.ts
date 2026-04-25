@@ -530,7 +530,7 @@ export async function uploadBatch(
           continue
         }
         
-        let isDirectory = entry.isDirectory
+        const isDirectory = entry.isDirectory
         
         if (isDirectory) {
           console.log(`[upload] 创建文件夹上传任务: ${filePath}`)

@@ -5,7 +5,10 @@
  */
 
 <template>
-  <div class="sftp-footer-container" ref="containerRef">
+  <div
+    ref="containerRef"
+    class="sftp-footer-container"
+  >
     <!-- 简化状态栏 -->
     <div class="sftp-footer">
       <div class="footer-item">
@@ -19,27 +22,81 @@
     </div>
 
     <!-- 树形传输详情 -->
-    <div class="tree-panel" :style="{ height: treePanelHeight + 'px' }">
+    <div
+      class="tree-panel"
+      :style="{ height: treePanelHeight + 'px' }"
+    >
       <!-- 拖拽手柄 -->
-      <div class="resize-handle" @mousedown="startResize">
-        <svg width="16" height="4" viewBox="0 0 16 4" fill="none">
-          <circle cx="3" cy="2" r="1.5" fill="currentColor"/>
-          <circle cx="8" cy="2" r="1.5" fill="currentColor"/>
-          <circle cx="13" cy="2" r="1.5" fill="currentColor"/>
+      <div
+        class="resize-handle"
+        @mousedown="startResize"
+      >
+        <svg
+          width="16"
+          height="4"
+          viewBox="0 0 16 4"
+          fill="none"
+        >
+          <circle
+            cx="3"
+            cy="2"
+            r="1.5"
+            fill="currentColor"
+          />
+          <circle
+            cx="8"
+            cy="2"
+            r="1.5"
+            fill="currentColor"
+          />
+          <circle
+            cx="13"
+            cy="2"
+            r="1.5"
+            fill="currentColor"
+          />
         </svg>
       </div>
 
       <!-- 工具栏：全部展开/全部折叠/状态筛选按钮 -->
       <div class="tree-toolbar">
-        <button class="toolbar-btn" @click="expandAllNodes" title="全部展开">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M10.5 5.25L7 8.75L3.5 5.25" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <button
+          class="toolbar-btn"
+          title="全部展开"
+          @click="expandAllNodes"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+          >
+            <path
+              d="M10.5 5.25L7 8.75L3.5 5.25"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
           </svg>
           <span>全部展开</span>
         </button>
-        <button class="toolbar-btn" @click="collapseAllNodes" title="全部折叠">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M5.25 3.5L8.75 7L5.25 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <button
+          class="toolbar-btn"
+          title="全部折叠"
+          @click="collapseAllNodes"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+          >
+            <path
+              d="M5.25 3.5L8.75 7L5.25 10.5"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
           </svg>
           <span>全部折叠</span>
         </button>
@@ -47,34 +104,74 @@
         <!-- 取消选中任务按钮 -->
         <button 
           class="toolbar-btn cancel-btn" 
-          @click="handleCancelSelectedTasks"
           :disabled="!hasSelectedCancellableTasks"
           title="取消选中的任务"
+          @click="handleCancelSelectedTasks"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+            fill="none"
+          >
+            <path
+              d="M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+            />
           </svg>
           <span>取消选中</span>
         </button>
         
         <!-- 状态筛选下拉菜单 -->
-        <div class="filter-dropdown" ref="filterDropdownRef">
+        <div
+          ref="filterDropdownRef"
+          class="filter-dropdown"
+        >
           <button 
             class="toolbar-btn filter-btn" 
-            @click="toggleFilterDropdown"
             title="状态筛选"
+            @click="toggleFilterDropdown"
           >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M1 2h12l-4.5 6v4l-3 1.5V8L1 2z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 14 14"
+              fill="none"
+            >
+              <path
+                d="M1 2h12l-4.5 6v4l-3 1.5V8L1 2z"
+                stroke="currentColor"
+                stroke-width="1.2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
             <span>{{ currentFilterLabel }}</span>
-            <svg width="10" height="6" viewBox="0 0 10 6" class="dropdown-arrow" :class="{ 'is-open': showFilterDropdown }">
-              <path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <svg
+              width="10"
+              height="6"
+              viewBox="0 0 10 6"
+              class="dropdown-arrow"
+              :class="{ 'is-open': showFilterDropdown }"
+            >
+              <path
+                d="M1 1l4 4 4-4"
+                stroke="currentColor"
+                stroke-width="1.2"
+                fill="none"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
             </svg>
           </button>
           
           <!-- 下拉菜单内容：显示全部6种状态 -->
-          <div v-show="showFilterDropdown" class="dropdown-menu">
+          <div
+            v-show="showFilterDropdown"
+            class="dropdown-menu"
+          >
             <!-- 待开始（排第一） -->
             <div 
               class="dropdown-item"
@@ -135,13 +232,25 @@
         </div>
 
         <!-- 隐藏空闲节点滑动开关（仅传输中状态时有效，error 节点始终显示） -->
-        <div class="toggle-switch-wrapper" :title="hideIdleNodes ? '显示全部节点' : '隐藏空闲节点'">
-          <span class="toggle-label" :class="{ 'is-muted': hideIdleNodes }">全部</span>
+        <div
+          class="toggle-switch-wrapper"
+          :title="hideIdleNodes ? '显示全部节点' : '隐藏空闲节点'"
+        >
+          <span
+            class="toggle-label"
+            :class="{ 'is-muted': hideIdleNodes }"
+          >全部</span>
           <label class="toggle-switch">
-            <input type="checkbox" v-model="hideIdleNodes" />
-            <span class="toggle-slider"></span>
+            <input
+              v-model="hideIdleNodes"
+              type="checkbox"
+            >
+            <span class="toggle-slider" />
           </label>
-          <span class="toggle-label" :class="{ 'is-active': hideIdleNodes }">进行中</span>
+          <span
+            class="toggle-label"
+            :class="{ 'is-active': hideIdleNodes }"
+          >进行中</span>
         </div>
       </div>
       
@@ -157,7 +266,10 @@
         />
         
         <!-- 空状态提示（根据当前过滤器显示不同的提示信息） -->
-        <div v-if="filteredTasks.length === 0" class="empty-state">
+        <div
+          v-if="filteredTasks.length === 0"
+          class="empty-state"
+        >
           <span class="empty-icon">{{ emptyStateIcon }}</span>
           <span class="empty-text">
             {{ emptyStateText }}

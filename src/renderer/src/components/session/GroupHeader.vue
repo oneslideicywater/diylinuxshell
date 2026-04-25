@@ -7,14 +7,17 @@
  */
 
 <template>
-  <div class="group-header-wrapper" ref="headerWrapperRef">
+  <div
+    ref="headerWrapperRef"
+    class="group-header-wrapper"
+  >
     <!-- 分组头部 -->
     <div
       class="group-header"
       :class="{ 'depth-limit-reached': !canCreateSubGroup }"
+      :title="tooltip"
       @click="$emit('toggle')"
       @contextmenu.prevent.stop="handleContextMenu($event)"
-      :title="tooltip"
     >
       <!-- 展开箭头图标 -->
       <svg
@@ -24,7 +27,12 @@
         height="12"
         viewBox="0 0 12 12"
       >
-        <path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="2" fill="none" />
+        <path
+          d="M4 2l4 4-4 4"
+          stroke="currentColor"
+          stroke-width="2"
+          fill="none"
+        />
       </svg>
 
       <!-- 分组图标 -->

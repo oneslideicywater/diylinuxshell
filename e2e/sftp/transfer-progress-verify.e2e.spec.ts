@@ -27,7 +27,8 @@ const TEST_SESSION = {
 
 // 测试目录（D盘，Windows 反斜杠路径）
 const TEST_LOCAL_DIR = 'D:\\e2e-transfer-test'
-const TEST_REMOTE_BASE = '/tmp/e2e-transfer-test'
+// 远程测试基础路径（保留供后续测试使用）
+const _TEST_REMOTE_BASE = '/tmp/e2e-transfer-test'
 
 // 控制台日志收集器
 interface LogEntry {

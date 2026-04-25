@@ -52,8 +52,8 @@ describe('会话表单模态行为', () => {
     console.log('✓ 表单仍然可见')
 
     // 验证闪烁效果（通过检查 shaking class）
-    // 注意：由于动画很快，我们可能需要快速检查
-    const isShaking = await sessionForm.evaluate((el) => {
+    // 注意：由于动画很快，我们只触发检查，不保存结果
+    await sessionForm.evaluate((el) => {
       return el.classList.contains('shaking')
     })
     

@@ -5,34 +5,87 @@
  */
 
 <template>
-  <div v-if="visible" class="error-dialog-overlay" @click.self="handleClose">
+  <div
+    v-if="visible"
+    class="error-dialog-overlay"
+    @click.self="handleClose"
+  >
     <div class="error-dialog">
       <div class="dialog-header">
         <h3>连接失败</h3>
-        <button class="close-btn" @click="handleClose">
-          <svg width="14" height="14" viewBox="0 0 14 14">
-            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        <button
+          class="close-btn"
+          @click="handleClose"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 14 14"
+          >
+            <path
+              d="M1 1l12 12M13 1L1 13"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+            />
           </svg>
         </button>
       </div>
 
       <div class="dialog-body">
         <div class="error-icon">
-          <svg width="48" height="48" viewBox="0 0 48 48">
-            <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="3" fill="none" />
-            <path d="M24 14v16M24 34v2" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 48 48"
+          >
+            <circle
+              cx="24"
+              cy="24"
+              r="20"
+              stroke="currentColor"
+              stroke-width="3"
+              fill="none"
+            />
+            <path
+              d="M24 14v16M24 34v2"
+              stroke="currentColor"
+              stroke-width="3"
+              stroke-linecap="round"
+            />
           </svg>
         </div>
         <div class="error-message">
-          <p class="error-title">{{ title }}</p>
-          <p class="error-detail">{{ message }}</p>
+          <p class="error-title">
+            {{ title }}
+          </p>
+          <p class="error-detail">
+            {{ message }}
+          </p>
         </div>
       </div>
 
       <div class="dialog-footer">
-        <button class="btn cancel" @click="handleClose">关闭</button>
-        <button v-if="showRetry" class="btn retry" @click="handleRetry">重新输入密码</button>
-        <button v-if="showEdit" class="btn edit" @click="handleEdit">编辑会话</button>
+        <button
+          class="btn cancel"
+          @click="handleClose"
+        >
+          关闭
+        </button>
+        <button
+          v-if="showRetry"
+          class="btn retry"
+          @click="handleRetry"
+        >
+          重新输入密码
+        </button>
+        <button
+          v-if="showEdit"
+          class="btn edit"
+          @click="handleEdit"
+        >
+          编辑会话
+        </button>
       </div>
     </div>
   </div>
