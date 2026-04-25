@@ -43,7 +43,7 @@ export function FeatureSection({ title, description, highlights, icon, align, im
         {imageSrc && !imgErrored ? (
           <Image
             src={imageSrc}
-            alt={title}
+            alt={`${title} 功能截图`}
             fill
             className="object-contain"
             sizes="(max-width: 640px) 100vw, 480px"
@@ -54,7 +54,7 @@ export function FeatureSection({ title, description, highlights, icon, align, im
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center p-8 space-y-3">
               <div className="w-14 h-14 rounded-xl bg-primary-50 flex items-center justify-center mx-auto">
-                <IconComponent className="w-7 h-7 text-primary-500" />
+                <IconComponent className="w-7 h-7 text-primary-500" aria-hidden="true" />
               </div>
               <p className="text-sm text-ink-tertiary font-mono">{title}</p>
               <p className="text-xs text-ink-tertiary/60">产品截图区域</p>
@@ -75,7 +75,7 @@ export function FeatureSection({ title, description, highlights, icon, align, im
     >
       <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full
                   bg-primary-50 text-primary-600 text-xs font-semibold mb-4">
-        <IconComponent className="w-3.5 h-3.5" />
+        <IconComponent className="w-3.5 h-3.5" aria-hidden="true" />
         {title.split(" ")[0]}
       </div>
 
@@ -83,10 +83,11 @@ export function FeatureSection({ title, description, highlights, icon, align, im
 
       <p className="text-ink-secondary leading-relaxed mb-6">{description}</p>
 
-      <ul className="space-y-2.5">
+      <ul className="space-y-2.5" role="list">
         {highlights.map((item) => (
           <li key={item} className="flex items-start gap-2.5 text-sm text-ink-secondary">
-            <span className="mt-1 w-1.5 h-1.5 rounded-full bg-success-500 flex-shrink-0" />
+            <span className="mt-1 w-1.5 h-1.5 rounded-full bg-success-500 flex-shrink-0"
+                  aria-hidden="true" />
             {item}
           </li>
         ))}
@@ -96,7 +97,9 @@ export function FeatureSection({ title, description, highlights, icon, align, im
 
   return (
     <div className={`flex flex-col ${align === "left" ? "lg:flex-row" : "lg:flex-row-reverse"}
-                        items-center gap-12 lg:gap-16`}>
+                        items-center gap-12 lg:gap-16`}
+         role="region"
+         aria-label={`功能介绍：${title}`}>
       {imageBlock}
       {textBlock}
     </div>

@@ -56,7 +56,7 @@ const itemVariants = {
 /* Bento Grid 功能亮点区域 */
 export function FeatureCards() {
   return (
-    <section className="py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <section className="light-content py-24 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -70,25 +70,28 @@ export function FeatureCards() {
             variants={itemVariants}
             className={`group relative p-6 rounded-xl bg-surface border border-border-default
                         shadow-card hover:shadow-card-hover hover:-translate-y-1
-                        transition-all duration-200 cursor-pointer ${feature.borderColor}`}
+                        focus-within:ring-2 focus-within:ring-primary-400
+                        cursor-pointer ${feature.borderColor}`}
+            role="article"
+            aria-label={`功能：${feature.title}`}
           >
             {/* 图标背景光晕 */}
             <div
               className={`absolute inset-0 rounded-xl bg-gradient-to-br ${feature.color} opacity-0
                           group-hover:opacity-100 transition-opacity duration-300`}
+              aria-hidden="true"
             />
 
             {/* 内容 */}
             <div className="relative z-10">
               <div
                 className={`w-11 h-11 rounded-lg flex items-center justify-center mb-4
-                            bg-surface-subtle group-hover:bg-surface transition-colors duration-200`}
+                            bg-surface-subtle group-hover:bg-surface`}
               >
-                <feature.icon className={`w-5 h-5 ${feature.iconColor}`} />
+                <feature.icon className={`w-5 h-5 ${feature.iconColor}`} aria-hidden="true" />
               </div>
 
-              <h3 className="font-semibold text-base text-ink dark:text-[#E2E8F0] mb-2 group-hover:text-primary-600
-                          transition-colors duration-200">
+              <h3 className="font-semibold text-base text-ink mb-2 group-hover:text-primary-600">
                 {feature.title}
               </h3>
 
@@ -111,10 +114,12 @@ export function FeatureCards() {
         <Link
           href="/features"
           className="inline-flex items-center gap-1.5 text-sm font-medium text-primary-500
-                     hover:text-primary-600 transition-colors duration-200 cursor-pointer group"
+                     hover:text-primary-600 focus-visible:underline focus-visible:outline-2
+                     focus-visible:outline-offset-2 cursor-pointer group"
+          aria-label="了解全部功能详情"
         >
           了解全部功能详情
-          <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
+          <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5" aria-hidden="true" />
         </Link>
       </motion.div>
     </section>

@@ -20,6 +20,10 @@ export const metadata: Metadata = {
     siteName: "DIY-Linux-Shell",
     images: ["/images/og-image.png"],
   },
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B0E14" },
+  ],
 }
 
 /* 根布局 - 包含字体、主题、Header、Footer */

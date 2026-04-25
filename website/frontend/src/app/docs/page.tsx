@@ -45,7 +45,7 @@ const docLinks = [
 /* 文档导航页面 */
 export default function DocsPage() {
   return (
-    <div className="pt-24 pb-20 min-h-screen">
+    <div className="light-content pt-24 pb-20 min-h-screen">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 标题 */}
         <div className="text-center mb-16">

@@ -55,19 +55,22 @@ export function TechStack() {
             whileHover={{ scale: 1.05, y: -2 }}
             className="group relative px-6 py-3 rounded-xl bg-surface border border-border-default
                         shadow-card hover:shadow-card-hover hover:border-primary-200
-                        transition-all duration-200 cursor-pointer"
+                        focus-within:ring-2 focus-within:ring-primary-400
+                        cursor-pointer"
+            role="listitem"
+            aria-label={`技术：${tech.name} - ${tech.description}`}
           >
             {/* 悬停光效 */}
             <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-primary-500/5 to-transparent
-                        opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                        opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                        aria-hidden="true" />
 
             <div className="relative z-10">
-              <span className="font-mono font-semibold text-sm text-ink group-hover:text-primary-600
-                           transition-colors duration-200">
+              <span className="font-mono font-semibold text-sm text-ink group-hover:text-primary-600">
                 {tech.name}
               </span>
               <span className="hidden sm:inline-block ml-2 text-xs text-ink-tertiary
-                               group-hover:text-ink-secondary transition-colors duration-200">
+                               group-hover:text-ink-secondary">
                 {tech.description}
               </span>
             </div>

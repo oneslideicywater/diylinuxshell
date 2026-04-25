@@ -23,18 +23,18 @@
   --color-success-600: #16A34A;
 
   /* 文字 — 浅色主题 */
-  --color-ink: #1D2129;
-  --color-ink-secondary: #4E5969;
-  --color-ink-tertiary: #86909C;
+  --color-ink: #0F172A;
+  --color-ink-secondary: #334155;
+  --color-ink-tertiary: #64748B;
 
   /* 背景 — 浅色主题 */
   --color-surface: #FFFFFF;
-  --color-surface-subtle: #F7F8FA;
-  --color-surface-muted: #F0F0F0;
+  --color-surface-subtle: #F8FAFC;
+  --color-surface-muted: #F1F5F9;
 
   /* 边框 */
-  --color-border-default: #E5E7EB;
-  --color-border-strong: #C9CDD4;
+  --color-border-default: #E2E8F0;
+  --color-border-strong: #CBD5E1;
 
   /* 圆角 */
   --radius-default: 8px;
@@ -50,6 +50,7 @@
 
 html {
   scroll-behavior: smooth;
+  color-scheme: light dark;
 }
 
 body {
@@ -60,6 +61,24 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 标题文字平衡换行 */
+h1, h2, h3, h4, h5, h6 {
+  text-wrap: balance;
+}
+
+/* ==================== 动画偏好设置 ==================== */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ==================== 暗色主题 ====================
    策略：用纯 CSS 选择器覆盖文字颜色（Tailwind v4 dark: 变体不稳定）
    背景和边框仍通过 CSS 变量控制
@@ -67,12 +86,12 @@ body {
 .dark {
   /* 背景 — 深邃纯黑底 */
   --color-surface: #0B0E14;
-  --color-surface-subtle: #141820;
-  --color-surface-muted: #11141C;
+  --color-surface-subtle: #111827;
+  --color-surface-muted: #0F172A;
 
   /* 边框 */
-  --color-border-default: #1E2433;
-  --color-border-strong: #2D3548;
+  --color-border-default: #1E293B;
+  --color-border-strong: #334155;
 
   /* 阴影 */
   --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
@@ -81,48 +100,73 @@ body {
   /* 渲染优化 */
   -webkit-font-smoothing: subpixel-antialiased;
   text-rendering: optimizeLegibility;
+
+  color-scheme: dark;
 }
 
-/* ===== 暗色模式文字颜色 — 直接选择器覆盖 ===== */
+/* ===== 暗色模式文字颜色 — 直接选择器 ===== */
 
-/* Hero 主标题 h1 */
-.dark h1 {
-  color: #F8FAFC !important;
+/* 所有标题文字 - 提高亮度至纯白（CTA 浅色区域除外）*/
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6:not(.cta-light-text) {
+  color: #FFFFFF !important;
 }
 
-/* Hero 副标题（h1 内的 span） */
-.dark h1 span:nth-of-type(2) {
+/* CTA 区域 - 强制浅色主题文字（优先级高于上面的规则）*/
+.dark .cta-light-section h2,
+.dark .cta-light-section p,
+.dark .cta-light-section span {
+  color: inherit !important;
+}
+
+.cta-light-text {
+  color: #0f172a !important;
+}
+
+/* 浅色内容区域 - 白底卡片/组件在暗色模式下保持深色文字 */
+.dark .light-content h1,
+.dark .light-content h2,
+.dark .light-content h3,
+.dark .light-content h4,
+.dark .light-content h5,
+.dark .light-content h6,
+.dark .light-content p,
+.dark .light-content li,
+.dark .light-content span {
+  color: inherit !important;
+}
+
+/* 所有段落和正文文字 - 使用更亮的灰蓝色 */
+.dark p,
+.dark li,
+.dark span:not([class*="text-"]):not([class*="bg-"]) {
   color: #E2E8F0 !important;
 }
 
-/* Hero 描述段落（包含 Electron 的 p） */
-.dark p:has(.font-mono.font-semibold) {
+/* 次要文字（使用 text-ink-secondary 类）- 提高亮度 */
+.dark .text-ink-secondary {
   color: #CBD5E1 !important;
 }
 
-/* Tech Stack / CTA 大标题 h2 */
-.dark h2 {
-  color: #F8FAFC !important;
-}
-
-/* CTA / Tech Stack 描述段落 */
-.dark section p:not(:has(.font-mono)) {
-  color: #CBD5E1 !important;
-}
-
-/* 功能卡片标题 h3 */
-.dark h3 {
-  color: #E2E8F0 !important;
-}
-
-/* 功能卡片描述文字 */
-.dark h3 + p {
+/* 三级文字（使用 text-ink-tertiary 类）- 确保可读性 */
+.dark .text-ink-tertiary {
   color: #94A3B8 !important;
 }
 
-/* 终端预览区域内的文字 */
-.dark .font-mono.text-sm {
-  color: #CBD5E1 !important;
+/* 代码/等宽字体文字 - 高亮显示 */
+.dark .font-mono,
+.dark code,
+.dark pre {
+  color: #F1F5F9 !important;
+}
+
+/* 链接文字 */
+.dark a:not([class*="bg-"]):not([class*="text-white"]) {
+  color: #60A5FA !important;
 }
 
 /* 选中文本 */
@@ -131,8 +175,16 @@ body {
   color: white;
 }
 
-/* 焦点环 */
+/* 焦点环 - 增强可访问性 */
 *:focus-visible {
   outline: 2px solid var(--color-primary-500);
   outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* 交互元素统一过渡 - 避免使用 transition: all */
+a, button, [role="button"] {
+  transition: color 0.2s ease, background-color 0.2s ease,
+              border-color 0.2s ease, box-shadow 0.2s ease,
+              transform 0.2s ease;
 }

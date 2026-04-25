@@ -10,11 +10,11 @@ export function HeroSection() {
     <section className="relative min-h-[90vh] flex items-center justify-center overflow-hidden">
       {/* 背景装饰 */}
       <div className="absolute inset-0 -z-10">
-        {/* 渐变光晕 */}
-        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full
-                      bg-primary-100/40 blur-[120px]" />
-        <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] rounded-full
-                      bg-success-400/10 blur-[100px]" />
+        {/* 渐变光晕 - 适度透明度保持视觉层次 */}
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] rounded-full
+                      bg-primary-100/25 blur-[100px]" />
+        <div className="absolute bottom-0 right-1/4 w-[350px] h-[350px] rounded-full
+                      bg-success-400/10 blur-[80px]" />
 
         {/* 网格图案 */}
         <div
@@ -37,11 +37,12 @@ export function HeroSection() {
         >
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full
                        bg-primary-50 text-primary-600 text-xs font-medium border border-primary-200/50">
-            <Sparkles className="w-3 h-3" />
+            <Sparkles className="w-3 h-3" aria-hidden="true" />
             Apache 2.0 开源
           </span>
           <span className="inline-flex items-center px-3 py-1 rounded-full
-                       bg-surface-subtle text-ink-tertiary text-xs font-mono border border-border-default">
+                       bg-surface-subtle text-xs font-mono border border-border-default"
+                       style={{ color: '#475569 !important' }}>
             Electron 29 · Vue 3.4 · TS 5.3
           </span>
         </motion.div>
@@ -71,7 +72,7 @@ export function HeroSection() {
           为开发者和运维人员打造的<span className="font-semibold text-primary-500">高效远程服务器管理</span>方案。
         </motion.p>
 
-        {/* CTA 按钮组 */}
+        {/* CTA 按钮组 - 统一过渡效果 */}
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -83,11 +84,13 @@ export function HeroSection() {
             className="group inline-flex items-center gap-2 px-8 py-3.5 rounded-xl
                        bg-primary-500 text-white font-semibold text-base
                        hover:bg-primary-600 hover:-translate-y-0.5 hover:shadow-card-hover
-                       transition-all duration-200 cursor-pointer"
+                       focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2
+                       cursor-pointer"
+            aria-label="免费下载 DIY-Linux-Shell"
           >
-            <Download className="w-5 h-5" />
+            <Download className="w-5 h-5" aria-hidden="true" />
             免费下载
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform duration-200" />
+            <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5" aria-hidden="true" />
           </Link>
 
           <a
@@ -97,10 +100,12 @@ export function HeroSection() {
             className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl
                        bg-surface text-ink font-semibold text-base
                        border border-border-default
-                       hover:border-primary-300 hover:text-primary-600 hover:-translate-y-0.5
-                       transition-all duration-200 cursor-pointer"
+                       hover:border-primary-400 hover:text-primary-600 hover:-translate-y-0.5
+                       focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2
+                       cursor-pointer"
+            aria-label="访问 Gitee 仓库"
           >
-            <GitBranch className="w-5 h-5" />
+            <GitBranch className="w-5 h-5" aria-hidden="true" />
             Gitee
           </a>
 
@@ -111,10 +116,12 @@ export function HeroSection() {
             className="inline-flex items-center gap-2 px-6 py-3.5 rounded-xl
                        bg-surface text-ink font-semibold text-base
                        border border-border-default
-                       hover:border-primary-300 hover:text-primary-600 hover:-translate-y-0.5
-                       transition-all duration-200 cursor-pointer"
+                       hover:border-primary-400 hover:text-primary-600 hover:-translate-y-0.5
+                       focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2
+                       cursor-pointer"
+            aria-label="访问 GitHub 仓库"
           >
-            <GitBranch className="w-5 h-5" />
+            <GitBranch className="w-5 h-5" aria-hidden="true" />
             GitHub
           </a>
         </motion.div>
@@ -130,9 +137,9 @@ export function HeroSection() {
                       bg-surface-subtle">
             {/* 终端标题栏 */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border-default bg-surface-subtle">
-              <div className="w-3 h-3 rounded-full bg-red-400" />
-              <div className="w-3 h-3 rounded-full bg-yellow-400" />
-              <div className="w-3 h-3 rounded-full bg-green-400" />
+              <div className="w-3 h-3 rounded-full bg-red-400" aria-hidden="true" />
+              <div className="w-3 h-3 rounded-full bg-yellow-400" aria-hidden="true" />
+              <div className="w-3 h-3 rounded-full bg-green-400" aria-hidden="true" />
               <span className="ml-2 text-xs text-ink-tertiary font-mono">terminal</span>
             </div>
             {/* 命令内容 — 对齐 README 克隆步骤 */}
@@ -159,7 +166,7 @@ export function HeroSection() {
           transition={{ duration: 0.6, delay: 0.7 }}
           className="mt-6 text-xs text-success-500 font-medium"
         >
-          ✅ 目前已通过全部基础测试，各平台安装包相继上传中...
+          ✅ 目前已通过全部基础测试，各平台安装包相继上传中…
         </motion.p>
       </div>
     </section>
