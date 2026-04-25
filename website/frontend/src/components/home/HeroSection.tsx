@@ -51,11 +51,11 @@ export function HeroSection() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-tight"
+          className="text-4xl sm:text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-tight dark:text-dark-ink"
         >
           <span className="font-mono">DIY-Linux-Shell</span>
           <br />
-          <span className="text-ink/80">现代化的 SSH 终端管理工具</span>
+          <span className="text-ink-secondary dark:text-dark-ink-secondary">现代化的 SSH 终端管理工具</span>
         </motion.h1>
 
         {/* 副标题描述 — 对齐 README 产品简介 */}
@@ -63,7 +63,7 @@ export function HeroSection() {
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
-          className="text-lg sm:text-xl text-ink-secondary max-w-2xl mx-auto mb-10 leading-relaxed"
+          className="text-lg sm:text-xl text-ink-secondary dark:text-dark-ink-secondary max-w-2xl mx-auto mb-10 leading-relaxed"
         >
           基于 <span className="font-mono font-semibold text-primary-500">Electron + Vue 3 + TypeScript</span> 构建。
           多会话终端管理、SFTP 文件传输、灵活分组管理，

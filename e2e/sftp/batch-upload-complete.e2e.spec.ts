@@ -24,8 +24,6 @@ const TEST_SESSION = {
 
 // 测试目录（D盘）
 const TEST_LOCAL_DIR = 'D:/test-batch-complete'
-// 远程测试目录（保留供后续测试使用）
-const _TEST_REMOTE_DIR = '/tmp/test-batch-complete'
 
 // 日志收集
 const consoleMessages: any[] = []
@@ -346,8 +344,8 @@ test.describe('批量上传完整功能测试（Bug 修复 + 架构验证）', (
     
     // 记录初始状态
     const initialTaskCount = await getTransferTaskCount(page)
-    // 日志快照位置（调试用）
-    const _logIndexBefore = consoleMessages.length
+    // 日志快照（调试用）
+    void (consoleMessages.length)
     
     console.log(`\n[Initial State] 初始任务数: ${initialTaskCount}`)
     

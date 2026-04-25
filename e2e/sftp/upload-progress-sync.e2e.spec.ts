@@ -134,7 +134,8 @@ test.describe('SFTP 文件夹上传进度同步功能', () => {
       await expect(rootNode).toBeVisible()
 
 
-      let parentProgressDetected = false
+      // 检测父节点进度（调试用）
+      let _parentProgressDetected = false
       let childTransferringDetected = false
 
       for (let i = 0; i < 20; i++) {
@@ -149,7 +150,7 @@ test.describe('SFTP 文件夹上传进度同步功能', () => {
           const rootProgressEl = rootNode.locator('.progress-column')
           const progressText = await rootProgressEl.textContent().catch(() => null)
           if (progressText && progressText.trim() !== '' && progressText.trim() !== '-') {
-            parentProgressDetected = true
+            _parentProgressDetected = true
             console.log(`[TEST] 第${i + 1}次检查 - 父节点进度: ${progressText.trim()}`)
             break
           }
@@ -160,7 +161,7 @@ test.describe('SFTP 文件夹上传进度同步功能', () => {
           const rootProgressEl = rootNode.locator('.progress-column')
           const progressText = await rootProgressEl.textContent().catch(() => null)
           if (progressText && progressText.trim() !== '') {
-            parentProgressDetected = true
+            _parentProgressDetected = true
             console.log(`[TEST] 传输中检测到进度更新: ${progressText.trim()}`)
           }
           break

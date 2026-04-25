@@ -185,13 +185,17 @@ test.describe('第三层分组 Bug 诊断', () => {
       const sessions = await window.api.session.getAll()
       for (const s of sessions) {
         if (s.name.startsWith('DiagTest')) {
-          try { await window.api.session.delete(s.id) } catch (e) {}
+          try { await window.api.session.delete(s.id) } catch {
+            // 忽略删除失败（会话可能已被删除）
+          }
         }
       }
       const groups = await window.api.sessionGroup.getAll()
       for (const g of groups) {
         if (g.name.startsWith('DiagTest') && g.name !== '默认分组') {
-          try { await window.api.sessionGroup.delete(g.id) } catch (e) {}
+          try { await window.api.sessionGroup.delete(g.id) } catch {
+            // 忽略删除失败（分组可能已被删除）
+          }
         }
       }
     })

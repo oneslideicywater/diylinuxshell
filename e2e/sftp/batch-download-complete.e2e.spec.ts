@@ -29,8 +29,6 @@ const TEST_SESSION = {
 
 // 测试目录（D盘）
 const TEST_LOCAL_DIR = 'D:/test-batch-download'
-// 远程测试目录（保留供后续测试使用）
-const _TEST_REMOTE_DIR = '/tmp/test-batch-download'
 
 // 日志收集
 const consoleMessages: any[] = []
@@ -110,9 +108,9 @@ async function setupRemoteTestEnvironment(page: any): Promise<void> {
           try {
               const sftpOverlay = document.querySelector('.sftp-overlay')
               if (sftpOverlay && (sftpOverlay as any).__vue_app__) {
-                // 获取 Vue 应用实例（调试用）
-                const _vueApp = (sftpOverlay as any).__vue_app__
-                console.log('[Setup] 方法3: 找到 Vue 应用实例, 尝试获取组件数据...', _vueApp)
+                // 获取 Vue 应用实例（调试用，void 标记有意忽略）
+                void ((sftpOverlay as any).__vue_app__)
+                console.log('[Setup] 方法3: 找到 Vue 应用实例, 尝试获取组件数据...')
               }
             
             // 遍历所有 DOM 元素查找 Vue 组件实例
@@ -622,8 +620,8 @@ test.describe('批量下载完整功能测试（downloadBatch 架构验证）', 
     await page.waitForTimeout(500)
     
     const initialTaskCount = await getTransferTaskCount(page)
-    // 日志快照位置（调试用，标记下载开始前）
-    const _logIndexBefore = consoleMessages.length
+    // 日志快照位置（调试用，void 标记有意忽略）
+    void (consoleMessages.length)
     
     console.log(`\n[Initial State] 初始任务数: ${initialTaskCount}`)
     

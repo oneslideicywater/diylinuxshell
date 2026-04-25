@@ -263,8 +263,8 @@ test.describe('批量上传多 TransferTask 架构验证', () => {
     const selectedItemCount = await page.locator('.file-panel.local .file-item.selected').count()
     console.log(`[Select] 已选中 ${selectedItemCount} 个项目`)
 
-    // 记录日志索引（调试用）
-    const _logIndexBeforeUpload = consoleMessages.length
+    // 记录日志索引（调试用，void 标记有意忽略）
+    void (consoleMessages.length)
     
     // 触发批量上传
     await rightClickAndUpload(page)
@@ -336,7 +336,7 @@ test.describe('批量上传多 TransferTask 架构验证', () => {
     await multiSelectFiles(page, ['file-a.txt', 'folder-alpha', 'file-b.txt'])
 
     // 日志快照（调试用）
-    const _logIndexBefore = consoleMessages.length
+    void (consoleMessages.length)
 
     await rightClickAndUpload(page)
 
@@ -393,7 +393,7 @@ test.describe('批量上传多 TransferTask 架构验证', () => {
     await multiSelectFiles(page, ['file-a.txt', 'file-b.txt', 'file-c.txt'])
 
     // 日志快照（调试用）
-    const _logIndexBefore = consoleMessages.length
+    void (consoleMessages.length)
 
     await rightClickAndUpload(page)
 
@@ -439,7 +439,7 @@ test.describe('批量上传多 TransferTask 架构验证', () => {
     await multiSelectFiles(page, ['folder-alpha', 'folder-beta'])
 
     // 日志快照（调试用）
-    const _logIndexBefore = consoleMessages.length
+    void (consoleMessages.length)
 
     await rightClickAndUpload(page)
 

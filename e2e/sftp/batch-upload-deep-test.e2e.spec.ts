@@ -25,8 +25,6 @@ const TEST_SESSION = {
 
 // 测试用的本地临时目录（D盘）
 const TEST_LOCAL_DIR = 'D:/test-batch-upload-deep'
-// 远程测试基础路径（保留供后续测试使用）
-const _TEST_REMOTE_BASE = '/tmp/test-batch-deep'
 
 // 控制台消息收集
 const consoleMessages: any[] = []
@@ -289,8 +287,8 @@ test.describe('批量上传深度测试 - TransferTask 验证', () => {
     expect(selectedItems).toBeGreaterThanOrEqual(4)
     
     // 清空之前的上传日志（便于分析本次上传）
-    // 记录日志快照位置（调试用，标记上传开始前的日志索引）
-    const _logIndexBeforeUpload = consoleMessages.length
+    // 记录日志快照位置（调试用，void 标记有意忽略）
+    void (consoleMessages.length)
     
     // 触发批量上传
     await rightClickAndUpload(page)
@@ -373,8 +371,8 @@ test.describe('批量上传深度测试 - TransferTask 验证', () => {
     const selectedItems = await page.locator('.file-panel.local .file-item.selected').count()
     expect(selectedItems).toBeGreaterThanOrEqual(1)
     
-    // 记录日志快照位置（调试用）
-    const _logIndexBefore = consoleMessages.length
+    // 记录日志快照（调试用）
+    void (consoleMessages.length)
     
     await rightClickAndUpload(page)
     

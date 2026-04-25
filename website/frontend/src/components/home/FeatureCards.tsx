@@ -87,12 +87,12 @@ export function FeatureCards() {
                 <feature.icon className={`w-5 h-5 ${feature.iconColor}`} />
               </div>
 
-              <h3 className="font-semibold text-base text-ink mb-2 group-hover:text-primary-600
+              <h3 className="font-semibold text-base text-ink dark:text-dark-ink mb-2 group-hover:text-primary-600
                           transition-colors duration-200">
                 {feature.title}
               </h3>
 
-              <p className="text-sm text-ink-secondary leading-relaxed">
+              <p className="text-sm text-ink-secondary dark:text-dark-ink-secondary leading-relaxed">
                 {feature.description}
               </p>
             </div>

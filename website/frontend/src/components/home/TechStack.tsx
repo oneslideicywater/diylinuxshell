@@ -28,10 +28,10 @@ export function TechStack() {
         <p className="text-sm font-medium text-primary-500 font-mono uppercase tracking-wider mb-3">
           Tech Stack
         </p>
-        <h2 className="text-3xl sm:text-4xl font-bold text-ink tracking-tight">
+        <h2 className="text-3xl sm:text-4xl font-bold text-ink dark:text-dark-ink tracking-tight">
           成熟稳定的技术生态
         </h2>
-        <p className="mt-4 text-ink-secondary max-w-lg mx-auto">
+        <p className="mt-4 text-ink-secondary dark:text-dark-ink-secondary max-w-lg mx-auto">
           基于 Node.js 20+ / Electron 29 / Vue 3.4 / TypeScript 5.3 构建，
           确保性能与开发体验的平衡
         </p>

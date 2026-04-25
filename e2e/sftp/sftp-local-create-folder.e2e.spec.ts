@@ -240,7 +240,8 @@ test.describe('SFTP 本地创建文件夹功能', () => {
       await page.waitForTimeout(3000)
       
       // 手动刷新文件列表（确保显示新创建的文件夹）
-      const refreshButton = page.locator('.file-panel.local .nav-btn[title="上级目录"]').first()
+      // 尝试定位刷新按钮（调试用，void 标记有意忽略）
+      void (page.locator('.file-panel.local .nav-btn[title="上级目录"]').first())
       // 如果找不到刷新按钮，尝试重新导航到当前目录
       const pathInput = page.locator('.file-panel.local .path-input').first()
       await pathInput.fill(testBaseDir)

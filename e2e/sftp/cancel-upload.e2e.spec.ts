@@ -136,28 +136,6 @@ function cleanupTestFile(filePath: string): void {
   }
 }
 
-/**
- * 辅助函数：清理远程文件
- */
-async function cleanupRemoteFile(page: Page, fileName: string): Promise<void> {
-  try {
-    await page.evaluate(async (fileName) => {
-      try {
-        const sessions = await (window as any).api.session.getAll()
-        const session = sessions.find((s: any) => s.name === TEST_SESSION.name)
-        if (session) {
-          const sessionId = session.id || session.host
-          await (window as any).api.sftp.delete(sessionId, '/tmp/' + fileName)
-        }
-      } catch (e) {
-        console.log('清理远程文件失败:', e)
-      }
-    }, fileName)
-  } catch (e) {
-    console.log('清理远程文件失败:', e)
-  }
-}
-
 test.describe('SFTP 取消上传功能', () => {
   let app: ElectronApplication
   let page: Page

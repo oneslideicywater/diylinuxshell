@@ -27,8 +27,6 @@ const TEST_SESSION = {
 
 // 测试目录（D盘，Windows 反斜杠路径）
 const TEST_LOCAL_DIR = 'D:\\e2e-transfer-test'
-// 远程测试基础路径（保留供后续测试使用）
-const _TEST_REMOTE_BASE = '/tmp/e2e-transfer-test'
 
 // 控制台日志收集器
 interface LogEntry {
@@ -232,21 +230,6 @@ async function triggerUpload(page: Page): Promise<void> {
 }
 
 /**
- * 右键点击选中的远程文件并触发下载
- */
-async function triggerDownload(page: Page): Promise<void> {
-  const selectedItem = page.locator('.file-panel.remote .file-item.selected').first()
-  await selectedItem.click({ button: 'right', force: true })
-  await page.waitForTimeout(500)
-
-  // 点击"下载"菜单项
-  const downloadItem = page.locator('.context-menu-item', { hasText: /下载/ }).first()
-  await downloadItem.click({ force: true })
-
-  console.log('[Download] ✅ 已触发批量下载')
-}
-
-/**
  * 从收集的日志中过滤出 [upload] / [download] 前缀的日志
  */
 function filterTransferLogs(prefix: string): LogEntry[] {
@@ -389,8 +372,8 @@ test.describe('SFTP 传输进度树数据验证', () => {
       fullPage: false
     })
 
-    // 分析日志（testLogs 用于调试，保留原始切片）
-    const _testLogs = collectedLogs.slice(logStartIndex)
+    // 分析日志（testLogs 用于调试，void 标记有意忽略）
+    void (collectedLogs.slice(logStartIndex))
     const uploadLogs = filterTransferLogs('upload')
     const result = verifyProgressData(uploadLogs, 'UPLOAD')
 
@@ -504,7 +487,7 @@ test.describe('SFTP 传输进度树数据验证', () => {
     })
 
     // 分析下载日志（testLogs 用于调试）
-    const _testLogs = collectedLogs.slice(logStartIndex)
+    void (collectedLogs.slice(logStartIndex))
     const downloadLogs = filterTransferLogs('download')
     const result = verifyProgressData(downloadLogs, 'DOWNLOAD')
 
@@ -628,7 +611,7 @@ test.describe('SFTP 传输进度树数据验证', () => {
     })
 
     // 分析日志（testLogs 用于调试）
-    const _testLogs = collectedLogs.slice(logStartIndex)
+    void (collectedLogs.slice(logStartIndex))
     const uploadLogs = filterTransferLogs('upload')
     const result = verifyProgressData(uploadLogs, 'IVY2-UPLOAD')
 

@@ -2,15 +2,22 @@
 
 import { useTheme } from "next-themes"
 import { Sun, Moon } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useSyncExternalStore } from "react"
+
+/* 订阅空存储用于检测 SSR/客户端转换 */
+const emptySubscribe = () => () => {}
+function useIsMounted(): boolean {
+  return useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  )
+}
 
 /* 主题切换按钮 - 支持亮色/暗色切换 */
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme()
-  const [mounted, setMounted] = useState(false)
-
-  /* 避免 SSR 水合不匹配 */
-  useEffect(() => setMounted(true), [])
+  const mounted = useIsMounted()
 
   if (!mounted) return <div className="w-9 h-9" />
 

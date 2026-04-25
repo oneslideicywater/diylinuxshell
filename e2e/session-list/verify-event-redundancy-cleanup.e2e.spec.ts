@@ -23,7 +23,9 @@ test.describe('Dev 模式 - 验证事件冗余清理', () => {
     try {
       execSync('for /f "tokens=5" %a in (\'netstat -ano ^| findstr :5173 ^| findstr LISTENING\') do taskkill /PID %a /F', { stdio: 'pipe' })
       execSync('for /f "tokens=5" %a in (\'netstat -ano ^| findstr :5174 ^| findstr LISTENING\') do taskkill /PID %a /F', { stdio: 'pipe' })
-    } catch (e) {}
+    } catch {
+      // 忽略端口清理失败（可能没有进程占用）
+    }
 
     await new Promise(resolve => setTimeout(resolve, 1000))
 
@@ -131,7 +133,9 @@ test.describe('Dev 模式 - 验证事件冗余清理', () => {
     // 清理残留进程
     try {
       execSync('taskkill /F /IM electron.exe', { stdio: 'pipe' })
-    } catch (e) {}
+    } catch {
+      // 忽略进程清理失败（可能没有运行中的进程）
+    }
   })
 
   test('验证无 handleGroupContextMenu Vue warn', async () => {

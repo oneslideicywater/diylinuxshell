@@ -219,7 +219,8 @@ test.describe('SFTP 传输树展开/折叠功能', () => {
     
     // 验证孙子节点不可见（只展开一层）
     const grandChildren = parentElement.locator('.children .children .tree-node')
-    const grandChildrenCount = await grandChildren.count()
+    // 孙子节点数量（调试用）
+    void (grandChildren.count())
     
     // 孙子节点不应该显示（因为只展开直接子节点）
     // 注意：如果直接子节点中有文件夹，它们的子节点（孙子）应该保持折叠
@@ -303,7 +304,8 @@ test.describe('SFTP 传输树展开/折叠功能', () => {
 
     // 验证所有节点都折叠了
     const allTreeNodes = page.locator('.tree-node')
-    const nodeCount = await allTreeNodes.count()
+    // 节点总数（调试用）
+    void (allTreeNodes.count())
     
     // 验证没有展开的子节点容器
     const expandedChildren = page.locator('.children .tree-node')

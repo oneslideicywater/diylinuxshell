@@ -259,16 +259,15 @@ test.describe('SFTP 文件传输功能', () => {
     // 打开 SFTP 窗口
     await openSFTPWindow(page)
 
-    // 获取初始文件列表
-    const initialFileCount = await page.evaluate(() => {
+    // 获取初始文件列表（调试用）
+    void (await page.evaluate(() => {
       const localFiles = document.querySelectorAll('.file-panel.local .file-item').length
       const remoteFiles = document.querySelectorAll('.file-panel.remote .file-item').length
       return { local: localFiles, remote: remoteFiles }
-    })
+    }))
 
     // 点击刷新按钮
-    const refreshButton = await page.locator('.header-btn[title="刷新"]').first()
-    await refreshButton.click()
+    await (await page.locator('.header-btn[title="刷新"]').first()).click()
 
     // 等待刷新完成
     await page.waitForTimeout(2000)

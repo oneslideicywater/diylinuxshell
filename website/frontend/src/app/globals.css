@@ -1,13 +1,13 @@
 @import "tailwindcss";
 
-/* ==================== 设计 Token (浅色优先) ==================== */
+/* ==================== 设计 Token ==================== */
 
 @theme inline {
   /* 字体 */
   --font-sans: var(--font-ibm-plex-sans), system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-jetbrains-mono), Consolas, monospace;
 
-  /* 品牌主色 - 亮蓝色系 */
+  /* 品牌主色 */
   --color-primary-50: #EFF6FF;
   --color-primary-100: #DDEBFF;
   --color-primary-200: #BCD5FF;
@@ -17,17 +17,17 @@
   --color-primary-600: #2550E0;
   --color-primary-700: #163BD6;
 
-  /* CTA 绿色 - 运行成功语义 */
+  /* CTA 绿色 */
   --color-success-400: #4ADE80;
   --color-success-500: #22C55E;
   --color-success-600: #16A34A;
 
-  /* 文字层级 — 浅色主题 */
+  /* 文字 — 浅色主题 */
   --color-ink: #1D2129;
   --color-ink-secondary: #4E5969;
   --color-ink-tertiary: #86909C;
 
-  /* 背景层级 — 浅色主题 */
+  /* 背景 — 浅色主题 */
   --color-surface: #FFFFFF;
   --color-surface-subtle: #F7F8FA;
   --color-surface-muted: #F0F0F0;
@@ -41,9 +41,21 @@
   --radius-lg: 12px;
   --radius-xl: 16px;
 
-  /* 阴影 */
+  /* 阴影 — 浅色 */
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-card-hover: 0 4px 16px rgba(51, 112, 255, 0.1), 0 2px 4px rgba(0, 0, 0, 0.04);
+
+  /* ===== 暗色模式专用 Token ===== */
+  --color-dark-ink: #F8FAFC;
+  --color-dark-ink-secondary: #CBD5E1;
+  --color-dark-ink-tertiary: #94A3B8;
+  --color-dark-surface: #0B0E14;
+  --color-dark-surface-subtle: #141820;
+  --color-dark-surface-muted: #11141C;
+  --color-dark-border-default: #1E2433;
+  --color-dark-border-strong: #2D3548;
+  --shadow-dark-card: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-dark-card-hover: 0 8px 32px rgba(51, 112, 255, 0.15), 0 4px 8px rgba(0, 0, 0, 0.4);
 }
 
 /* ==================== 全局基础样式 ==================== */
@@ -60,39 +72,29 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 暗色主题覆盖 — 提升文字对比度确保可读性 */
+/* ==================== 暗色主题 — 直接覆盖背景和 body ====================
+   文字颜色通过组件级 dark:text-dark-* 控制（Tailwind v4 @theme 变量运行时覆盖不稳定）
+*/
 .dark {
-  /* 主文字：接近纯白 */
-  --color-ink: #F8FAFC;
-  /* 正文文字 — 大字号场景需足够亮，对比度 > 7:1 */
-  --color-ink-secondary: #E2E8F0;
-  /* 辅助文字 */
-  --color-ink-tertiary: #94A3B8;
+  --color-surface: #0B0E14;
+  --color-surface-subtle: #141820;
+  --color-surface-muted: #11141C;
+  --color-border-default: #1E2433;
+  --color-border-strong: #2D3548;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-card-hover: 0 8px 32px rgba(51, 112, 255, 0.15), 0 4px 8px rgba(0, 0, 0, 0.4);
 
-  /* 背景层级 — 从深到浅 */
-  --color-surface: #0F1117;
-  --color-surface-subtle: #1A1D26;
-  --color-surface-muted: #151820;
-
-  /* 边框 — 略亮以便区分 */
-  --color-border-default: #2D3342;
-  --color-border-strong: #3D4556;
-
-  /* 阴影 — 暗色模式增强 */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
-  --shadow-card-hover: 0 4px 16px rgba(51, 112, 255, 0.15), 0 2px 4px rgba(0, 0, 0, 0.3);
-
-  /* 暗色模式下文字微调抗锯齿 */
   -webkit-font-smoothing: subpixel-antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* 选中文本颜色 */
+/* 选中文本 */
 ::selection {
   background-color: var(--color-primary-500);
   color: white;
 }
 
-/* 焦点环样式 */
+/* 焦点环 */
 *:focus-visible {
   outline: 2px solid var(--color-primary-500);
   outline-offset: 2px;
