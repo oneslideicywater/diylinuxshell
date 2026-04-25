@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+/* ==================== 设计 Token (浅色优先) ==================== */
+
+@theme inline {
+  /* 字体 */
+  --font-sans: var(--font-ibm-plex-sans), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), Consolas, monospace;
+
+  /* 品牌主色 - 亮蓝色系 */
+  --color-primary-50: #EFF6FF;
+  --color-primary-100: #DDEBFF;
+  --color-primary-200: #BCD5FF;
+  --color-primary-300: #8EB3FF;
+  --color-primary-400: #5E8FFF;
+  --color-primary-500: #3370FF;
+  --color-primary-600: #2550E0;
+  --color-primary-700: #163BD6;
+
+  /* CTA 绿色 - 运行成功语义 */
+  --color-success-400: #4ADE80;
+  --color-success-500: #22C55E;
+  --color-success-600: #16A34A;
+
+  /* 文字层级 */
+  --color-ink: #1D2129;
+  --color-ink-secondary: #4E5969;
+  --color-ink-tertiary: #86909C;
+
+  /* 背景层级 */
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #F7F8FA;
+  --color-surface-muted: #F0F0F0;
+
+  /* 边框 */
+  --color-border-default: #E5E7EB;
+  --color-border-strong: #C9CDD4;
+
+  /* 圆角 */
+  --radius-default: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* 阴影 */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-card-hover: 0 4px 16px rgba(51, 112, 255, 0.1), 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* ==================== 全局基础样式 ==================== */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 暗色主题覆盖 */
+.dark {
+  --color-ink: #F8FAFC;
+  --color-ink-secondary: #94A3B8;
+  --color-ink-tertiary: #64748B;
+  --color-surface: #0E1014;
+  --color-surface-subtle: #1D2129;
+  --color-surface-muted: #161A1E;
+  --color-border-default: #334155;
+  --color-border-strong: #475569;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
+  --shadow-card-hover: 0 4px 16px rgba(51, 112, 255, 0.15), 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* 选中文本颜色 */
+::selection {
+  background-color: var(--color-primary-500);
+  color: white;
+}
+
+/* 焦点环样式 */
+*:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}

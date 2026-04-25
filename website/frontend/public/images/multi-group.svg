@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#FAFAFA"/>
+  <rect x="0" y="0" width="240" height="900" fill="#F7F8FA" stroke-right="#E5E7EB" stroke-width="1"/>
+  <rect x="10" y="15" width="130" height="24" rx="4" fill="#3370FF" opacity="0.9"/>
+  <text x="75" y="32" fill="white" font-size="12" font-family="system-ui" text-anchor="middle" font-weight="600">DIY-Linux-Shell</text>
+  <g transform="translate(12,55)">
+    <rect width="216" height="26" rx="4" fill="#EFF6FF" stroke="#BCD5FF" stroke-width="1"/>
+    <text x="10" y="18" fill="#3370FF" font-size="10" font-family="system-ui" font-weight="500">📁 默认分组</text>
+  </g>
+  <g transform="translate(16,90)">
+    <rect width="208" height="26" rx="4" fill="#F0F0F0"/>
+    <text x="10" y="18" fill="#4E5969" font-size="10" font-family="system-ui">📁 生产环境</text>
+  </g>
+  <g transform="translate(24,122)">
+    <rect width="195" height="26" rx="4" fill="white" stroke="#E5E7EB"/>
+    <text x="10" y="18" fill="#1D2129" font-size="10" font-family="system-ui">🖥 web-server-01</text>
+  </g>
+  <g transform="translate(24,154)">
+    <rect width="195" height="26" rx="4" fill="white" stroke="#E5E7EB"/>
+    <text x="10" y="18" fill="#1D2129" font-size="10" font-family="system-ui">🖥 db-server-01</text>
+  </g>
+  <g transform="translate(16,190)">
+    <rect width="208" height="26" rx="4" fill="#F0F0F0"/>
+    <text x="10" y="18" fill="#4E5969" font-size="10" font-family="system-ui">📁 测试环境</text>
+  </g>
+  <g transform="translate(24,222)">
+    <rect width="195" height="26" rx="4" fill="white" stroke="#E5E7EB"/>
+    <text x="10" y="18" fill="#1D2129" font-size="10" font-family="system-ui">🖥 test-server-01</text>
+  </g>
+  <g transform="translate(16,258)">
+    <rect width="208" height="26" rx="4" fill="#F0F0F0"/>
+    <text x="10" y="18" fill="#4E5969" font-size="10" font-family="system-ui">📁 个人项目</text>
+  </g>
+  <rect x="260" y="20" width="1160" height="40" rx="6" fill="white" stroke="#E5E7EB" stroke-width="1"/>
+  <rect x="10" y="8" width="64" height="24" rx="4" fill="#3370FF"/>
+  <text x="42" y="24" fill="white" font-size="11" font-family="system-ui" text-anchor="middle" font-weight="500">终端</text>
+  <rect x="260" y="75" width="1160" height="800" rx="6" fill="white" stroke="#E5E7EB" stroke-width="1"/>
+  <text x="840" y="460" fill="#C9CDD4" font-size="18" font-family="system-ui" text-anchor="middle">多级嵌套分组管理界面</text>
+  <text x="840" y="485" fill="#E5E7EB" font-size="13" font-family="system-ui" text-anchor="middle">(multi-group.png — 待替换为真实截图)</text>
+</svg>

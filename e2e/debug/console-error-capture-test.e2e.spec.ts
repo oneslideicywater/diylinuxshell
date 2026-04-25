@@ -3,15 +3,33 @@
  * 用于验证能否正确获取控制台的错误信息
  */
 
-import { test, expect, ElectronApplication } from '@playwright/test'
+import { test, expect, ElectronApplication, Page } from '@playwright/test'
 import { startApp, closeApp, waitForAppReady } from '../helpers/electron-app'
 
 let electronApp: ElectronApplication
-let page: any
+let page: Page
+
+/** 控制台消息结构 */
+interface ConsoleMessage {
+  type: string
+  text: string
+  location?: {
+    url?: string
+    lineNumber?: number
+    columnNumber?: number
+  }
+  stack?: string
+}
+
+/** 页面错误结构 */
+interface PageError {
+  message: string
+  stack?: string
+}
 
 // 存储所有控制台消息
-const consoleMessages: any[] = []
-const pageErrors: any[] = []
+const consoleMessages: ConsoleMessage[] = []
+const pageErrors: PageError[] = []
 
 test.describe('控制台报错捕获测试', () => {
   test.beforeAll(async () => {
@@ -25,8 +43,8 @@ test.describe('控制台报错捕获测试', () => {
     pageErrors.length = 0
     
     // 监听所有控制台消息
-    page.on('console', (msg: any) => {
-      const message = {
+    page.on('console', (msg) => {
+      const message: ConsoleMessage = {
         type: msg.type(),
         text: msg.text(),
         location: msg.location(),
@@ -35,10 +53,10 @@ test.describe('控制台报错捕获测试', () => {
       consoleMessages.push(message)
       console.log(`[Console ${msg.type()}] ${msg.text()}`)
     })
-    
+
     // 监听页面错误
-    page.on('pageerror', (error: any) => {
-      const err = {
+    page.on('pageerror', (error) => {
+      const err: PageError = {
         message: error.message,
         stack: error.stack
       }

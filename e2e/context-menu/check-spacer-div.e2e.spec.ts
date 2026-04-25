@@ -2,7 +2,7 @@
  * 检查占位 div 是否渲染
  */
 
-import { test, expect, ElectronApplication, Page } from '@playwright/test'
+import { test, ElectronApplication, Page } from '@playwright/test'
 import { startApp, closeApp, waitForAppReady } from '../helpers/electron-app'
 
 let electronApp: ElectronApplication

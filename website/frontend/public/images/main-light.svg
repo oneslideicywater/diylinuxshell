@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#FAFAFA"/>
+  <rect x="0" y="0" width="200" height="900" fill="#F7F8FA" stroke-right="#E5E7EB" stroke-width="1"/>
+  <rect x="10" y="15" width="120" height="24" rx="4" fill="#3370FF" opacity="0.9"/>
+  <text x="70" y="32" fill="white" font-size="12" font-family="system-ui" text-anchor="middle" font-weight="600">DIY-Linux-Shell</text>
+  <g transform="translate(20,60)">
+    <rect width="160" height="28" rx="4" fill="#EFF6FF" stroke="#BCD5FF" stroke-width="1"/>
+    <text x="12" y="19" fill="#3370FF" font-size="11" font-family="system-ui" font-weight="500">默认分组</text>
+  </g>
+  <g transform="translate(12,100)">
+    <rect width="166" height="30" rx="4" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1"/>
+    <circle cx="22" cy="15" r="6" fill="#22C55E"/>
+    <text x="38" y="19" fill="#1D2129" font-size="11" font-family="system-ui">192.168.10.24</text>
+  </g>
+  <g transform="translate(12,140)">
+    <rect width="166" height="30" rx="4" fill="#FFFFFF"/>
+    <circle cx="22" cy="15" r="6" fill="#E5E7EB"/>
+    <text x="38" y="19" fill="#86909C" font-size="11" font-family="system-ui">192.168.10.25</text>
+  </g>
+  <g transform="translate(220,20)">
+    <rect width="1190" height="40" rx="6" fill="#FFFFFF" stroke="#E5E7EB" stroke-width="1"/>
+    <rect x="10" y="8" width="84" height="24" rx="4" fill="#3370FF"/>
+    <text x="52" y="24" fill="white" font-size="11" font-family="system-ui" text-anchor="middle" font-weight="500">终端</text>
+    <rect x="104" y="8" width="64" height="24" rx="4" fill="transparent"/>
+    <text x="136" y="24" fill="#86909C" font-size="11" font-family="system-ui" text-anchor="middle">SFTP</text>
+  </g>
+  <rect x="220" y="75" width="1190" height="800" rx="6" fill="white" stroke="#E5E7EB" stroke-width="1"/>
+  <text x="815" y="460" fill="#C9CDD4" font-size="18" font-family="system-ui" text-anchor="middle">浅色主题主界面截图区域</text>
+  <text x="815" y="485" fill="#E5E7EB" font-size="13" font-family="system-ui" text-anchor="middle">(main-light.png — 待替换为真实截图)</text>
+</svg>

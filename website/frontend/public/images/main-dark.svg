@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900">
+  <rect width="1440" height="900" fill="#1A1E26"/>
+  <rect x="0" y="0" width="200" height="900" fill="#161A1E"/>
+  <rect x="10" y="15" width="120" height="24" rx="4" fill="#3370FF" opacity="0.8"/>
+  <text x="70" y="32" fill="white" font-size="12" font-family="system-ui" text-anchor="middle" font-weight="600">DIY-Linux-Shell</text>
+  <g transform="translate(20,60)">
+    <rect width="160" height="28" rx="4" fill="#2D323C"/>
+    <text x="12" y="19" fill="#86909C" font-size="11" font-family="system-ui">默认分组</text>
+  </g>
+  <g transform="translate(12,100)">
+    <rect width="166" height="30" rx="4" fill="#252B36"/>
+    <circle cx="22" cy="15" r="6" fill="#4ADE80"/>
+    <text x="38" y="19" fill="#E5E7EB" font-size="11" font-family="system-ui">192.168.10.24</text>
+  </g>
+  <g transform="translate(12,140)">
+    <rect width="166" height="30" rx="4" fill="#1D2129"/>
+    <circle cx="22" cy="15" r="6" fill="#86909C"/>
+    <text x="38" y="19" fill="#94A3B8" font-size="11" font-family="system-ui">192.168.10.25</text>
+  </g>
+  <g transform="translate(220,20)">
+    <rect width="1190" height="40" rx="6" fill="#22262F"/>
+    <rect x="10" y="10" width="80" height="20" rx="3" fill="#3370FF" opacity="0.2"/>
+    <text x="50" y="24" fill="#5E8FFF" font-size="11" font-family="system-ui" text-anchor="middle">终端</text>
+    <rect x="100" y="10" width="80" height="20" rx="3" fill="transparent"/>
+    <text x="140" y="24" fill="#86909C" font-size="11" font-family="system-ui" text-anchor="middle">SFTP</text>
+  </g>
+  <rect x="220" y="75" width="1190" height="800" rx="6" fill="#0E1014" stroke="#334155" stroke-width="1"/>
+  <text x="815" y="460" fill="#475569" font-size="18" font-family="system-ui" text-anchor="middle">深色主题主界面截图区域</text>
+  <text x="815" y="485" fill="#334155" font-size="13" font-family="system-ui" text-anchor="middle">(main-dark.png — 待替换为真实截图)</text>
+</svg>

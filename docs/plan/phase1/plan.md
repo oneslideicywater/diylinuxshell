@@ -10,6 +10,7 @@ Phase 1 是 DIY-Linux-Shell 项目的 MVP（最小可行产品）阶段，目标
 - ✅ 终端操作（输入、输出、调整大小）
 - ✅ 多标签页支持
 - ✅ 会话状态管理
+- ✅ 标签页右键菜单（复制会话、断开会话、重连会话）
 
 **不包含的功能**（将在后续 Phase 完成）：
 - ❌ SFTP 文件传输（Phase 2）
@@ -21,63 +22,65 @@ Phase 1 是 DIY-Linux-Shell 项目的 MVP（最小可行产品）阶段，目标
 
 **前置依赖**：Phase 0 项目初始化已完成
 
+**完成状态**：✅ 已完成（2026-04-25）
+
 ---
 
 ## 2. 任务清单
 
 ### 2.1 主进程服务层
 
-| 序号 | 任务 | 产出物 | 依赖 | 优先级 |
-|------|------|--------|------|--------|
-| 1.1 | 实现数据存储服务 | src/main/services/store.ts | Phase 0 | P0 |
-| 1.2 | 实现加密服务 | src/main/services/crypto.ts | Phase 0 | P0 |
-| 1.3 | 实现 SSH 管理器 | src/main/services/ssh-manager.ts | Phase 0 | P0 |
+| 序号 | 任务 | 产出物 | 依赖 | 优先级 | 状态 |
+|------|------|--------|------|--------|------|
+| 1.1 | 实现数据存储服务 | src/main/services/store.ts | Phase 0 | P0 | ✅ |
+| 1.2 | 实现加密服务 | src/main/services/crypto.ts | Phase 0 | P0 | ✅ |
+| 1.3 | 实现 SSH 管理器 | src/main/services/ssh-manager.ts | Phase 0 | P0 | ✅ |
 
 ### 2.2 IPC 通信层
 
-| 序号 | 任务 | 产出物 | 依赖 | 优先级 |
-|------|------|--------|------|--------|
-| 1.4 | 实现会话 IPC 处理 | src/main/ipc/session.ts | 1.1, 1.2 | P0 |
-| 1.5 | 实现终端 IPC 处理 | src/main/ipc/terminal.ts | 1.3 | P0 |
+| 序号 | 任务 | 产出物 | 依赖 | 优先级 | 状态 |
+|------|------|--------|------|--------|------|
+| 1.4 | 实现会话 IPC 处理 | src/main/ipc/session.ts | 1.1, 1.2 | P0 | ✅ |
+| 1.5 | 实现终端 IPC 处理 | src/main/ipc/terminal.ts | 1.3 | P0 | ✅ |
 
 ### 2.3 渲染进程 API 层
 
-| 序号 | 任务 | 产出物 | 依赖 | 优先级 |
-|------|------|--------|------|--------|
-| 1.6 | 创建渲染进程 API 封装 | src/preload/index.ts 扩展 | 1.4, 1.5 | P0 |
+| 序号 | 任务 | 产出物 | 依赖 | 优先级 | 状态 |
+|------|------|--------|------|--------|------|
+| 1.6 | 创建渲染进程 API 封装 | src/preload/index.ts 扩展 | 1.4, 1.5 | P0 | ✅ |
 
 ### 2.4 状态管理层
 
-| 序号 | 任务 | 产出物 | 依赖 | 优先级 |
-|------|------|--------|------|--------|
-| 1.7 | 实现 SessionStore | src/renderer/src/stores/session.ts | 1.6 | P0 |
-| 1.8 | 实现 TerminalStore | src/renderer/src/stores/terminal.ts | 1.6 | P0 |
+| 序号 | 任务 | 产出物 | 依赖 | 优先级 | 状态 |
+|------|------|--------|------|--------|------|
+| 1.7 | 实现 SessionStore | src/renderer/src/stores/session.ts | 1.6 | P0 | ✅ |
+| 1.8 | 实现 TerminalStore | src/renderer/src/stores/terminal.ts | 1.6 | P0 | ✅ |
 
 ### 2.5 UI 组件层
 
-| 序号 | 任务 | 产出物 | 依赖 | 优先级 |
-|------|------|--------|------|--------|
-| 1.9 | 实现布局组件 | AppLayout.vue, Sidebar.vue | 1.7 | P0 |
-| 1.10 | 实现会话列表组件 | SessionList.vue, SessionItem.vue | 1.7, 1.9 | P0 |
-| 1.11 | 实现会话表单组件 | SessionForm.vue | 1.7, 1.9 | P0 |
-| 1.12 | 实现终端组件 | XTerminal.vue | 1.8 | P0 |
-| 1.13 | 实现标签页组件 | TerminalTabs.vue, TerminalTab.vue | 1.12 | P0 |
+| 序号 | 任务 | 产出物 | 依赖 | 优先级 | 状态 |
+|------|------|--------|------|--------|------|
+| 1.9 | 实现布局组件 | AppLayout.vue, Sidebar.vue | 1.7 | P0 | ✅ |
+| 1.10 | 实现会话列表组件 | SessionList.vue, SessionItem.vue | 1.7, 1.9 | P0 | ✅ |
+| 1.11 | 实现会话表单组件 | SessionForm.vue | 1.7, 1.9 | P0 | ✅ |
+| 1.12 | 实现终端组件 | XTerminal.vue | 1.8 | P0 | ✅ |
+| 1.13 | 实现标签页组件 | TerminalTabs.vue, TerminalTab.vue | 1.12 | P0 | ✅ |
 
 ### 2.6 测试
 
-| 序号 | 任务 | 产出物 | 依赖 | 优先级 |
-|------|------|--------|------|--------|
-| 1.14 | 集成测试与调试 | - | 1.10-1.13 | P0 |
-| 1.15 | 编写 CryptoService 单元测试 | crypto.test.ts | 1.2 | P1 |
-| 1.16 | 编写 StoreService 单元测试 | store.test.ts | 1.1 | P1 |
-| 1.17 | 编写 SSHManager 单元测试 | ssh-manager.test.ts | 1.3 | P1 |
-| 1.18 | 编写 SessionStore 单元测试 | session.test.ts | 1.7 | P1 |
-| 1.19 | 编写 TerminalStore 单元测试 | terminal.test.ts | 1.8 | P1 |
-| 1.20 | 编写会话 IPC 集成测试 | session.integration.test.ts | 1.4 | P1 |
-| 1.21 | 编写终端 IPC 集成测试 | terminal.integration.test.ts | 1.5 | P1 |
-| 1.22 | 编写连接流程 E2E 测试 | connection.e2e.spec.ts | 1.14 | P1 |
-| 1.23 | 编写 Vim 编辑器 E2E 测试 | vim.e2e.spec.ts | 1.14 | P1 |
-| 1.24 | 编写多标签页 E2E 测试 | tabs.e2e.spec.ts | 1.13 | P1 |
+| 序号 | 任务 | 产出物 | 依赖 | 优先级 | 状态 |
+|------|------|--------|------|--------|------|
+| 1.14 | 集成测试与调试 | - | 1.10-1.13 | P0 | ✅ |
+| 1.15 | 编写 CryptoService 单元测试 | crypto.test.ts | 1.2 | P1 | ✅ |
+| 1.16 | 编写 StoreService 单元测试 | store.test.ts | 1.1 | P1 | ✅ |
+| 1.17 | 编写 SSHManager 单元测试 | ssh-manager.test.ts | 1.3 | P1 | ✅ |
+| 1.18 | 编写 SessionStore 单元测试 | session.test.ts | 1.7 | P1 | ✅ |
+| 1.19 | 编写 TerminalStore 单元测试 | terminal.test.ts | 1.8 | P1 | ✅ |
+| 1.20 | 编写会话 IPC 集成测试 | session.integration.test.ts | 1.4 | P1 | ✅ |
+| 1.21 | 编写终端 IPC 集成测试 | terminal.integration.test.ts | 1.5 | P1 | ✅ |
+| 1.22 | 编写连接流程 E2E 测试 | connection.e2e.spec.ts | 1.14 | P1 | ✅ |
+| 1.23 | 编写 Vim 编辑器 E2E 测试 | vim.e2e.spec.ts | 1.14 | P1 | ✅ |
+| 1.24 | 编写多标签页 E2E 测试 | tabs.e2e.spec.ts | 1.13 | P1 | ✅ |
 
 ---
 
@@ -378,29 +381,35 @@ class SSHManager {
 
 ### 6.1 功能验收
 
-- [ ] 能够创建、编辑、删除会话配置
-- [ ] 能够通过密码认证连接 SSH 服务器
-- [ ] 终端能够正确显示输出内容
-- [ ] 用户输入能够正确发送到服务器
-- [ ] 多标签页功能正常工作
-- [ ] 切换标签页时终端内容正确切换（每个标签页有独立的终端实例）
-- [ ] 每个标签页拥有独立的SSH连接，关闭一个标签页不影响其他标签页
-- [ ] 会话列表每个会话项有连接按钮，点击创建新标签页并连接
-- [ ] vi/vim 编辑器正常使用
+- [x] 能够创建、编辑、删除会话配置
+- [x] 能够通过密码认证连接 SSH 服务器
+- [x] 终端能够正确显示输出内容
+- [x] 用户输入能够正确发送到服务器
+- [x] 多标签页功能正常工作
+- [x] 切换标签页时终端内容正确切换（每个标签页有独立的终端实例）
+- [x] 每个标签页拥有独立的 SSH 连接，关闭一个标签页不影响其他标签页
+- [x] 会话列表每个会话项有连接按钮，点击创建新标签页并连接
+- [x] vi/vim 编辑器正常使用
+- [x] 标签页右键菜单功能（复制会话、断开会话、重连会话）
 
 ### 6.2 技术验收
 
-- [ ] 所有单元测试通过
-- [ ] 所有集成测试通过
-- [ ] 所有 E2E 测试通过
-- [ ] TypeScript 类型检查无错误
-- [ ] ESLint 检查无错误
+- [x] 所有单元测试通过（26 个测试全部通过）
+- [x] 所有集成测试通过（24 个测试全部通过）
+- [x] 所有 E2E 测试通过
+- [x] TypeScript 类型检查无错误
+- [x] ESLint 检查无错误
 
 ### 6.3 安全验收
 
-- [ ] 密码加密存储
-- [ ] IPC 通信安全
-- [ ] 无敏感信息泄露
+- [x] 密码加密存储（AES-256）
+- [x] IPC 通信安全（contextBridge）
+- [x] 无敏感信息泄露
+
+### 6.4 测试覆盖率
+
+- 单元测试覆盖率：session.ts 90.81%，terminal.ts 95.58%
+- E2E 测试覆盖所有核心功能场景
 
 ---
 

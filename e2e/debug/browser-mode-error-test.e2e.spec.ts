@@ -5,9 +5,26 @@
 
 import { test, expect, Page } from '@playwright/test'
 
+/** 控制台消息结构 */
+interface ConsoleMessage {
+  type: string
+  text: string
+  location?: {
+    url?: string
+    lineNumber?: number
+    columnNumber?: number
+  }
+}
+
+/** 页面错误结构 */
+interface PageError {
+  message: string
+  stack?: string
+}
+
 // 存储所有控制台消息
-const consoleMessages: any[] = []
-const pageErrors: any[] = []
+const consoleMessages: ConsoleMessage[] = []
+const pageErrors: PageError[] = []
 
 test.describe('浏览器模式 - 复现 errorDialogSessionId 报错', () => {
   let page: Page
