@@ -70,33 +70,13 @@
 
 ---
 
-#### 问题5：上传无背压控制，可能导致内存溢出
+#### 问题5：上传无背压控制，可能导致内存溢出 ~~**位置**: [sftp.ts:L393-L430](../sftp.ts#L393-L430)~~
 
-**位置**: [sftp.ts:L393-L430](../sftp.ts#L393-L430)
-
-```typescript
-readStream.on('data', (chunk) => {
-  this.sftpHandle.write(handle, chunk, 0, chunk.length, position, (err: Error) => {
-    // write 回调是异步的，但 readStream 不会等待它完成
-  })
-})
-```
-
-**问题**: `readStream` 的 `data` 事件会持续触发，而 SFTP `write` 是异步回调。如果读取速度快于写入速度，会导致：
-- 大量 write 请求堆积在内存中
-- `position` 变量可能存在竞态条件（回调顺序可能乱序）
-
-**影响**: 大文件上传时可能内存溢出，或者文件内容损坏（如果 write 回调乱序执行）。
-
-**建议**: 暂停读取流直到 write 回调完成：
-```typescript
-readStream.on('data', (chunk) => {
-  readStream.pause()  // 暂停读取
-  this.sftpHandle.write(handle, chunk, 0, chunk.length, position, (err) => {
-    readStream.resume()  // 恢复读取
-  })
-})
-```
+> **核实结果：存在**（2026-04-25）
+> 
+> - **问题代码**：[sftp.ts:L393-L425](../sftp.ts#L393-L425) `readStream.on('data')` 持续触发，SFTP `write` 异步回调不阻塞读取
+> - **对比下载**：[downloadFile](../sftp.ts#L220-L260) 使用递归 `readChunk()` 模式，写完才读下一个（天然背压）
+> - **风险**：网络慢时大量 write 请求堆积、position 变量竞态条件、大文件内存溢出
 
 ---
 

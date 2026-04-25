@@ -374,10 +374,21 @@ export class SFTPService {
           const readStream = fs.createReadStream(localPath)
           let position = 0
 
+          // ── 背压控制：暂停读取流直到 write 回调完成 ─────────────────
+          // 设计说明：
+          //   - readStream.on('data') 持续触发会导致大量 write 请求堆积在内存中
+          //   - 网络慢时可能内存溢出（大文件上传场景）
+          //   - position 变量在回调乱序时可能出现竞态条件
+          // 解决方案：
+          //   - 每次收到 data 事件后立即 pause()
+          //   - write 回调完成后 resume() 继续读取下一个 chunk
+          //   - 与 downloadFile 的递归 readChunk() 模式对齐（串行写入）
           readStream.on('data', (chunk) => {
+            // 收到数据后立即暂停读取流（背压控制核心）
+            readStream.pause()
+
             // 检查是否被取消
             if (this.uploadCancelled) {
-              // 取消时尝试关闭 handle，但忽略错误
               try {
                 this.sftpHandle.close(handle)
               } catch (closeErr) {
@@ -389,7 +400,6 @@ export class SFTPService {
 
             this.sftpHandle.write(handle, chunk, 0, chunk.length, position, (err: Error) => {
               if (err) {
-                // 如果是取消导致的错误，忽略
                 if (this.uploadCancelled) {
                   try {
                     this.sftpHandle.close(handle)
@@ -411,9 +421,7 @@ export class SFTPService {
               position += chunk.length
               uploadedBytes += chunk.length
 
-              // ── 每次 chunk 写入远程后：触发进度回调 ───────────────────
-              // 计算逻辑同 download：瞬时速度 = 本轮增量字节 / 时间差
-              // 更新时间戳和已传字节数，供下一轮计算使用
+              // ── 每次 chunk 写入远程后：触发进度回调 + 恢复读取 ────────
               if (onProgress && fileSize > 0) {
                 const speed = this.calculateTransferSpeed(
                   uploadedBytes,
@@ -426,6 +434,9 @@ export class SFTPService {
                 
                 onProgress(speed, uploadedBytes, taskId, node)
               }
+
+              // 写入完成，恢复读取流（背压控制：允许读取下一个 chunk）
+              readStream.resume()
             })
           })
 
