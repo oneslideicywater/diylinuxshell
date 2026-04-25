@@ -19,51 +19,34 @@
 
 ### ❌ 逻辑问题
 
-#### 问题1：文件夹 size 字段始终为 0
+#### 问题1：文件夹 size 字段始终为 0 ~~**位置**: [download.ts:L186-L260](../../renderer/src/components/terminal/sftp/script/download.ts#L186-L260)~~
 
-**位置**: [download.ts:L186-L260](../../renderer/src/components/terminal/sftp/script/download.ts#L186-L260)
-
-```typescript
-if (node.isDirectory && node.children && node.children.length > 0) {
-  // 只创建本地目录 + 递归子节点
-  // 文件夹本身没有累加子文件的 size
-}
-```
-
-**问题**: 文件夹节点的 `size` 字段在扫描阶段已设置（来自 `scanRemoteTree`），但下载完成后文件夹的 `transferredBytes` 没有累加子文件的传输量。
-
-**影响**: 前端如果显示文件夹的 `transferredBytes/size` 进度，会显示不准确。
+> **核实结果：不存在**（2026-04-25）
+> 
+> `mutateNode` 函数通过 `deltaBytes` 自动向祖先链传播 `transferredBytes`，文件夹节点的累加已由 Store 层正确处理。
+> 参见 [sftpTransfer.ts:L304-L345](../../renderer/src/stores/sftpTransfer.ts#L304-L345)
 
 ---
 
-#### 问题2：进度回调的 `nodeId` 匹配依赖 IPC 层正确传递
+#### 问题2：进度回调的 `nodeId` 匹配依赖 IPC 层正确传递 ~~**位置**: [download.ts:L90-L108](../../renderer/src/components/terminal/sftp/script/download.ts#L90-L108)~~
 
-**位置**: [download.ts:L90-L108](../../renderer/src/components/terminal/sftp/script/download.ts#L90-L108)
-
-```typescript
-const cleanupProgress = window.api.sftp.onDownloadProgress((data) => {
-  if (data.nodeId === node.id) {  // ← 依赖 IPC 层传递 nodeId
-```
-
-**问题**: 主进程 [sftp.ts:L243-L253](../sftp.ts#L243-L253) 的 `onProgress` 回调传的是 `node` 对象，但 IPC 中间层是否正确提取了 `node.id` 并作为 `nodeId` 传递给前端？
-
-**建议**: 需要确认 IPC 层的实现是否正确映射了 `nodeId` 字段。
+> **核实结果：不存在**（2026-04-25）
+> 
+> IPC 层正确提取了 `node.id` 作为 `nodeId` 传递给前端：
+> - Service: `onProgress(speed, transferredBytes, taskId, node)` → 传入完整 node 对象
+> - IPC: `nodeId: node.id` → 正确提取 → [ipc/sftp.ts:L107-L112](../../main/ipc/sftp.ts#L107-L112)
+> - Preload: 完整透传 `nodeId` 字段 → [preload/index.ts:L225-L232](../../preload/index.ts#L225-L232)
+> - Renderer: `data.nodeId === node.id` → 正确匹配
 
 ---
 
-#### 问题3：单文件下载路径拼接缺少分隔符
+#### 问题3：单文件下载路径拼接缺少分隔符 ~~**位置**: [download.ts:L663](../../renderer/src/components/terminal/sftp/script/download.ts#L663)~~
 
-**位置**: [download.ts:L663](../../renderer/src/components/terminal/sftp/script/download.ts#L663)
-
-```typescript
-localPath: localBasePath ? `${localBasePath}${fileName}` : '',
-```
-
-**问题**: 如果 `localBasePath` 末尾没有 `/` 或 `\`，拼接结果会是 `C:\Users\testfile.txt` 而不是 `C:\Users\test\file.txt`。
-
-**对比**: 同文件 [L594-L596](../../renderer/src/components/terminal/sftp/script/download.ts#L594-L596) 使用了 `pathJoin` API，但这里用了字符串拼接。
-
-**影响**: 单文件下载到错误路径，或创建目录失败。
+> **核实结果：存在，但影响有限**（2026-04-25）
+> 
+> - **问题代码**：[download.ts:L684](../../renderer/src/components/terminal/sftp/script/download.ts#L684) `scanningNode.localPath` 使用字符串拼接 `${localBasePath}${fileName}`
+> - **实际影响**：`scanningNode` 仅用于扫描阶段 UI 占位显示，不影响实际下载。实际下载使用的是 `scanRemoteTree` 返回的 `ipcRoot`，其 `localPath` 使用了正确的 `path.join`（[sftp.ts:L956](../sftp.ts#L956)）
+> - **严重程度降级**：高 → 低（UI 显示问题，不影响功能）
 
 ---
 
@@ -77,28 +60,13 @@ localPath: localBasePath ? `${localBasePath}${fileName}` : '',
 
 ### ❌ 逻辑问题
 
-#### 问题4：上传失败时进度监听器未清理
+#### 问题4：上传失败时进度监听器未清理 ~~**位置**: [upload.ts:L33-L119](../../renderer/src/components/terminal/sftp/script/upload.ts#L33-L119)~~
 
-**位置**: [upload.ts:L33-L119](../../renderer/src/components/terminal/sftp/script/upload.ts#L33-L119)
-
-```typescript
-const cleanupProgress = window.api.sftp.onUploadProgress((data) => { ... })
-const result = await window.api.sftp.upload(connectionId, taskId, node)
-cleanupProgress()  // ← 只在成功时清理
-```
-
-**问题**: 如果 `upload` 抛出异常，`cleanupProgress()` 不会被调用。对比 [delete.ts:L88](../../renderer/src/components/terminal/sftp/script/delete.ts#L88) 用了 `finally` 块。
-
-**影响**: 上传失败时，进度监听器不会被清理，多次失败后可能导致内存泄漏。
-
-**建议**: 使用 `try...finally` 确保清理：
-```typescript
-try {
-  const result = await window.api.sftp.upload(connectionId, taskId, node)
-} finally {
-  cleanupProgress()
-}
-```
+> **核实结果：存在**（2026-04-25）
+> 
+> - **问题代码**：[upload.ts:L87-L89](../../renderer/src/components/terminal/sftp/script/upload.ts#L87-L89) `cleanupProgress()` 只在成功时调用
+> - **对比**：[delete.ts:L113-L115](../../renderer/src/components/terminal/sftp/script/delete.ts#L113-L115) 使用了 `finally` 块确保清理
+> - **影响**：上传失败时，进度监听器不会被清理，多次失败后可能导致内存泄漏
 
 ---
 

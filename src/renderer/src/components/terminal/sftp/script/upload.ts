@@ -56,38 +56,35 @@ async function uploadSingleFile(
   // ✅ 直接使用传入的 sftpConnectionId（连接已在 TerminalTab 初始化时建立）
   const connectionId = sftpConnectionId
   
-  try {
-    // 监听上传进度（500ms 定时器已控制 UI 刷新频率，无需节流）
-    let lastSpeed = 0
-    const cleanupProgress = window.api.sftp.onUploadProgress((data) => {
-      if (isTaskCancelled(taskId)) { return }
+  // 监听上传进度（500ms 定时器已控制 UI 刷新频率，无需节流）
+  let lastSpeed = 0
+  const cleanupProgress = window.api.sftp.onUploadProgress((data) => {
+    if (isTaskCancelled(taskId)) { return }
 
-      if (data.nodeId === node.id) {
-        const progress = node.size > 0 ? Math.round((data.transferredBytes / node.size) * 100) : 0
-        const speed = data.speed
-        lastSpeed = speed
+    if (data.nodeId === node.id) {
+      const progress = node.size > 0 ? Math.round((data.transferredBytes / node.size) * 100) : 0
+      const speed = data.speed
+      lastSpeed = speed
 
-        console.log(`[upload] 进度回调: ${node.name} | progress=${progress}% speed=${formatSize(speed)}/s`)
+      console.log(`[upload] 进度回调: ${node.name} | progress=${progress}% speed=${formatSize(speed)}/s`)
 
-        // 首次收到进度回调时初始化 startTime（文件和目录统一）
-        const liveNode = sftpTransferStore.getNode(taskId, node.id)
-        const updates: Partial<TransferNode> = { progress, speed, transferredBytes: data.transferredBytes }
-        if (liveNode && !liveNode.startTime) {
-          updates.startTime = Date.now()
-        }
-
-        sftpTransferStore.mutateNode(taskId, node.id, updates)
-
-        // 标记当前活跃传输节点（用于 UI 高亮定位）
-        sftpTransferStore.updateTask(taskId, { activeNodeId: node.id })
+      // 首次收到进度回调时初始化 startTime（文件和目录统一）
+      const liveNode = sftpTransferStore.getNode(taskId, node.id)
+      const updates: Partial<TransferNode> = { progress, speed, transferredBytes: data.transferredBytes }
+      if (liveNode && !liveNode.startTime) {
+        updates.startTime = Date.now()
       }
-    })
-    
+
+      sftpTransferStore.mutateNode(taskId, node.id, updates)
+
+      // 标记当前活跃传输节点（用于 UI 高亮定位）
+      sftpTransferStore.updateTask(taskId, { activeNodeId: node.id })
+    }
+  })
+  
+  try {
     // 调用 Electron API 上传文件（使用已建立的 sftpConnectionId）
     const result = await window.api.sftp.upload(connectionId, taskId, node)
-    
-    // 清理进度监听
-    cleanupProgress()
     
     // ✅ 上传完成后再次检查是否已被取消
     if (isTaskCancelled(taskId, `上传完成但任务已取消: ${node.name}`)) {
@@ -115,6 +112,11 @@ async function uploadSingleFile(
       error: error.message,
       endTime: Date.now()
     })
+    
+    throw error
+  } finally {
+    // 清理进度监听（无论成功或失败都要清理，防止内存泄漏）
+    cleanupProgress()
   }
 }
 
