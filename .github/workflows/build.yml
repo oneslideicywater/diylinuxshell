@@ -211,8 +211,6 @@ jobs:
           draft: false           # 是否为草稿
           prerelease: ${{ contains(github.ref, '-beta') || contains(github.ref, '-alpha') || contains(github.ref, '-rc') }}
           fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: ✅ Release created successfully
         run: echo "🎉 Release ${{ github.ref_name }} has been published!"
