@@ -262,9 +262,9 @@ test.describe('批量上传多 TransferTask 架构验证', () => {
     
     const selectedItemCount = await page.locator('.file-panel.local .file-item.selected').count()
     console.log(`[Select] 已选中 ${selectedItemCount} 个项目`)
-    
-    // 记录日志索引
-    const logIndexBeforeUpload = consoleMessages.length
+
+    // 记录日志索引（调试用）
+    const _logIndexBeforeUpload = consoleMessages.length
     
     // 触发批量上传
     await rightClickAndUpload(page)
@@ -334,11 +334,12 @@ test.describe('批量上传多 TransferTask 架构验证', () => {
     
     // 选择 2 个文件 + 1 个文件夹
     await multiSelectFiles(page, ['file-a.txt', 'folder-alpha', 'file-b.txt'])
-    
-    const logIndexBefore = consoleMessages.length
-    
+
+    // 日志快照（调试用）
+    const _logIndexBefore = consoleMessages.length
+
     await rightClickAndUpload(page)
-    
+
     // 等待处理
     await page.waitForTimeout(12000)
     
@@ -390,11 +391,12 @@ test.describe('批量上传多 TransferTask 架构验证', () => {
     
     // 只选择 3 个文件
     await multiSelectFiles(page, ['file-a.txt', 'file-b.txt', 'file-c.txt'])
-    
-    const logIndexBefore = consoleMessages.length
-    
+
+    // 日志快照（调试用）
+    const _logIndexBefore = consoleMessages.length
+
     await rightClickAndUpload(page)
-    
+
     // 等待处理（纯文件应该很快）
     await page.waitForTimeout(8000)
     
@@ -435,11 +437,12 @@ test.describe('批量上传多 TransferTask 架构验证', () => {
     
     // 只选择 2 个文件夹
     await multiSelectFiles(page, ['folder-alpha', 'folder-beta'])
-    
-    const logIndexBefore = consoleMessages.length
-    
+
+    // 日志快照（调试用）
+    const _logIndexBefore = consoleMessages.length
+
     await rightClickAndUpload(page)
-    
+
     // 等待文件夹扫描和上传
     await page.waitForTimeout(15000)
     

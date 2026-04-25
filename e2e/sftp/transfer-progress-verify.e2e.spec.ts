@@ -389,8 +389,8 @@ test.describe('SFTP 传输进度树数据验证', () => {
       fullPage: false
     })
 
-    // 分析日志
-    const testLogs = collectedLogs.slice(logStartIndex)
+    // 分析日志（testLogs 用于调试，保留原始切片）
+    const _testLogs = collectedLogs.slice(logStartIndex)
     const uploadLogs = filterTransferLogs('upload')
     const result = verifyProgressData(uploadLogs, 'UPLOAD')
 
@@ -503,8 +503,8 @@ test.describe('SFTP 传输进度树数据验证', () => {
       fullPage: false
     })
 
-    // 分析下载日志
-    const testLogs = collectedLogs.slice(logStartIndex)
+    // 分析下载日志（testLogs 用于调试）
+    const _testLogs = collectedLogs.slice(logStartIndex)
     const downloadLogs = filterTransferLogs('download')
     const result = verifyProgressData(downloadLogs, 'DOWNLOAD')
 
@@ -627,8 +627,8 @@ test.describe('SFTP 传输进度树数据验证', () => {
       fullPage: false
     })
 
-    // 分析日志
-    const testLogs = collectedLogs.slice(logStartIndex)
+    // 分析日志（testLogs 用于调试）
+    const _testLogs = collectedLogs.slice(logStartIndex)
     const uploadLogs = filterTransferLogs('upload')
     const result = verifyProgressData(uploadLogs, 'IVY2-UPLOAD')
 

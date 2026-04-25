@@ -346,7 +346,8 @@ test.describe('批量上传完整功能测试（Bug 修复 + 架构验证）', (
     
     // 记录初始状态
     const initialTaskCount = await getTransferTaskCount(page)
-    const logIndexBefore = consoleMessages.length
+    // 日志快照位置（调试用）
+    const _logIndexBefore = consoleMessages.length
     
     console.log(`\n[Initial State] 初始任务数: ${initialTaskCount}`)
     

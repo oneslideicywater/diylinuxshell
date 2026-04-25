@@ -289,7 +289,8 @@ test.describe('批量上传深度测试 - TransferTask 验证', () => {
     expect(selectedItems).toBeGreaterThanOrEqual(4)
     
     // 清空之前的上传日志（便于分析本次上传）
-    const logIndexBeforeUpload = consoleMessages.length
+    // 记录日志快照位置（调试用，标记上传开始前的日志索引）
+    const _logIndexBeforeUpload = consoleMessages.length
     
     // 触发批量上传
     await rightClickAndUpload(page)
@@ -372,7 +373,8 @@ test.describe('批量上传深度测试 - TransferTask 验证', () => {
     const selectedItems = await page.locator('.file-panel.local .file-item.selected').count()
     expect(selectedItems).toBeGreaterThanOrEqual(1)
     
-    const logIndexBefore = consoleMessages.length
+    // 记录日志快照位置（调试用）
+    const _logIndexBefore = consoleMessages.length
     
     await rightClickAndUpload(page)
     

@@ -108,11 +108,12 @@ async function setupRemoteTestEnvironment(page: any): Promise<void> {
         // 方法 3: 从 DOM 元素的 Vue 实例获取
         if (!connectionId) {
           try {
-            const sftpOverlay = document.querySelector('.sftp-overlay')
-            if (sftpOverlay && (sftpOverlay as any).__vue_app__) {
-              const vueApp = (sftpOverlay as any).__vue_app__
-              console.log('[Setup] 方法3: 找到 Vue 应用实例, 尝试获取组件数据...')
-            }
+              const sftpOverlay = document.querySelector('.sftp-overlay')
+              if (sftpOverlay && (sftpOverlay as any).__vue_app__) {
+                // 获取 Vue 应用实例（调试用）
+                const _vueApp = (sftpOverlay as any).__vue_app__
+                console.log('[Setup] 方法3: 找到 Vue 应用实例, 尝试获取组件数据...', _vueApp)
+              }
             
             // 遍历所有 DOM 元素查找 Vue 组件实例
             const allElements = document.querySelectorAll('*')
@@ -621,7 +622,8 @@ test.describe('批量下载完整功能测试（downloadBatch 架构验证）', 
     await page.waitForTimeout(500)
     
     const initialTaskCount = await getTransferTaskCount(page)
-    const logIndexBefore = consoleMessages.length
+    // 日志快照位置（调试用，标记下载开始前）
+    const _logIndexBefore = consoleMessages.length
     
     console.log(`\n[Initial State] 初始任务数: ${initialTaskCount}`)
     
