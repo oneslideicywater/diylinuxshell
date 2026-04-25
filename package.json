@@ -172,7 +172,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "your-github-username",
+      "owner": "oneslideicywater",
       "repo": "diy-linux-shell"
     }
   }
