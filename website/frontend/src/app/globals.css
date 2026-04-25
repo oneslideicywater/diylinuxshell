@@ -136,8 +136,18 @@ h1, h2, h3, h4, h5, h6 {
 .dark .light-content h6,
 .dark .light-content p,
 .dark .light-content li,
-.dark .light-content span {
+.dark .light-content span,
+.dark .light-content code {
   color: inherit !important;
+}
+
+/* 浅色内容区域内 - 覆盖文字颜色类 */
+.dark .light-content .text-ink-secondary {
+  color: #475569 !important;
+}
+
+.dark .light-content .text-ink-tertiary {
+  color: #64748B !important;
 }
 
 /* 所有段落和正文文字 - 使用更亮的灰蓝色 */

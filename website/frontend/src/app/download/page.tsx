@@ -39,7 +39,7 @@ const platforms = [
 /* 下载页面 */
 export default function DownloadPage() {
   return (
-    <div className="pt-24 pb-20 min-h-screen">
+    <div className="light-content pt-24 pb-20 min-h-screen">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 标题 */}
         <div className="text-center mb-16">
