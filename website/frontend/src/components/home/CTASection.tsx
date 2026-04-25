@@ -20,11 +20,11 @@ export function CTASection() {
         transition={{ duration: 0.6 }}
         className="max-w-3xl mx-auto text-center"
       >
-        <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-6 dark:text-dark-ink">
+        <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-6">
           准备好提升你的终端效率了吗？
         </h2>
 
-        <p className="text-lg text-ink-secondary dark:text-dark-ink-secondary mb-10 max-w-lg mx-auto leading-relaxed">
+        <p className="text-lg text-ink-secondary mb-10 max-w-lg mx-auto leading-relaxed">
           免费开源，开箱即用。立即下载，体验现代化的 SSH 终端管理。
         </p>
 

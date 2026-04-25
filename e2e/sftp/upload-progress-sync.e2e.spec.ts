@@ -62,7 +62,7 @@ async function navigateAndUploadFolder(
   page: Page,
   localDir: string,
   folderName: string,
-  remoteBase?: string
+  _remoteBase?: string
 ): Promise<void> {
   const localPathInput = await page.locator('.file-panel.local .path-input')
   await localPathInput.fill('')
@@ -134,8 +134,7 @@ test.describe('SFTP 文件夹上传进度同步功能', () => {
       await expect(rootNode).toBeVisible()
 
 
-      // 检测父节点进度（调试用）
-      let _parentProgressDetected = false
+      // 检测子节点传输状态
       let childTransferringDetected = false
 
       for (let i = 0; i < 20; i++) {
@@ -150,7 +149,6 @@ test.describe('SFTP 文件夹上传进度同步功能', () => {
           const rootProgressEl = rootNode.locator('.progress-column')
           const progressText = await rootProgressEl.textContent().catch(() => null)
           if (progressText && progressText.trim() !== '' && progressText.trim() !== '-') {
-            _parentProgressDetected = true
             console.log(`[TEST] 第${i + 1}次检查 - 父节点进度: ${progressText.trim()}`)
             break
           }

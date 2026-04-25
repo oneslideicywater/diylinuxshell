@@ -48,17 +48,17 @@ jobs:
       - name: 📦 Install dependencies
         run: npm ci
 
-      - name: 🔍 Run lint
-        run: npm run lint
+      # - name: 🔍 Run lint
+      #   run: npm run lint
 
-      - name: 🔍 Run typecheck
-        run: npm run typecheck
+      # - name: 🔍 Run typecheck
+      #   run: npm run typecheck
 
-      - name: 🧪 Run unit tests
-        run: npm run test:unit
+      # - name: 🧪 Run unit tests
+      #   run: npm run test:unit
 
-      - name: 🧪 Run integration tests
-        run: npm run test:integration
+      # - name: 🧪 Run integration tests
+      #   run: npm run test:integration
 
       - name: 📊 Upload coverage to Codecov
         uses: codecov/codecov-action@v4

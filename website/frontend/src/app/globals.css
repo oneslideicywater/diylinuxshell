@@ -44,18 +44,6 @@
   /* 阴影 — 浅色 */
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
   --shadow-card-hover: 0 4px 16px rgba(51, 112, 255, 0.1), 0 2px 4px rgba(0, 0, 0, 0.04);
-
-  /* ===== 暗色模式专用 Token ===== */
-  --color-dark-ink: #F8FAFC;
-  --color-dark-ink-secondary: #CBD5E1;
-  --color-dark-ink-tertiary: #94A3B8;
-  --color-dark-surface: #0B0E14;
-  --color-dark-surface-subtle: #141820;
-  --color-dark-surface-muted: #11141C;
-  --color-dark-border-default: #1E2433;
-  --color-dark-border-strong: #2D3548;
-  --shadow-dark-card: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-dark-card-hover: 0 8px 32px rgba(51, 112, 255, 0.15), 0 4px 8px rgba(0, 0, 0, 0.4);
 }
 
 /* ==================== 全局基础样式 ==================== */
@@ -72,20 +60,69 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ==================== 暗色主题 — 直接覆盖背景和 body ====================
-   文字颜色通过组件级 dark:text-dark-* 控制（Tailwind v4 @theme 变量运行时覆盖不稳定）
+/* ==================== 暗色主题 ====================
+   策略：用纯 CSS 选择器覆盖文字颜色（Tailwind v4 dark: 变体不稳定）
+   背景和边框仍通过 CSS 变量控制
 */
 .dark {
+  /* 背景 — 深邃纯黑底 */
   --color-surface: #0B0E14;
   --color-surface-subtle: #141820;
   --color-surface-muted: #11141C;
+
+  /* 边框 */
   --color-border-default: #1E2433;
   --color-border-strong: #2D3548;
+
+  /* 阴影 */
   --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
   --shadow-card-hover: 0 8px 32px rgba(51, 112, 255, 0.15), 0 4px 8px rgba(0, 0, 0, 0.4);
 
+  /* 渲染优化 */
   -webkit-font-smoothing: subpixel-antialiased;
   text-rendering: optimizeLegibility;
+}
+
+/* ===== 暗色模式文字颜色 — 直接选择器覆盖 ===== */
+
+/* Hero 主标题 h1 */
+.dark h1 {
+  color: #F8FAFC !important;
+}
+
+/* Hero 副标题（h1 内的 span） */
+.dark h1 span:nth-of-type(2) {
+  color: #E2E8F0 !important;
+}
+
+/* Hero 描述段落（包含 Electron 的 p） */
+.dark p:has(.font-mono.font-semibold) {
+  color: #CBD5E1 !important;
+}
+
+/* Tech Stack / CTA 大标题 h2 */
+.dark h2 {
+  color: #F8FAFC !important;
+}
+
+/* CTA / Tech Stack 描述段落 */
+.dark section p:not(:has(.font-mono)) {
+  color: #CBD5E1 !important;
+}
+
+/* 功能卡片标题 h3 */
+.dark h3 {
+  color: #E2E8F0 !important;
+}
+
+/* 功能卡片描述文字 */
+.dark h3 + p {
+  color: #94A3B8 !important;
+}
+
+/* 终端预览区域内的文字 */
+.dark .font-mono.text-sm {
+  color: #CBD5E1 !important;
 }
 
 /* 选中文本 */

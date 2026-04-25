@@ -156,9 +156,6 @@ test.describe('Vim 模式切换', () => {
     // 创建会话并连接
     const sessionName = generateUniqueName('Vim模式测试')
     await createSessionAndConnect(sessionName)
-    
-    // 检测可用的编辑器命令
-    _editorCommand = await detectAvailableEditor()
   })
 
   afterAll(async () => {
@@ -237,9 +234,6 @@ test.describe('Vim 模式切换', () => {
  * 测试 XShell 标准的 Vim 光标移动命令
  */
 test.describe('Vim 光标移动', () => {
-  // 编辑器命令（调试用，实际使用 getEditorCommandWithFile 函数）
-  let _editorCommand: string
-
   beforeAll(async () => {
     const result = await startApp()
     app = result.app
@@ -358,9 +352,6 @@ test.describe('Vim 光标移动', () => {
  * 测试 XShell 标准的 Vim 编辑命令
  */
 test.describe('Vim 编辑命令', () => {
-  // 编辑器命令（调试用，实际使用 getEditorCommandWithFile 函数）
-  let _editorCommand: string
-
   beforeAll(async () => {
     const result = await startApp()
     app = result.app
@@ -582,8 +573,6 @@ test.describe('Vim 特殊键', () => {
  * 测试 XShell 标准的中文输入支持
  */
 test.describe('中文支持', () => {
-  let editorCommand: string
-
   beforeAll(async () => {
     const result = await startApp()
     app = result.app
@@ -593,9 +582,6 @@ test.describe('中文支持', () => {
     // 创建会话并连接
     const sessionName = generateUniqueName('中文测试')
     await createSessionAndConnect(sessionName)
-    
-    // 检测可用的编辑器命令
-    editorCommand = await detectAvailableEditor()
   })
 
   afterAll(async () => {
