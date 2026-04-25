@@ -42,11 +42,11 @@ export function CTASection() {
           </Link>
 
           <a
-            href="https://github.com/oneslideicywater/diy-linux-shell"
+            href="https://github.com/oneslideicywater/diylinuxshell"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 px-8 py-4 rounded-xl
-                       bg-white dark:bg-[#1E293B] text-ink font-semibold text-base
+                       bg-surface text-ink font-semibold text-base
                        border border-border-default shadow-card
                        hover:border-primary-300 hover:-translate-y-0.5 hover:shadow-card-hover
                        transition-all duration-200 cursor-pointer"

@@ -22,12 +22,12 @@
   --color-success-500: #22C55E;
   --color-success-600: #16A34A;
 
-  /* 文字层级 */
+  /* 文字层级 — 浅色主题 */
   --color-ink: #1D2129;
   --color-ink-secondary: #4E5969;
   --color-ink-tertiary: #86909C;
 
-  /* 背景层级 */
+  /* 背景层级 — 浅色主题 */
   --color-surface: #FFFFFF;
   --color-surface-subtle: #F7F8FA;
   --color-surface-muted: #F0F0F0;
@@ -60,18 +60,30 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 暗色主题覆盖 */
+/* 暗色主题覆盖 — 提升文字对比度确保可读性 */
 .dark {
+  /* 主文字：接近纯白 */
   --color-ink: #F8FAFC;
-  --color-ink-secondary: #94A3B8;
-  --color-ink-tertiary: #64748B;
-  --color-surface: #0E1014;
-  --color-surface-subtle: #1D2129;
-  --color-surface-muted: #161A1E;
-  --color-border-default: #334155;
-  --color-border-strong: #475569;
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 1px 2px rgba(0, 0, 0, 0.15);
-  --shadow-card-hover: 0 4px 16px rgba(51, 112, 255, 0.15), 0 2px 4px rgba(0, 0, 0, 0.2);
+  /* 正文文字 — 大字号场景需足够亮，对比度 > 7:1 */
+  --color-ink-secondary: #E2E8F0;
+  /* 辅助文字 */
+  --color-ink-tertiary: #94A3B8;
+
+  /* 背景层级 — 从深到浅 */
+  --color-surface: #0F1117;
+  --color-surface-subtle: #1A1D26;
+  --color-surface-muted: #151820;
+
+  /* 边框 — 略亮以便区分 */
+  --color-border-default: #2D3342;
+  --color-border-strong: #3D4556;
+
+  /* 阴影 — 暗色模式增强 */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.25);
+  --shadow-card-hover: 0 4px 16px rgba(51, 112, 255, 0.15), 0 2px 4px rgba(0, 0, 0, 0.3);
+
+  /* 暗色模式下文字微调抗锯齿 */
+  -webkit-font-smoothing: subpixel-antialiased;
 }
 
 /* 选中文本颜色 */

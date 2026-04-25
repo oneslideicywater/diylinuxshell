@@ -55,7 +55,7 @@ export function HeroSection() {
         >
           <span className="font-mono">DIY-Linux-Shell</span>
           <br />
-          <span className="text-ink-secondary">现代化的 SSH 终端管理工具</span>
+          <span className="text-ink/80">现代化的 SSH 终端管理工具</span>
         </motion.h1>
 
         {/* 副标题描述 — 对齐 README 产品简介 */}
@@ -127,7 +127,7 @@ export function HeroSection() {
           className="mt-14 max-w-lg mx-auto"
         >
           <div className="rounded-xl overflow-hidden border border-border-default shadow-card
-                      bg-[#FAFAFA] dark:bg-[#1A1E26]">
+                      bg-surface-subtle">
             {/* 终端标题栏 */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-border-default bg-surface-subtle">
               <div className="w-3 h-3 rounded-full bg-red-400" />

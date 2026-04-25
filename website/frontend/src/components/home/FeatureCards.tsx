@@ -82,7 +82,7 @@ export function FeatureCards() {
             <div className="relative z-10">
               <div
                 className={`w-11 h-11 rounded-lg flex items-center justify-center mb-4
-                            bg-surface-subtle group-hover:bg-white transition-colors duration-200`}
+                            bg-surface-subtle group-hover:bg-surface transition-colors duration-200`}
               >
                 <feature.icon className={`w-5 h-5 ${feature.iconColor}`} />
               </div>
