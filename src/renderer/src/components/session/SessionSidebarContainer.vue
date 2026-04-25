@@ -54,7 +54,8 @@
                 @edit-session="handleEdit" @delete-session="handleDelete" @duplicate-session="handleDuplicate"
                 @properties-session="handleProperties"
                 @create-subgroup="handleCreateSubGroup"
-                @add-session-to-group="handleAddSessionToGroup" />
+                @add-session-to-group="handleAddSessionToGroup"
+                @delete-group="handleDeleteGroupFromGroupHeader" />
 
               <!-- 当前分组的会话 -->
               <div class="group-sessions">

@@ -159,24 +159,38 @@ export function useSessionGroup(options: UseSessionGroupOptions): UseSessionGrou
   }
 
   /**
-   * 检查是否可以在目标分组下创建新的子分组
-   * 基于最大嵌套深度限制（MAX_GROUP_DEPTH）
-   * @param groupId - 目标分组 ID
-   * @returns 如果可以创建子分组返回 true，否则返回 false
-   *
-   * @example
-   * ```ts
-   * // 假设 MAX_GROUP_DEPTH = 5，当前分组 depth = 4
-   * canCreateSubGroupIn('group-id') // 返回 false（已达层级上限）
-   * ```
-   */
-  const canCreateSubGroupIn = (groupId: string): boolean => {
-    const groups = getAllGroups()
-    const group = groups.find(g => g.id === groupId)
-    if (!group) return false
+ * 检查是否可以在目标分组下创建新的子分组
+ * 业务规则：
+ * 1. 默认分组不允许创建子分组（保持良好的分组规范）
+ * 2. 基于最大嵌套深度限制（MAX_GROUP_DEPTH）
+ * @param groupId - 目标分组 ID
+ * @returns 如果可以创建子分组返回 true，否则返回 false
+ *
+ * @example
+ * ```ts
+ * // 默认分组不允许创建子分组
+ * canCreateSubGroupIn('default-group-id') // 返回 false
+ *
+ * // 普通分组在层级限制内可以创建子分组
+ * canCreateSubGroupIn('normal-group-id') // 返回 true（depth < MAX_GROUP_DEPTH）
+ *
+ * // 达到层级上限的分组不能创建子分组
+ * canCreateSubGroupIn('deep-group-id') // 返回 false（depth >= MAX_GROUP_DEPTH）
+ * ```
+ */
+const canCreateSubGroupIn = (groupId: string): boolean => {
+  const groups = getAllGroups()
+  const group = groups.find(g => g.id === groupId)
+  if (!group) return false
 
-    return group.depth < MAX_GROUP_DEPTH
+  // 业务规则：默认分组不允许创建子分组
+  if (group.name === '默认分组') {
+    return false
   }
+
+  // 检查层级深度限制
+  return group.depth < MAX_GROUP_DEPTH
+}
 
   return {
     getDirectGroupSessions,

@@ -107,6 +107,7 @@ const emit = defineEmits<{
   propertiesSession: [session: Session]
   createSubgroup: [group: SessionGroup]
   addSessionToGroup: [group: SessionGroup]
+  deleteGroup: [group: SessionGroup]
 }>()
 
 /**
@@ -208,12 +209,12 @@ const handleEditGroupFromGroupHeader = (group: SessionGroup) => {
 }
 
 /**
- * 从 GroupHeader 删除分组
- * 直接传递给父组件处理
+ * 从 GroupHeader 删除分组（修复 Bug：实际执行删除操作）
+ * 触发父组件的 delete-group 事件，由 SessionSidebarContainer 统一处理删除逻辑
+ * @param group - 要删除的分组对象
  */
 const handleDeleteGroupFromGroupHeader = (group: SessionGroup) => {
-  // 删除分组功能暂时未实现，可以后续扩展
-  console.log('[SessionGroupTree] 删除分组:', group.name)
+  emit('deleteGroup', group)
 }
 </script>
 

@@ -41,6 +41,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import type { SessionGroup } from '@shared/types'
 import GroupIcon from './GroupIcon.vue'
 import { MAX_GROUP_DEPTH } from '@shared/types'
@@ -56,7 +57,7 @@ interface Props {
   isExpanded: boolean
   /** 分组内的会话数量（包括子分组） */
   sessionCount: number
-  /** 是否可以创建子分组 */
+  /** 是否可以创建子分组（基于层级限制） */
   canCreateSubGroup: boolean
 }
 
@@ -65,6 +66,23 @@ const props = withDefaults(defineProps<Props>(), {
   sessionCount: 0,
   canCreateSubGroup: true
 })
+
+/** 判断是否为默认分组 */
+const isDefaultGroup = computed(() => props.group.name === '默认分组')
+
+/**
+ * 显示提示消息（使用 Element Plus 的 ElMessage）
+ * @param message - 提示内容
+ * @param type - 消息类型：'info' | 'success' | 'warning' | 'error'
+ */
+const showAlert = (message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): void => {
+  ElMessage({
+    message,
+    type,
+    duration: 3000, // 显示3秒
+    showClose: true
+  })
+}
 
 /**
  * Emits 定义
@@ -124,7 +142,16 @@ const handleContextMenu = (event: MouseEvent) => {
   /* 构建菜单项列表 */
   const menuItems = [
     { action: 'add-session', title: '添加会话', icon: 'add', description: '添加会话到当前分组' },
-    { action: 'create-subgroup', title: '新建子分组', icon: 'create-folder', description: '在当前分组内创建子分组', visible: props.canCreateSubGroup },
+    {
+      action: 'create-subgroup',
+      title: '新建子分组',
+      icon: 'create-folder',
+      description: isDefaultGroup.value
+        ? '默认分组不支持新建子分组'
+        : '在当前分组内创建子分组',
+      visible: true, // 始终显示，但默认分组点击时会提示
+      disabled: isDefaultGroup.value // 默认分组禁用此选项
+    },
     { action: 'edit-group', title: '编辑分组', icon: 'edit', description: '双击分组名称，可修改分组名' },
     { action: 'delete-group', title: '删除分组', icon: 'delete', description: '删除分组将会话全部删除，操作不可逆' },
     { action: 'inspect', title: '审查元素', icon: 'inspect', description: '打开开发者工具并审查当前元素' }
@@ -137,6 +164,16 @@ const handleContextMenu = (event: MouseEvent) => {
         emit('add-session-to-group', props.group)
         break
       case 'create-subgroup':
+        // 业务规则：默认分组不允许创建子分组，弹出提示
+        if (isDefaultGroup.value) {
+          showAlert('请新建分组来保持良好规范，默认分组不支持新建子分组。', 'warning')
+          return
+        }
+        // 层级限制检查：如果达到层级上限，提示用户
+        if (!props.canCreateSubGroup) {
+          showAlert(`子分组嵌套层级已达上限（最多 ${MAX_GROUP_DEPTH} 级），无法继续创建下级分组。`, 'error')
+          return
+        }
         emit('create-subgroup', props.group)
         break
       case 'edit-group':
