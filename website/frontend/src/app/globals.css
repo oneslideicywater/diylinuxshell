@@ -127,26 +127,55 @@ h1, h2, h3, h4, h5, h6 {
   color: #0f172a !important;
 }
 
-/* 浅色内容区域 - 白底卡片/组件在暗色模式下保持深色文字 */
-.dark .light-content h1,
-.dark .light-content h2,
-.dark .light-content h3,
-.dark .light-content h4,
-.dark .light-content h5,
-.dark .light-content h6,
-.dark .light-content p,
-.dark .light-content li,
-.dark .light-content span,
-.dark .light-content code {
+/* 浅色内容区域策略:
+ * - 容器本身不设背景，保持暗色模式一致性
+ * - 有背景色的子元素（bg-surface等）内部保持深色文字
+ * - 无背景的区域（页面标题等）使用亮色文字
+ */
+
+/* 有背景色的组件内部 - 保持深色文字（按钮除外） */
+.dark .light-content .bg-surface,
+.dark .light-content .bg-surface-subtle,
+.dark .light-content [class*="bg-"]:not([class*="bg-gradient"]) {
+  color: #0f172a;
+}
+
+/* 渐变背景按钮 - 保持白色文字 */
+.dark .light-content [class*="bg-gradient"] {
+  color: #ffffff !important;
+}
+
+.dark .light-content .bg-surface h1,
+.dark .light-content .bg-surface h2,
+.dark .light-content .bg-surface h3,
+.dark .light-content .bg-surface h4,
+.dark .light-content .bg-surface h5,
+.dark .light-content .bg-surface h6,
+.dark .light-content .bg-surface p,
+.dark .light-content .bg-surface li,
+.dark .light-content .bg-surface span,
+.dark .light-content .bg-surface code,
+.dark .light-content .bg-surface-subtle h1,
+.dark .light-content .bg-surface-subtle h2,
+.dark .light-content .bg-surface-subtle h3,
+.dark .light-content .bg-surface-subtle h4,
+.dark .light-content .bg-surface-subtle h5,
+.dark .light-content .bg-surface-subtle h6,
+.dark .light-content .bg-surface-subtle p,
+.dark .light-content .bg-surface-subtle li,
+.dark .light-content .bg-surface-subtle span,
+.dark .light-content .bg-surface-subtle code {
   color: inherit !important;
 }
 
-/* 浅色内容区域内 - 覆盖文字颜色类 */
-.dark .light-content .text-ink-secondary {
+/* 卡片内的次要/三级文字 */
+.dark .light-content .bg-surface .text-ink-secondary,
+.dark .light-content .bg-surface-subtle .text-ink-secondary {
   color: #475569 !important;
 }
 
-.dark .light-content .text-ink-tertiary {
+.dark .light-content .bg-surface .text-ink-tertiary,
+.dark .light-content .bg-surface-subtle .text-ink-tertiary {
   color: #64748B !important;
 }
 

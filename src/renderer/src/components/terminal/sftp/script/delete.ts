@@ -152,6 +152,11 @@ export async function deleteFolderContent(
     
     // 先删除所有子文件/子文件夹（从叶子节点开始）
     for (const child of node.children) {
+      // 检查任务是否已被取消（与 upload/download 保持一致的取消机制）
+      if (isTaskCancelled(taskId, `停止删除剩余子项: ${node.name}`)) {
+        break
+      }
+      
       await deleteFolderContent(child, sftpConnectionId, taskId)
     }
     // 所有子项删除完成 - 最后删除父文件夹本身（传递 sftpConnectionId）
@@ -348,14 +353,27 @@ export async function deleteRemoteBatch(
       const itemName = remotePath.split('/').pop() || 'item'
       
       // 判断是文件还是文件夹（通过查询远程路径类型）
-      const listResult = await window.api.sftp.listDir(
-        sftpConnectionId, 
-        remotePath.includes('/') ? remotePath.substring(0, remotePath.lastIndexOf('/')) : '/'
-      )
+      // 计算父目录路径：/tmp/file → /tmp,  /file → /
+      const lastSlashIndex = remotePath.lastIndexOf('/')
+      const parentPath = (lastSlashIndex > 0) ? remotePath.substring(0, lastSlashIndex) : '/'
       
-      const selectedItem = listResult.success && listResult.data ? listResult.data.find(
+      const listResult = await window.api.sftp.listDir(sftpConnectionId, parentPath)
+      
+      // listDir 失败时提前报错（目标路径的父目录不存在或连接异常）
+      if (!listResult.success) {
+        console.error(`[delete-remote] 无法列出父目录内容: ${parentPath}`, listResult.error)
+        throw new Error(`无法访问目录 "${parentPath}"：${listResult.error || '路径不存在'}`)
+      }
+      
+      const selectedItem = listResult.data?.find(
         (item: any) => item.path === remotePath || item.name === itemName
-      ) : null
+      ) || null
+      
+      // 目标路径在父目录中不存在（可能已被删除或从未创建）
+      if (!selectedItem) {
+        console.warn(`[delete-remote] 目标路径不存在: ${remotePath}`)
+        throw new Error(`删除失败：路径 "${remotePath}" 不存在`)
+      }
       
       if (selectedItem && (selectedItem.type === 'd' || selectedItem.isDirectory)) {
         console.log(`[delete-remote] 创建文件夹删除任务: ${remotePath}`)

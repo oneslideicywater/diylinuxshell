@@ -46,12 +46,10 @@ export default function DownloadPage() {
           <p className="text-sm font-medium text-primary-500 font-mono uppercase tracking-wider mb-3">
             Download
           </p>
-          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4"
-              style={{ color: '#0f172a' }}>
+          <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4">
             免费下载
           </h1>
-          <p className="text-lg text-ink-secondary max-w-lg mx-auto"
-             style={{ color: '#475569' }}>
+          <p className="text-lg text-ink-secondary max-w-lg mx-auto">
             Apache 2.0 开源协议，全平台支持。
             选择适合你操作系统的版本即可开始使用。
           </p>
