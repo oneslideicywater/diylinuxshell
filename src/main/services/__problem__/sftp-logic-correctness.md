@@ -356,6 +356,55 @@ if (node.isDirectory && node.children && node.children.length > 0) {
 
 ---
 
+#### 问题10：任务状态转换后 UI 不刷新 + 子节点状态卡住 ✅ BUG-053 已修复 / BUG-054 待验证
+
+**位置**: [sftpTransfer.ts](../../renderer/src/stores/sftpTransfer.ts) `updateTaskStatus()`
+
+> **核实结果**: **存在，BUG-053 已修复 (2026-04-26)，BUG-054 待验证**
+
+### 🔴 问题10a：状态转换后树形列表不刷新（BUG-053） ✅ 已修复
+
+**现象**：批量下载/上传/删除完成后，已完成任务仍显示在"传输中"列表中，切换筛选器不更新。
+
+**根因**：`updateTaskStatus()` 未递增 `version.value++`
+
+[sftpTransfer.ts](../../renderer/src/stores/sftpTransfer.ts) 中存在两条更新路径：
+
+```
+路径 A: mutateNode(taskId, nodeId, updates)
+    → version.value++          ✅ 节点属性变更时递增 → UI 刷新
+    
+路径 B: updateTaskStatus(taskId, status) 
+    → Object.assign(task, { status })  ❌ 状态变更时不递增 → UI 不刷新！
+```
+
+UI 组件 [SftpTransferTreeNode.vue](../../renderer/src/components/terminal/sftp/status/SftpTransferTreeNode.vue) 的 computed 属性**显式依赖 `store.version`**，当 version 不变时 computed 不重算。
+
+**修复**（一行代码）：在 `updateTaskStatus()` 末尾添加 `version.value++`
+
+```typescript
+function updateTaskStatus(taskId: string, status: TransferTask['status']): void {
+  if (!shouldAllowTransition(taskId, status)) return
+  
+  // 直接修改任务状态（绕过 updateTask 的 status 守卫）
+  const task = transferTasks.value.find(t => t.id === taskId)
+  if (task) { task.status = status }
+  
+  // 递增版本号 → 触发依赖 version 的 computed 重算（与 mutateNode 保持一致）
+  version.value++
+}
+```
+
+### 🟡 问题10b：本地删除子节点 pending 状态不更新（BUG-054） 待验证
+
+**现象**：本地删除文件夹后，父节点显示"已完成 100%"，但子节点仍显示"等待中"(pending)，且任务错误地出现在"待开始"列表。
+
+**可能根因**：与 BUG-053 关联 — version 未递增导致子节点的 completed 状态无法触发 UI 重算。需在应用 BUG-053 修复后重新验证。
+
+详细记录见 [BUG-054](../../docs/bugs/sftp/delete/BUG-054-SFTP本地删除子节点pending状态不更新.md)
+
+---
+
 ## 四、问题汇总
 
 | 编号  | 模块 | 问题                       | 严重程度  | 影响           |
@@ -368,6 +417,7 @@ if (node.isDirectory && node.children && node.children.length > 0) {
 | 问题6 | 删除 | 循环中缺少取消检查                | **高** | 无法取消删除任务     |
 | 问题7 | 删除 | 进度只有 0% 和 100%           | 低     | 用户体验差        |
 | 问题8 | 删除 | deleteFileByPath 无进度上报   | 中     | 回退路径进度丢失     |
+| 问题10 | Store/UI | 任务状态转换后 UI 不刷新（version 未递增） | **高** | 已完成任务显示在错误列表中 |
 
 ***
 
@@ -383,4 +433,5 @@ if (node.isDirectory && node.children && node.children.length > 0) {
 | P2  | 问题1：文件夹进度累加             | 中（需要递归累加逻辑）             |
 | P2  | 问题2：nodeId 匹配确认         | 低（检查 IPC 层代码）           |
 | P3  | 问题7：删除进度细化              | 中（改造删除逻辑）               |
+| P0  | 问题10：状态转换后 UI 不刷新（version 递增） | 低（一行代码：version.value++） |
 

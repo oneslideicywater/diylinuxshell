@@ -21,6 +21,15 @@ import { transferNodeFSM } from '@/components/terminal/sftp/fsm/NodeStateMachine
  *      注意：updateTask 禁止传入 status 字段，否则会报错拒绝！
  *   3. ❌ 绝对禁止：task.status = 'xxx' 或 updateTask({ status: 'xxx' })
  *      这会绕过 FSM 导致状态不一致（如待开始:1 但已完成列表有数据）
+ * 
+ * 📌 version 字段注意事项（UI 刷新机制）：
+ *   - version 是一个递增计数器，用于触发 Vue computed 属性重算
+ *   - UI 组件（SftpTransferTreeNode）的 computed 显式依赖 store.version
+ *   - 任何修改任务/节点状态的操作都必须递增 version，否则 UI 不会刷新！
+ *   - 两条更新路径都必须递增 version：
+ *     ① mutateNode()     → 节点属性变更时 → 已内置 version.value++
+ *     ② updateTaskStatus() → 任务状态变更时 → 已内置 version.value++（BUG-053 修复后）
+ *   - ⚠️ 如果新增了其他修改状态的方法，必须记得添加 version.value++！
  */
 export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   /**
