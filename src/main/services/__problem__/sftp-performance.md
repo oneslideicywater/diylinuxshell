@@ -31,13 +31,15 @@
 
 ## P1 - 上传无背压控制 ✅ 已解决
 
-> 📋 关联：[sftp-transfer-state-machine.md](../../docs/relation/sftp-transfer-state-machine.md) | 修复位置: [uploadFile](../sftp.ts#L490-L530)
+> 📋 关联：[sftp-transfer-state-machine.md](../../docs/relation/sftp-transfer-state-machine.md) | 修复位置: [uploadFile](../sftp.ts#L499-L510)
 
 **状态**: ~~未解决~~ → **已通过背压 (backpressure) 控制解决**
 
 **原问题描述**: `data` 事件触发速度远快于 SFTP `write` 回调，导致内存积压大量未完成 write 请求。
 
-**修复方案**: 收到 data 后立即 `readStream.pause()`，write 回调完成后 `resume()` 继续读取。
+**修复方案（两项）**:
+1. **背压控制**: 收到 data 后立即 `readStream.pause()`，write 回调完成后 `resume()` 继续读取
+2. **缓冲区增大**: `createReadStream` 添加 `highWaterMark: 256KB`（默认64KB），减少 ~75% 的 write 回调次数
 
 ---
 

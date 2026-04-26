@@ -498,8 +498,15 @@ export class SFTPService {
             return
           }
 
-          // 读取本地文件
-          const readStream = fs.createReadStream(localPath)
+          // ── 优化 P1：增大上传读取缓冲区（默认64KB → 256KB）──────────────
+          // 原因：
+          //   - createReadStream 默认 highWaterMark=64KB，每次 data 事件只给 64KB
+          //   - 导致 sftpHandle.write 回调次数过多，JS↔C++ 上下文切换开销大
+          //   - 与 downloadFile 保持一致的缓冲区大小（256KB）
+          // 
+          // 注意：SFTP 协议单包上限 ~32-64KB，ssh2 内部会自动拆包
+          //       真正收益是减少 JS 层 write 回调次数（约减少 75%）
+          const readStream = fs.createReadStream(localPath, { highWaterMark: 256 * 1024 })
           let position = 0
 
           // ── 背压控制：暂停读取流直到 write 回调完成 ─────────────────
