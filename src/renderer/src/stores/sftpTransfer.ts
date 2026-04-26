@@ -542,11 +542,28 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
    * 此方法通过 nodeIndexMap 直接遍历该任务下所有节点，批量设置状态，
    * 比递归遍历树结构更高效（O(n) vs O(n) 但无需函数调用栈）。
    *
+   * ⚠️ 安全锁：仅允许 'delete-local' 调用方使用，防止误用导致整棵树状态被篡改。
+   *
    * @param taskId 任务 ID
    * @param status 目标节点状态
    * @param extraFields 额外要更新的字段（如 progress, endTime 等）
+   * @param purpose 调用目的标识，必须传 'delete-local' 才会执行
    */
-  function mutateAllTaskNodes(taskId: string, status: TransferNode['status'], extraFields?: Partial<TransferNode>): void {
+  function mutateAllTaskNodes(
+    taskId: string,
+    status: TransferNode['status'],
+    extraFields?: Partial<TransferNode>,
+    purpose?: string
+  ): void {
+    // 安全锁：仅允许本地删除场景调用，防止其他模块误用
+    if (purpose !== 'delete-local') {
+      console.warn(
+        `[sftpTransfer] 🚫 mutateAllTaskNodes 被拒绝: purpose="${purpose || '(未传)'}", ` +
+        `仅允许 purpose='delete-local' (本地删除)。taskId=${taskId}`
+      )
+      return
+    }
+
     const prefix = `${taskId}::`
     
     // 遍历 nodeIndexMap 中属于该任务的所有节点，批量更新状态
