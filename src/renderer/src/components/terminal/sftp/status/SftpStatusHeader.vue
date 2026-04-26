@@ -31,7 +31,7 @@
         进度
       </div>
       <div class="header-column size-column">
-        大小
+        已传输/总体
       </div>
       <div class="header-column local-path-column">
         本地路径
@@ -171,8 +171,8 @@ function handleToggle(): void {
 }
 
 .size-column {
-  width: 120px;
-  min-width: 120px;
+  width: 140px;
+  min-width: 140px;
   flex-shrink: 0;
 }
 
@@ -216,29 +216,5 @@ function handleToggle(): void {
   flex-shrink: 0;
 }
 
-/* 树形内容 */
-.tree-content {
-  flex: 1;
-  overflow-y: auto;
-  max-height: 400px;
-}
 
-/* 滚动条样式 */
-.tree-content::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.tree-content::-webkit-scrollbar-track {
-  background: var(--bg-color, #1e1e1e);
-}
-
-.tree-content::-webkit-scrollbar-thumb {
-  background: var(--border-color, #333);
-  border-radius: 4px;
-}
-
-.tree-content::-webkit-scrollbar-thumb:hover {
-  background: var(--text-secondary, var(--text-color, #888));
-}
 </style>

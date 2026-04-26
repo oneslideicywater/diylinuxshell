@@ -551,10 +551,14 @@ const statusText = computed(() => {
   align-items: center;
 }
 
+/* 大小列（固定宽度，强制单行显示，超出截断省略） */
 .size-column {
-  width: 120px;
-  min-width: 120px;
+  width: 140px;
+  min-width: 140px;
   flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 本地路径列（固定最大宽度，超出截断显示省略号） */
@@ -633,6 +637,7 @@ const statusText = computed(() => {
 
 /* 进度条（容器相对定位，用于叠加百分比文字）
  * 设计要点：
+ *   - 高度 100% 自适应父容器 .progress-column（配合 36px 行高）
  *   - 轨道背景使用 --bg-color-tertiary 响应主题切换（亮/暗色）
  *   - 填充层使用 --primary-color 保持品牌一致性
  *   - 文字通过 mix-blend-mode: difference 自动适配双色背景
@@ -640,7 +645,7 @@ const statusText = computed(() => {
 .progress-bar {
   position: relative;
   width: 100%;
-  height: 20px;
+  height: 22px;
   background: var(--bg-color-tertiary, #2d2d30);
   border-radius: var(--border-radius-sm, 4px);
   overflow: hidden;
