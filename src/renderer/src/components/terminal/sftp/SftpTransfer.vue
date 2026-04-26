@@ -539,7 +539,8 @@ async function handleDownloadBatch(paths: string[]): Promise<void> {
 
     console.log('[SftpTransfer] ✅ 批量下载完成')
 
-    await remotePanelRef.value?.loadFiles()
+    // 下载完成后刷新本地文件列表（新下载的文件已保存到本地）
+    await localPanelRef.value?.loadFiles()
   } catch (error: any) {
     console.error('[SftpTransfer] ❌ 批量下载失败:', error)
     showAlert(`批量下载失败: ${error.message}`, '错误', true)
