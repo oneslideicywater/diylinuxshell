@@ -66,6 +66,7 @@
         :key="item.path"
         :data-path="item.path"
         :data-is-directory="item.isDirectory"
+        :data-is-symlink="item.isSymbolicLink"
         class="file-item"
         :class="{ selected: selectedLocals.includes(item.path) }"
         :title="item.isSymbolicLink ? `符号链接 → ${item.linkTarget || '未知'}` : item.path"
@@ -453,9 +454,9 @@ function handleClick(path: string, event?: MouseEvent): void {
 /**
  * 处理文件双击（委托给 Store）
  */
-function handleDblClick(event: MouseEvent): void {
+async function handleDblClick(event: MouseEvent): Promise<void> {
   if (!props.connectionId) return
-  sftpBrowserStore.handleLocalDblClick(props.connectionId, event, DRIVES_PATH)
+  await sftpBrowserStore.handleLocalDblClick(props.connectionId, event, DRIVES_PATH)
   emit('local-dblclick')
 }
 

@@ -568,8 +568,13 @@ async function getLocalDirectoryContents(dirPath: string): Promise<FileInfo[]> {
           const isSymbolicLink = dirent.isSymbolicLink()
           let linkTarget: string | undefined = undefined
           
-          // 如果是符号链接，读取目标路径
+          // 对于符号链接，需要根据目标判断类型（而不是符号链接本身）
+          let isDirectory = dirent.isDirectory()
           if (isSymbolicLink) {
+            // 符号链接：使用 stats（跟随链接后的属性）判断是否为目录
+            isDirectory = stats.isDirectory()
+            
+            // 读取符号链接目标路径
             try {
               linkTarget = fs.readlinkSync(fullPath)
             } catch (error: any) {
@@ -580,7 +585,7 @@ async function getLocalDirectoryContents(dirPath: string): Promise<FileInfo[]> {
           files.push({
             name: dirent.name,
             path: fullPath,
-            isDirectory: dirent.isDirectory(),
+            isDirectory,
             isSymbolicLink,
             linkTarget,
             size: stats.size,

@@ -156,15 +156,31 @@ export const useSftpBrowserStore = defineStore('sftpBrowser', () => {
   /**
    * 处理本地文件双击导航到目录
    */
-  function handleLocalDblClick(connectionId: string, event: MouseEvent, drivesPath: string): void {
+  async function handleLocalDblClick(connectionId: string, event: MouseEvent, drivesPath: string): Promise<void> {
     const target = (event.target as HTMLElement).closest('.file-item')
-    if (!target) return
+    if (!target) {
+      console.log('[sftpBrowser] handleLocalDblClick: 未找到 file-item')
+      return
+    }
+    
+    const path = (target as HTMLElement).dataset.path
+    console.log('[sftpBrowser] handleLocalDblClick: 双击路径 =', path)
     
     const state = getState(connectionId).local
-    const item = state.localFiles.find(f => f.path === (target as HTMLElement).dataset.path)
+    const item = state.localFiles.find(f => f.path === path)
+    
+    console.log('[sftpBrowser] handleLocalDblClick: 找到的 item =', item)
+    console.log('[sftpBrowser] handleLocalDblClick: isDirectory =', item?.isDirectory, 'isSymbolicLink =', item?.isSymbolicLink)
+    
     if (item?.isDirectory) {
-      state.localPath = item.path
-      loadLocalFiles(connectionId, drivesPath)
+      // 如果是符号链接文件夹，跳转到目标路径
+      const targetPath = item.isSymbolicLink && item.linkTarget ? item.linkTarget : item.path
+      console.log('[sftpBrowser] handleLocalDblClick: 进入目录', targetPath, item.isSymbolicLink ? `(符号链接目标：${item.linkTarget})` : '')
+      state.localPath = targetPath
+      await loadLocalFiles(connectionId, drivesPath)
+      console.log('[sftpBrowser] handleLocalDblClick: 加载完成，文件数量 =', state.localFileCount)
+    } else {
+      console.log('[sftpBrowser] handleLocalDblClick: 不是目录，不处理')
     }
   }
 
