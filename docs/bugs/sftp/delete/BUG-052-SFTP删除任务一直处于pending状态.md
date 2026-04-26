@@ -104,17 +104,21 @@ sftpTransferStore.updateTask(task.id, { status: 'completed' })
 
 ## 修改文件
 
+- [sftpTransfer.ts](../../renderer/src/stores/sftpTransfer.ts)
+  - `updateTask()` 方法添加防御性检查：检测到 `status` 字段时直接拒绝并打印错误日志
+  - 确保所有状态变更必须通过 `updateTaskStatus()` 经过 FSM 校验
 - [delete.ts](../../renderer/src/components/terminal/sftp/script/delete.ts)
   - **L407** (文件夹分支): 扫描前添加 `updateTaskStatus(task.id, 'scanning')`
   - **L468** (单文件分支): 扫描前添加 `updateTaskStatus(task.id, 'scanning')`
-  - L426 (文件夹分支): 扫描后 `updateTaskStatus(task.id, 'transferring')` — 原有
-  - L477 (单文件分支): 扫描后 `updateTaskStatus(task.id, 'transferring')` — 原有
-  - L167-L179 (`deleteFolderContent`): 空目录/单文件分支安全检查 — 原有
+  - L527 (远程删除完成): 改用 `updateTaskStatus('completed')` 替代 `updateTask({status:'completed'})`
+  - L319 (本地删除完成): 移除 `task.status = 'completed'` 直接赋值，仅用 `updateTaskStatus`
+  - L253/L326/L450/L499/L556 (error 路径): 全部移除 `task.status = 'error'` 直接赋值
+- [sftpTransfer.ts](../../renderer/src/stores/sftpTransfer.ts) 文件头添加全局任务状态更新规范
 
 ## 测试验证
 
-1. 删除单个远程文件 → 验证：待开始→0，已完成→1，状态流转正确
-2. 删除空目录 → 验证同上
-3. 删除有内容的文件夹 → 验证同上
-4. 批量删除混合内容 → 验证所有任务状态正确
+1. 删除单个远程文件 → 验证：待开始→0，已完成→1，状态流转正确 ✅
+2. 删除空目录 → 验证同上 ✅
+3. 删除有内容的文件夹 → 验证同上 ✅
+4. 批量删除混合内容 → 验证所有任务状态正确 ✅
 5. 取消正在扫描的任务 → 验证 `scanning → cancelled` 正常

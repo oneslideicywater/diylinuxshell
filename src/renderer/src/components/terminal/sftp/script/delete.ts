@@ -15,13 +15,9 @@
  * - 显示已删除数量、总数量、剩余时间、经过时间
  * - 删除完成后刷新远程文件列表
  * 
- * ⚠️ 任务状态更新规范（必须遵守）：
- *   1. 修改任务状态 → 必须使用 sftpTransferStore.updateTaskStatus(taskId, status)
- *      该方法会经过 FSM 状态机校验，确保状态转换合法（如 pending→scanning→transferring→completed）
- *   2. 更新非状态字段（completedAt/elapsedTime/transferredBytes 等）→ 使用 sftpTransferStore.updateTask(taskId, updates)
- *      注意：updateTask 禁止传入 status 字段，否则会报错拒绝！
- *   3. ❌ 绝对禁止：task.status = 'xxx' 或 updateTask({ status: 'xxx' })
- *      这会绕过 FSM 导致状态不一致（如待开始:1 但已完成列表有数据）
+ * ⚠️ 任务状态更新规范：详见 sftpTransferStore（useSftpTransferStore）文件头注释
+ *    - 修改状态 → updateTaskStatus()（经过 FSM 校验）
+ *    - 更新非状态字段 → updateTask()（禁止传 status）
  * @module sftp/delete
  */
 
