@@ -702,7 +702,17 @@ export class SFTPService {
    * 回退方法：当子节点不在 TransferNode 树中时，用路径方式删除
    * 仅在 deleteFile 内部调用，保持对外 API 统一
    * 
+   * 调用场景（何时触发此方法）：
+   *   1. 扫描目录树后，其他进程新建了文件/文件夹（readdir 返回了但树中没有）
+   *   2. 扫描时因权限不足跳过了某些隐藏文件
+   *   3. 符号链接等特殊文件类型未被 scanRemoteTree 收录到树中
+   * 
    * 注意：此方法没有对应的 TransferNode 子对象，进度统一关联到 parentNode（父节点）
+   * 
+   * 进度上报策略：
+   *   - 特殊文件的 size 未被计入 parentNode.size（扫描时未收录）
+   *   - 因此完成时不能传 parentNode.size（否则前端计算 100%，导致父节点提前跳满）
+   *   - 只在开始时上报 0% 告知前端"在工作中"，完成后不上报（避免干扰正常进度）
    */
   private async deleteFileByPath(
     taskId: string,
@@ -715,6 +725,7 @@ export class SFTPService {
     }
 
     // ── 回退路径开始：上报 0% 进度（关联到父节点） ──────────────────
+    // 仅告知前端"正在处理回退路径"，不改变实际百分比
     if (onProgress) {
       onProgress(0, 0, taskId, parentNode)
     }
@@ -727,48 +738,30 @@ export class SFTPService {
         }
 
         if (stats.isDirectory()) {
-          // ── 回退目录：递归删除子项，完成后上报 100% ────────────────
+          // ── 回退目录：递归删除子项 ────────────────────────────────
           this.sftpHandle.readdir(remotePath, async (err: Error, entries: any[]) => {
             if (err) { reject(err); return }
 
-            // 过滤有效子项，用于计算中间进度
+            // 过滤有效子项
             const validEntries = entries.filter(e => e.filename !== '.' && e.filename !== '..')
-            const totalChildren = validEntries.length
 
-            for (let i = 0; i < validEntries.length; i++) {
-              const entry = validEntries[i]
+            for (const entry of validEntries) {
               const childPath = path.posix.join(remotePath, entry.filename)
               await this.deleteFileByPath(taskId, childPath, parentNode, onProgress)
-
-              // 每删除完一个子项，上报父节点中间进度（与 deleteFile 保持一致）
-              if (onProgress && totalChildren > 0 && parentNode.size) {
-                const completedRatio = (i + 1) / totalChildren
-                const intermediateBytes = Math.floor(parentNode.size * completedRatio)
-                onProgress(0, intermediateBytes, taskId, parentNode)
-              }
             }
 
-            // ── 回退目录所有子项删除完毕：rmdir + 上报 100% ───────────
+            // ── 回退目录所有子项删除完毕：rmdir ─────────────────────
+            // 注意：不上报 100% 进度！因为此目录的 size 未计入 parentNode.size
+            // 如果传 parentNode.size 会导致前端计算 progress=100%，父节点提前跳满
             this.sftpHandle.rmdir(remotePath, (err: Error) => {
-              if (err) { reject(err) } else {
-                // 上报父节点 100%（回退路径的目录删除完成）
-                if (onProgress) {
-                  onProgress(0, parentNode.size || 0, taskId, parentNode)
-                }
-                resolve()
-              }
+              if (err) { reject(err) } else { resolve() }
             })
           })
         } else {
-          // ── 回退文件：unlink + 上报 100% ───────────────────────────
+          // ── 回退文件：unlink ─────────────────────────────────────
+          // 同样不上报 100%，原因同上
           this.sftpHandle.unlink(remotePath, (err: Error) => {
-            if (err) { reject(err) } else {
-              // 上报父节点 100%（回退路径的文件删除完成）
-              if (onProgress) {
-                onProgress(0, parentNode.size || 0, taskId, parentNode)
-              }
-              resolve()
-            }
+            if (err) { reject(err) } else { resolve() }
           })
         }
       })

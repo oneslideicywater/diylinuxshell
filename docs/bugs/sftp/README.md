@@ -36,6 +36,7 @@ sftp/
 | BUG-049 | SFTP 删除远程路径不存在时无友好提示 | 已修复 |
 | BUG-050 | SFTP 删除进度只有 0% 和 100% | 已修复 |
 | BUG-051 | SFTP deleteFileByPath 回退路径无进度上报 | 已修复 |
+| BUG-052 | SFTP 删除任务一直处于 pending 状态 | 已修复 |
 
 ## UI (ui/)
 

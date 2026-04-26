@@ -20,9 +20,9 @@
 ### 触发场景
 
 `deleteFileByPath` 在以下情况被调用：
-- 扫描目录树后，其他进程新建了文件/文件夹
+- 扫描目录树后，其他进程新建了文件/文件夹（readdir 返回了但树中没有）
 - 扫描时因权限不足跳过了某些隐藏文件
-- 符号链接等特殊文件类型未被收录到树中
+- 符号链接等特殊文件类型未被 scanRemoteTree 收录到树中
 
 ### 错误现象
 
@@ -55,40 +55,49 @@ private async deleteFileByPath(taskId, remotePath, parentNode, onProgress?) {
 
 ## 修复方案
 
-在 `deleteFileByPath` 中添加完整的进度上报链路，与 `deleteFile` 保持一致：
+采用**有限度的进度上报策略**——只上报开始，不上报完成：
 
 ```typescript
-// 1. 开始时上报 0%
+// ✅ 开始时上报 0%（告知前端"正在处理回退路径"）
 if (onProgress) {
   onProgress(0, 0, taskId, parentNode)
 }
 
-// 2. 目录循环中每完成一个子项，上报中间进度
-for (let i = 0; i < validEntries.length; i++) {
-  await this.deleteFileByPath(taskId, childPath, parentNode, onProgress)
-  
-  if (onProgress && totalChildren > 0 && parentNode.size) {
-    const completedRatio = (i + 1) / totalChildren
-    const intermediateBytes = Math.floor(parentNode.size * completedRatio)
-    onProgress(0, intermediateBytes, taskId, parentNode)
-  }
-}
+// ... 删除逻辑（递归/unlink/rmdir）...
 
-// 3. 完成时上报 100%（文件 unlink 或目录 rmdir）
-if (onProgress) {
-  onProgress(0, parentNode.size || 0, taskId, parentNode)
-}
+// ❌ 完成时不上报！原因：
+//   - 特殊文件的 size 未被计入 parentNode.size（扫描时未收录）
+//   - 如果传 parentNode.size → 前端计算 progress=100% → 父节点提前跳满
+//   - 所以只在开始时通知前端"有活动"，完成后静默返回
 ```
 
-**注意**: 由于回退路径没有对应的 TransferNode 子对象，所有进度都关联到 `parentNode`（父节点）。
+### 为什么不能传 `parentNode.size`？
+
+**数据流分析**：
+```
+扫描阶段 (scanRemoteTree):
+  正常子项A: 100KB ─┐
+  正常子项B: 200KB ─┤→ parentNode.size = 300KB
+  正常子项C: 300KB ─┘
+  
+  特殊文件X: 50KB  ← 未被收录！（触发回退路径）
+
+删除阶段:
+  删完 A: transferredBytes=100KB → progress=33% ✅
+  删完 B: transferredBytes=200KB → progress=67% ✅
+  删完 C: transferredBytes=300KB → progress=100% ✅
+  删完 X (回退): 若传 parentNode.size=300KB → progress=100% ❌ 提前跳满！
+```
+
+**结论**: 回退路径处理的文件大小不在 `parentNode.size` 统计范围内，传此值会导致百分比计算错误。
 
 ## 修改文件
 
-- [sftp.ts](../../src/main/services/sftp.ts) - `deleteFileByPath` 方法，添加完整的进度上报链路（开始0%、中间进度、完成100%）
+- [sftp.ts](../../src/main/services/sftp.ts) - `deleteFileByPath` 方法，添加开始时的进度上报（0%），完成后不上报
 
 ## 测试验证
 
 1. 正常删除（不走回退路径）→ 验证功能不受影响
-2. 模拟回退场景（手动触发 deleteFileByPath）→ 验证进度正常更新
-3. 回退路径删除大目录 → 验证中间进度逐步推进
-4. 回退路径删除单文件 → 验证 0%→100% 正常
+2. 模拟回退场景 → 验证开始时有进度通知
+3. 回退路径删除完成后 → 验证父节点不会提前跳到 100%
+4. 混合场景（正常+回退）→ 验证正常子项的进度正确推进

@@ -174,22 +174,17 @@ private async deleteFileByPath(taskId, remotePath, parentNode, onProgress?) {
   // 没有调用 onProgress
 }
 
-// 修复后：完整的进度上报链路
+// 修复后：有限度的进度上报（只上报开始，不上报完成）
 private async deleteFileByPath(taskId, remotePath, parentNode, onProgress?) {
-  // 开始时上报 0%
+  // 开始时上报 0%（告知前端"正在处理回退路径"）
   if (onProgress) { onProgress(0, 0, taskId, parentNode) }
   
-  // 目录循环中每完成一个子项，上报中间进度
-  for (let i = 0; i < validEntries.length; i++) {
-    await this.deleteFileByPath(taskId, childPath, parentNode, onProgress)
-    if (onProgress) { 
-      const completedRatio = (i + 1) / totalChildren
-      onProgress(0, Math.floor(parentNode.size * completedRatio), taskId, parentNode) 
-    }
-  }
+  // ... 删除逻辑 ...
   
-  // 完成时上报 100%（文件 unlink 或目录 rmdir）
-  if (onProgress) { onProgress(0, parentNode.size || 0, taskId, parentNode) }
+  // 完成时不上报！原因：
+  //   - 特殊文件的 size 未被计入 parentNode.size（扫描时未收录）
+  //   - 如果传 parentNode.size → 前端计算 progress=100% → 父节点提前跳满
+  //   - 所以只在开始时通知前端"有活动"，完成后静默返回
 }
 ```
 
@@ -197,19 +192,60 @@ private async deleteFileByPath(taskId, remotePath, parentNode, onProgress?) {
 
 **影响**: 如果走回退路径，前端进度条不会更新。
 
+**设计决策**: 为什么完成时不上报 `parentNode.size`？
+- `parentNode.size` 是扫描阶段统计的**正常子项总大小**
+- 回退路径处理的**特殊文件**未被计入此值
+- 若传 `parentNode.size` 作为 `transferredBytes`，前端会计算 `size/size = 100%`
+- 导致父节点在正常子项未删完时就显示 100%，用户感知错误
+
 **核实结果**: **存在，已修复 (BUG-051)**
 
 ***
 
-#### 问题9：删除任务一直处于 pending 状态
+#### 问题9：删除任务一直处于 pending 状态 ✅ 已修复
 
-**位置**: [delete.ts:L370-L485](../../renderer/src/components/terminal/sftp/script/delete.ts#L370-L485)
+**位置**: [delete.ts:L407, L468, L426, L477](../../renderer/src/components/terminal/sftp/script/delete.ts#L407)
+**FSM 定义**: [TaskStateMachine.ts](../../renderer/src/components/terminal/sftp/fsm/TaskStateMachine.ts)
 
-**核实结果：存在**（2026-04-25）
+**核实结果：存在，已修复 (BUG-052)**
 
----
+### 🔴 根本原因：FSM 状态机拒绝 `pending → transferring` 转换
 
-##### 问题链路追踪
+```typescript
+// TaskStateMachine 合法转换表
+pending: new Set(['scanning', 'error', 'cancelled'])  // ❌ 没有 transferring！
+scanning: new Set(['transferring', 'error', 'cancelled'])  // scanning 才能 → transferring
+```
+
+**删除逻辑跳过了 `scanning` 状态，直接尝试 `pending → transferring`，被 FSM 拒绝。**
+
+### 修复内容（核心：添加 scanning 状态）
+
+| 步骤 | 修复前 | 修复后 |
+|------|--------|--------|
+| 创建任务后 | 直接扫描 | **`updateTaskStatus('scanning')`** ✅ 新增 |
+| 扫描完成后 | `mutateNode` (节点) | `updateTaskStatus('transferring')` ✅ 已有 |
+| 删除完成后 | `updateTask({completed})` | 同上 ✅ 已有 |
+
+### 状态流转对比
+
+```
+❌ 修复前:  pending ──✗→ transferring ──✗→ completed
+             (FSM 拒绝)      (FSM 拒绝)
+
+✅ 修复后:  pending → scanning → transferring → completed
+            (合法)     (合法)        (合法)
+```
+
+### 受影响场景
+
+所有删除场景均受影响（不仅是单文件/空目录）：
+
+| 删除对象 | 修复前 | 修复后 |
+|---------|--------|--------|
+| 单文件 | `pending` ❌ | 完整流转 ✅ |
+| 空目录 | `pending` ❌ | 完整流转 ✅ |
+| 文件夹（有子节点）| `pending` ❌ | 完整流转 ✅ |
 
 **1. 任务创建阶段**（[delete.ts:L370-L375](../../renderer/src/components/terminal/sftp/script/delete.ts#L370-L375)）
 

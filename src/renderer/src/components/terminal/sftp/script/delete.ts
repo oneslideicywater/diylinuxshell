@@ -14,6 +14,14 @@
  * - 支持取消批量删除任务
  * - 显示已删除数量、总数量、剩余时间、经过时间
  * - 删除完成后刷新远程文件列表
+ * 
+ * ⚠️ 任务状态更新规范（必须遵守）：
+ *   1. 修改任务状态 → 必须使用 sftpTransferStore.updateTaskStatus(taskId, status)
+ *      该方法会经过 FSM 状态机校验，确保状态转换合法（如 pending→scanning→transferring→completed）
+ *   2. 更新非状态字段（completedAt/elapsedTime/transferredBytes 等）→ 使用 sftpTransferStore.updateTask(taskId, updates)
+ *      注意：updateTask 禁止传入 status 字段，否则会报错拒绝！
+ *   3. ❌ 绝对禁止：task.status = 'xxx' 或 updateTask({ status: 'xxx' })
+ *      这会绕过 FSM 导致状态不一致（如待开始:1 但已完成列表有数据）
  * @module sftp/delete
  */
 
@@ -163,12 +171,26 @@ export async function deleteFolderContent(
     await deleteSingleItem(node, sftpConnectionId, taskId)
     
   } else if (node.isDirectory) {
-    // 空目录或无子节点信息的目录 - 直接删除目录本身（传递 sftpConnectionId）
+    // 空目录或无子节点信息的目录 - 直接删除目录本身
+    // 检查任务状态：如果当前是 pending，则更新为 transferring（与有子节点的文件夹分支保持一致）
+    const emptyDirTask = sftpTransferStore.getTask(taskId)
+    if (emptyDirTask && emptyDirTask.status === 'pending') {
+      sftpTransferStore.updateTaskStatus(taskId, 'transferring')
+      console.log('[delete] 任务状态从 pending 转换为 transferring（空目录删除开始）')
+    }
+    
     console.log(`[delete] 检测到空目录/叶子目录，直接删除: ${node.name}`)
     await deleteSingleItem(node, sftpConnectionId, taskId)
     
   } else if (!node.isDirectory) {
-    // 如果是文件，执行删除（传递 sftpConnectionId）
+    // 如果是文件，执行删除
+    // 检查任务状态：如果当前是 pending，则更新为 transferring（修复：单文件删除时任务不会卡在 pending）
+    const fileTask = sftpTransferStore.getTask(taskId)
+    if (fileTask && fileTask.status === 'pending') {
+      sftpTransferStore.updateTaskStatus(taskId, 'transferring')
+      console.log('[delete] 任务状态从 pending 转换为 transferring（单文件删除开始）')
+    }
+    
     await deleteSingleItem(node, sftpConnectionId, taskId)
   }
 }
@@ -236,7 +258,6 @@ export async function deleteLocalBatch(
       } catch (scanError: any) {
         console.error(`[delete-local] 扫描本地路径失败: ${filePath}`, scanError)
         sftpTransferStore.updateTaskStatus(task.id, 'error')
-        task.status = 'error'
       }
       
     } catch (error: any) {
@@ -302,14 +323,14 @@ export async function deleteLocalBatch(
 
         // 若已被用户取消则跳过
         if (task.status === 'cancelled') continue
-        task.status = 'completed'
+        
+        // 通过 FSM 状态机转换任务状态
         sftpTransferStore.updateTaskStatus(task.id, 'completed')
 
         console.log(`[delete-local] ✅ 任务 ${i + 1} 完成: ${task.root!.name}`)
       } catch (error: any) {
         console.error(`[delete-local] ❌ 任务 ${i + 1} 失败: ${task.root!.name}`, error)
 
-        task.status = 'error'
         sftpTransferStore.updateTaskStatus(task.id, 'error')
       } finally {
         cleanupProgress()
@@ -389,6 +410,9 @@ export async function deleteRemoteBatch(
         sftpTransferStore.addTask(task)
         createdTasks.push(task)
 
+        // 任务状态：pending → scanning（遵循 FSM：必须经过 scanning 才能到 transferring）
+        sftpTransferStore.updateTaskStatus(task.id, 'scanning')
+
         console.log(`[delete-remote] ✅ 已创建删除任务 #${createdTasks.length}（扫描中）: ${itemName}`)
 
         try {
@@ -421,13 +445,15 @@ export async function deleteRemoteBatch(
             startTime: Date.now()
           })
 
+          // 更新任务状态为传输中（修复：单文件/空目录删除时任务不会卡在 pending）
+          sftpTransferStore.updateTaskStatus(task.id, 'transferring')
+
           sftpTransferStore.updateTask(task.id, { totalBytes: delScanResult.totalBytes || 0 })
 
         } catch (scanError: any) {
           console.error(`[delete-remote] 扫描远程文件夹失败: ${remotePath}`, scanError)
 
           sftpTransferStore.updateTaskStatus(task.id, 'error')
-          task.status = 'error'
         }
         
       } else {
@@ -443,6 +469,9 @@ export async function deleteRemoteBatch(
 
         sftpTransferStore.addTask(task)
         createdTasks.push(task)
+
+        // 任务状态：pending → scanning（遵循 FSM：必须经过 scanning 才能到 transferring）
+        sftpTransferStore.updateTaskStatus(task.id, 'scanning')
 
         try {
           console.log(`[delete-remote] 扫描远程文件（主进程扫描）: ${remotePath}`)
@@ -467,10 +496,12 @@ export async function deleteRemoteBatch(
             startTime: Date.now()
           })
 
+          // 更新任务状态为传输中（修复：单文件删除时任务不会卡在 pending）
+          sftpTransferStore.updateTaskStatus(task.id, 'transferring')
+
         } catch (scanError: any) {
           console.error(`[delete-remote] 扫描远程文件失败: ${remotePath}`, scanError)
           sftpTransferStore.updateTaskStatus(task.id, 'error')
-          task.status = 'error'
         }
       }
       
@@ -493,18 +524,19 @@ export async function deleteRemoteBatch(
     try {
       await deleteFolderContent(task.root!, sftpConnectionId, task.id)
       
-      const completedAt = Date.now()
-      const elapsedTime = Math.round((completedAt - task.createdAt) / 1000)
+
       
       // 若已被用户取消则跳过
       if (task.status === 'cancelled') continue
-      task.status = 'completed'
-      task.completedAt = completedAt
-      task.elapsedTime = elapsedTime
-      task.transferredBytes = task.totalBytes
+      
+      // 通过 FSM 状态机转换任务状态：transferring → completed
+      // 注意：必须用 updateTaskStatus（有 FSM 守卫），不能用 updateTask 直接写 status（会绕过 FSM）
+      sftpTransferStore.updateTaskStatus(task.id, 'completed')
+      
+      const completedAt = Date.now()
+      const elapsedTime = Math.round((completedAt - task.createdAt) / 1000)
       
       sftpTransferStore.updateTask(task.id, {
-        status: 'completed',
         completedAt,
         elapsedTime,
         transferredBytes: task.totalBytes
@@ -525,7 +557,6 @@ export async function deleteRemoteBatch(
     } catch (error: any) {
       console.error(`[delete-remote] ❌ 任务 ${i + 1} 失败: ${task.root!.name}`, error)
       
-      task.status = 'error'
       sftpTransferStore.updateTaskStatus(task.id, 'error')
     }
   }

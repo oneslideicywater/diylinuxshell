@@ -133,13 +133,28 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   }
 
   /**
-   * 更新传输任务的顶层属性
-   * 当 root 被替换时自动重建节点索引（两阶段策略的关键）
+   * 更新传输任务的顶层属性（非状态字段）
+   * 
+   * ⚠️ 状态字段（status）禁止通过此方法修改！
+   *    修改任务状态必须使用 updateTaskStatus()，该方法会经过 FSM 状态机校验。
+   *    若此方法检测到 updates 中包含 status 字段，将直接拒绝并打印错误日志。
+   * 
+   * 用途：更新 completedAt、elapsedTime、transferredBytes、totalBytes 等非状态属性
    * 
    * @param taskId 任务 ID
-   * @param updates 要更新的字段
+   * @param updates 要更新的字段（不得包含 status）
    */
   function updateTask(taskId: string, updates: Partial<TransferTask>): void {
+    // 防御性检查：禁止通过此方法绕过 FSM 修改任务状态
+    if ('status' in updates) {
+      console.error(
+        `[sftpTransfer] 🚫 updateTask() 拒绝：检测到 status 字段！` +
+        `修改任务状态必须使用 updateTaskStatus(taskId, status) 以经过 FSM 校验。` +
+        `调用栈信息请检查上方日志。`
+      )
+      return
+    }
+
     const task = transferTasks.value.find(t => t.id === taskId)
     if (!task) return
     Object.assign(task, updates)
