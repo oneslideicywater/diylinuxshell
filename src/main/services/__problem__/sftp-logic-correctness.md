@@ -163,20 +163,41 @@ const progress = node.size > 0 ? Math.round((data.transferredBytes / node.size) 
 
 ***
 
-#### 问题8：`deleteFileByPath` 没有进度上报
+#### 问题8：`deleteFileByPath` 没有进度上报 ✅ 已修复
 
-**位置**: [sftp.ts:L668-L698](../sftp.ts#L668-L698)
+**位置**: [sftp.ts:L702-L770](../sftp.ts#L702-L770)
 
 ```typescript
+// 修复前：没有任何 onProgress 调用
 private async deleteFileByPath(taskId, remotePath, parentNode, onProgress?) {
   // ... 删除逻辑
   // 没有调用 onProgress
+}
+
+// 修复后：完整的进度上报链路
+private async deleteFileByPath(taskId, remotePath, parentNode, onProgress?) {
+  // 开始时上报 0%
+  if (onProgress) { onProgress(0, 0, taskId, parentNode) }
+  
+  // 目录循环中每完成一个子项，上报中间进度
+  for (let i = 0; i < validEntries.length; i++) {
+    await this.deleteFileByPath(taskId, childPath, parentNode, onProgress)
+    if (onProgress) { 
+      const completedRatio = (i + 1) / totalChildren
+      onProgress(0, Math.floor(parentNode.size * completedRatio), taskId, parentNode) 
+    }
+  }
+  
+  // 完成时上报 100%（文件 unlink 或目录 rmdir）
+  if (onProgress) { onProgress(0, parentNode.size || 0, taskId, parentNode) }
 }
 ```
 
 **问题**: 回退删除路径时（子节点不在 TransferNode 树中），完全没有调用 `onProgress`，前端收不到任何进度更新。
 
 **影响**: 如果走回退路径，前端进度条不会更新。
+
+**核实结果**: **存在，已修复 (BUG-051)**
 
 ***
 
