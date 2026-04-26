@@ -553,8 +553,8 @@ const statusText = computed(() => {
 
 /* 大小列（固定宽度，强制单行显示，超出截断省略） */
 .size-column {
-  width: 140px;
-  min-width: 140px;
+  width: 160px;
+  min-width: 160px;
   flex-shrink: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -683,6 +683,20 @@ const statusText = computed(() => {
   letter-spacing: 0.3px;
   /* 微弱阴影增强边缘可读性 */
   filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.3));
+}
+
+/* 浅色主题进度条适配（与项目 [data-theme="light"] 模式一致）
+ * 轨道背景改为浅灰色，文字使用深色 + 白色 text-shadow 保证可读性
+ */
+[data-theme="light"] .progress-bar {
+  background: #e8eaed;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .progress-text {
+  mix-blend-mode: normal;
+  color: #333333;
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.9));
 }
 
 .progress-percent {
