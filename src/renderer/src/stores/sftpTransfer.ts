@@ -196,14 +196,27 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   }
 
   /**
-   * 更新任务状态（带状态机保护）
+   * 更新任务状态（带状态机保护 + 版本递增）
+   *
+   * 注意：此方法是唯一合法的任务状态修改入口。
+   * 状态变更后会自动递增 version，触发依赖 version 的 computed 重算，
+   * 确保 UI 组件（SftpTransferTreeNode）能及时刷新任务列表。
    *
    * @param taskId 任务 ID
    * @param status 新状态
    */
   function updateTaskStatus(taskId: string, status: TransferTask['status']): void {
     if (!shouldAllowTransition(taskId, status)) return
-    updateTask(taskId, { status })
+    
+    // 直接修改任务状态（绕过 updateTask 的 status 守卫，因为已通过 FSM 校验）
+    const task = transferTasks.value.find(t => t.id === taskId)
+    if (task) {
+      task.status = status
+    }
+    
+    // 递增版本号 → 触发依赖 version 的 computed 重算（与 mutateNode 保持一致）
+    // 解决 BUG-053：任务状态转换后树形列表不刷新
+    version.value++
   }
 
   /**
