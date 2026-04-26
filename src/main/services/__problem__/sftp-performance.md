@@ -5,59 +5,39 @@
 
 ---
 
-## P0 - 串行文件传输（最严重）
+## P0 - 串行文件传输（最严重） ✅ 已解决
 
-**位置**: [downloadFolder](../sftp.ts#L286-L310) / [uploadFolder](../sftp.ts#L455-L474)
+> 📋 关联：[sftp-transfer-state-machine.md](../../docs/relation/sftp-transfer-state-machine.md) | 修复位置: [runConcurrent](../sftp.ts#L396-L436)
 
-```typescript
-for (const child of node.children) {
-  if (child.isDirectory) {
-    await this.downloadFolder(taskId, child, onProgress)
-  } else {
-    await this.downloadFile(taskId, child, onProgress)
-  }
-}
-```
+**状态**: ~~未解决~~ → **已通过并发池 (`runConcurrent`) 解决**
 
-**问题**: 文件夹内的文件**完全串行**处理，每个文件必须等前一个完成才开始。假设100个小文件，每个1MB，网络延迟50ms，串行需要至少5秒延迟开销。
+**原问题描述**: 文件夹内的文件**完全串行**处理，每个文件必须等前一个完成才开始。
 
-**建议**: 同一目录下的文件应该**并发传输**（可配置并发数，如5-10个并发）。
+**修复方案**: 引入 Promise Pool 并发执行器，默认 `MAX_CONCURRENCY=5` 并发数。
 
 ---
 
-## P1 - 下载缓冲区过小
+## P1 - 下载缓冲区过小 ✅ 已解决
 
-**位置**: [downloadFile](../sftp.ts#L193)
+> 📋 关联：[sftp-transfer-state-machine.md](../../docs/relation/sftp-transfer-state-machine.md) | 修复位置: [downloadFile](../sftp.ts#L247-L256)
 
-```typescript
-const buffer = Buffer.alloc(32 * 1024) // 32KB buffer
-```
+**状态**: ~~未解决~~ → **已通过增大缓冲区解决 (32KB → 256KB)**
 
-**问题**: 32KB 缓冲区在现代网络环境下太小。对于高带宽连接（如100Mbps+），这会导致：
-- 频繁的回调调用
-- 无法充分利用网络带宽
-- CPU 在回调调度上浪费时间
+**原问题描述**: 32KB 缓冲区在现代网络环境下太小，导致频繁回调、带宽利用率低。
 
-**建议**: 至少 128KB-256KB，或根据文件大小动态调整。
+**修复方案**: 缓冲区从 `32KB` 增大到 `256KB`，平衡带宽利用率与内存占用。
 
 ---
 
-## P1 - 上传无背压控制
+## P1 - 上传无背压控制 ✅ 已解决
 
-**位置**: [uploadFile](../sftp.ts#L368-L445)
+> 📋 关联：[sftp-transfer-state-machine.md](../../docs/relation/sftp-transfer-state-machine.md) | 修复位置: [uploadFile](../sftp.ts#L490-L530)
 
-```typescript
-const readStream = fs.createReadStream(localPath)
-readStream.on('data', (chunk) => {
-  this.sftpHandle.write(handle, chunk, ...)
-})
-```
+**状态**: ~~未解决~~ → **已通过背压 (backpressure) 控制解决**
 
-**问题**: `createReadStream` 默认使用 64KB 缓冲区，但 `data` 事件触发速度可能远快于 SFTP `write` 回调完成速度，导致：
-- 内存中积压大量未完成的 write 请求
-- 大文件上传时内存占用过高
+**原问题描述**: `data` 事件触发速度远快于 SFTP `write` 回调，导致内存积压大量未完成 write 请求。
 
-**建议**: 使用背压（backpressure）控制，等待 write 回调完成后再读取下一个 chunk。
+**修复方案**: 收到 data 后立即 `readStream.pause()`，write 回调完成后 `resume()` 继续读取。
 
 ---
 
@@ -153,14 +133,14 @@ private calculateTransferSpeed(...) {
 
 ## 性能问题优先级汇总
 
-| 优先级 | 问题 | 影响 |
-|--------|------|------|
-| P0 | 串行文件传输 | 大文件夹传输时间翻倍 |
-| P1 | 下载缓冲区过小 | 带宽利用率低 |
-| P1 | 上传无背压控制 | 大文件内存溢出风险 |
-| P2 | listDir 全量加载 | 大目录卡顿 |
-| P2 | 无连接池 | 无法并发任务 |
-| P2 | deleteFile 串行删除 | 删除大量文件缓慢 |
-| P3 | 重复 stat 调用 | 轻微延迟增加 |
-| P3 | 高频 Date.now() | 微小 CPU 开销 |
-| P3 | 递归调用栈溢出风险 | 极深目录结构崩溃 |
+| 优先级 | 问题 | 状态 | 影响 |
+|--------|------|------|------|
+| P0 | 串行文件传输 | ✅ 已解决 | 大文件夹传输时间翻倍 |
+| P1 | 下载缓冲区过小 | ✅ 已解决 | 带宽利用率低 |
+| P1 | 上传无背压控制 | ✅ 已解决 | 大文件内存溢出风险 |
+| P2 | listDir 全量加载 | ⏳ 待处理 | 大目录卡顿 |
+| P2 | 无连接池 | ⏳ 待处理 | 无法并发任务 |
+| P2 | deleteFile 串行删除 | ⏳ 待处理 | 删除大量文件缓慢 |
+| P3 | 重复 stat 调用 | ⏳ 待处理 | 轻微延迟增加 |
+| P3 | 高频 Date.now() | ⏳ 待处理 | 微小 CPU 开销 |
+| P3 | 递归调用栈溢出风险 | ⏳ 待处理 | 极深目录结构崩溃 |

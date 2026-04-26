@@ -433,16 +433,19 @@ const statusText = computed(() => {
 </script>
 
 <style scoped>
-/* 树节点容器 */
+/* 树节点容器（min-width: max-content 与表头 .sftp-transfer-tree 一致，
+ * 确保窗口变窄时不会被 flex 压缩，而是通过外层 .tree-content 的 overflow: auto 水平滚动） */
 .tree-node {
   border-bottom: 1px solid var(--border-color, #e0e0e0);
+  min-width: max-content;
 }
 
-/* 节点行 */
+/* 节点行（固定高度，所有子元素垂直居中） */
 .node-row {
   display: flex;
   align-items: center;
-  padding: 6px 0;
+  height: 36px;
+  padding: 0;
   transition: background 0.2s;
 }
 
@@ -458,9 +461,9 @@ const statusText = computed(() => {
   color: var(--danger-color, #f56c6c);
 }
 
-/* 列样式 */
+/* 列样式（配合 36px 固定高度行，垂直居中） */
 .column {
-  padding: 6px 12px;
+  padding: 0 10px;
   display: flex;
   align-items: center;
 }
@@ -554,9 +557,11 @@ const statusText = computed(() => {
   flex-shrink: 0;
 }
 
+/* 本地路径列（固定最大宽度，超出截断显示省略号） */
 .local-path-column {
-  flex: 1;
-  min-width: 200px;
+  width: 220px;
+  max-width: 220px;
+  min-width: 120px;
   color: var(--text-color-secondary, #999999);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -571,9 +576,11 @@ const statusText = computed(() => {
   font-weight: bold;
 }
 
+/* 远程路径列（固定最大宽度，超出截断显示省略号） */
 .remote-path-column {
-  flex: 1;
-  min-width: 200px;
+  width: 220px;
+  max-width: 220px;
+  min-width: 120px;
   color: var(--text-color-secondary, #999999);
   overflow: hidden;
   text-overflow: ellipsis;

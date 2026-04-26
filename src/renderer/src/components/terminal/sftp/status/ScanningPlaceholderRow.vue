@@ -144,11 +144,13 @@ const isCancelled = computed((): boolean => {
 </script>
 
 <style scoped>
-/* 占位行容器 */
+/* 占位行容器（min-width: max-content 与表头/数据行一致，防止 flex 压缩导致错位） */
 .scanning-placeholder-row {
   display: flex;
   align-items: center;
-  padding: 6px 0;
+  height: 36px;
+  padding: 0;
+  min-width: max-content;
 }
 
 /* 列样式（与 SftpTransferTreeNode 对齐） */

@@ -104,20 +104,26 @@ function handleToggle(): void {
   min-width: max-content;
 }
 
-/* 表头 - 使用 --header-bg 变量以支持主题切换 */
+/* 表头（固定高度 36px 与数据行对齐，使用 --header-bg 变量支持主题切换） */
 .tree-header {
   display: flex;
+  align-items: center;
+  height: 36px;
   background: var(--header-bg, var(--sidebar-bg, var(--bg-color, #252526)));
   border-bottom: 1px solid var(--border-color, #333);
   font-weight: 500;
   user-select: none;
 }
 
+/* 表头列（配合 36px 固定高度行，与数据行 .column 对齐）
+ * 注意：不设置 border-right，避免每列多 1px 导致与数据行累计偏移
+ */
 .header-column {
-  padding: 6px 12px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
   text-align: left;
   color: var(--text-secondary, var(--text-color, #888));
-  border-right: 1px solid var(--border-color, #333);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -170,9 +176,11 @@ function handleToggle(): void {
   flex-shrink: 0;
 }
 
+/* 本地路径列（固定最大宽度，与数据行 .local-path-column 对齐） */
 .local-path-column {
-  flex: 1;
-  min-width: 200px;
+  width: 220px;
+  max-width: 220px;
+  min-width: 120px;
 }
 
 .arrow-column {
@@ -183,9 +191,11 @@ function handleToggle(): void {
   color: var(--primary-color, #409eff);
 }
 
+/* 远程路径列（固定最大宽度，与数据行 .remote-path-column 对齐） */
 .remote-path-column {
-  flex: 1;
-  min-width: 200px;
+  width: 220px;
+  max-width: 220px;
+  min-width: 120px;
 }
 
 .speed-column {
