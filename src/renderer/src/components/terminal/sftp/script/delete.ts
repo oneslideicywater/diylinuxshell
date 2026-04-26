@@ -272,11 +272,14 @@ export async function deleteLocalBatch(
       startTime: Date.now()
     })
     
+    // FSM 合法转换: pending → scanning → transferring（不能直接 pending → transferring）
+    sftpTransferStore.updateTaskStatus(task.id, 'scanning')
     sftpTransferStore.updateTaskStatus(task.id, 'transferring')
-      sftpTransferStore.mutateNode(task.id, task.root!.id, {
-        status: 'transferring',
-        startTime: Date.now()
-      })
+    
+    // 批量更新所有子节点状态为 transferring
+    // 本地删除使用 fs.rm({recursive:true}) 一次性删除，主进程只上报根节点进度，
+    // 子节点不会被遍历更新，通过 Store 层的 mutateAllTaskNodes 批量设置（修复 BUG-055）
+    sftpTransferStore.mutateAllTaskNodes(task.id, 'transferring', { startTime: Date.now() })
       
       if (!task.root!.localPath) {
         throw new Error('本地路径为空，无法删除')
@@ -316,6 +319,9 @@ export async function deleteLocalBatch(
           transferredBytes: task.root!.size || 0,
           endTime: Date.now()
         })
+
+        // 批量更新所有子节点状态为 completed（与 transferring 对称）
+         sftpTransferStore.mutateAllTaskNodes(task.id, 'completed', { progress: 100, speed: 0, endTime: Date.now() })
 
         // 若已被用户取消则跳过
         if (task.status === 'cancelled') continue

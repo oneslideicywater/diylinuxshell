@@ -384,13 +384,27 @@ if (node.isDirectory && node.children && node.children.length > 0) {
 
 详细记录见 [BUG-053](../../docs/bugs/sftp/ui/BUG-053-SFTP任务状态转换后树形列表不刷新.md)
 
-### 🟡 问题10b：本地删除子节点 pending 状态不更新（BUG-054） 待验证
+### 🟡 问题10b：本地删除子节点 pending 状态不更新（BUG-054） ✅ 已修复 (2026-04-26)
 
-**现象**：本地删除文件夹后，父节点显示"已完成 100%"，但子节点仍显示"等待中"(pending)，且任务错误地出现在"待开始"列表。
+**现象**：本地删除文件/文件夹后，节点显示"已完成 100%"，但任务错误地出现在"待开始"列表。
 
-**可能根因**：与 BUG-053 关联 — version 未递增导致子节点的 completed 状态无法触发 UI 重算。需在应用 BUG-053 修复后重新验证。
+**根因**：`deleteLocalBatch` 缺失 `scanning` 状态，直接调用 `updateTaskStatus('transferring')` → FSM 拒绝 `pending→transferring`（[TaskStateMachine.ts](../../renderer/src/components/terminal/sftp/fsm/TaskStateMachine.ts#L37) 不允许此转换）→ 任务永远停在 `pending`
+
+**修复**：在 [delete.ts#L276-L277](../../renderer/src/components/terminal/sftp/script/delete.ts#L276-L277) 补上 `scanning` 中间状态
 
 详细记录见 [BUG-054](../../docs/bugs/sftp/delete/BUG-054-SFTP本地删除子节点pending状态不更新.md)
+
+### 🔴 问题10c：本地删除子节点永远 pending，根节点已完成（BUG-055） ✅ 已修复 (2026-04-26)
+
+**现象**：本地删除文件夹后，父节点显示"已完成 100%"，但所有子节点（.code_contribution, .ripgrep, config.json 等）仍停留在"等待中"(pending)。
+
+**根因**：`sftp:delete-local` IPC handler 使用 `fs.rm({ recursive: true })` **一次性删除整个文件夹**，进度回调只上报**根节点 nodeId**。子节点从未被遍历和更新状态。
+
+**对比远程删除**（正确实现）：远程删除使用 `deleteFolderContent()` 递归遍历每个子项，每项都调用 `mutateNode` 更新状态。
+
+**修复**：在 [delete.ts](../../renderer/src/components/terminal/sftp/script/delete.ts) 新增 `updateAllDescendants()` 辅助函数，在删除前递归设所有子孙节点为 `transferring`，删除成功后递归设为 `completed`。
+
+详细记录见 [BUG-055](../../docs/bugs/sftp/delete/BUG-055-SFTP本地删除子节点永远pending根节点已完成.md)
 
 ---
 
@@ -407,6 +421,7 @@ if (node.isDirectory && node.children && node.children.length > 0) {
 | 问题7 | 删除 | 进度只有 0% 和 100%           | 低     | 用户体验差        |
 | 问题8 | 删除 | deleteFileByPath 无进度上报   | 中     | 回退路径进度丢失     |
 | 问题10 | Store/UI | 任务状态转换后 UI 不刷新（version 未递增） | **高** | 已完成任务显示在错误列表中 |
+| 问题10c | 删除 | 本地删除子节点永远 pending（fs.rm 一次性删除不遍历子节点） | **高** | 子节点状态不更新，UI 显示矛盾 |
 
 ***
 

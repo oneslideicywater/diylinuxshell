@@ -4,7 +4,7 @@
 - **编号**: BUG-054
 - **标题**: 执行本地删除操作时，父节点文件夹已显示"已完成"，但子节点仍停留在"等待中"(pending) 状态，且任务整体错误地显示在"待开始"列表中
 - **发现日期**: 2026-04-26
-- **状态**: 待修复（与 BUG-053 关联，修复 version 递增后可能部分解决）
+- **状态**: ✅ 已修复 (2026-04-26)
 - **严重程度**: 高
 - **影响模块**: SFTP 删除功能 + 任务列表展示
 - **复现步骤**: 本地删除一个包含多个子文件/子文件夹的目录
@@ -28,7 +28,45 @@
 
 ## 根因分析
 
-### 🔴 原因一：与 BUG-053 关联 — version 未递增导致 UI 不刷新
+### 🔴 **真正根因**：本地删除 `deleteLocalBatch` 缺少 `scanning` 状态，FSM 拒绝 `pending → transferring`
+
+**位置**: [delete.ts#L275](../../renderer/src/components/terminal/sftp/script/delete.ts#L275)（修复前）
+
+**Task FSM 合法转换表**（[TaskStateMachine.ts](../../renderer/src/components/terminal/sftp/fsm/TaskStateMachine.ts#L37)）：
+```typescript
+pending: new Set(['scanning', 'error', 'cancelled']),  // ❌ 没有 transferring！
+scanning: new Set(['transferring', 'error', 'cancelled']),  // scanning 才能 → transferring
+```
+
+**反模式代码**（修复前）：
+```typescript
+// deleteLocalBatch 循环中（L275）— 直接尝试 pending → transferring
+sftpTransferStore.updateTaskStatus(task.id, 'transferring')  
+// 🚫 FSM 拒绝：pending → transferring 不合法！任务永远停在 pending！
+```
+
+**影响链**：
+```
+创建任务 → status = 'pending'
+    ↓
+updateTaskStatus('transferring')   ← 🚫 FSM 拒绝 pending→transferring
+    ↓
+任务状态永远是 'pending'           ← 出现在"待开始"列表 ❌
+    ↓
+节点通过 mutateNode 正常变为 completed ✅（节点有独立 FSM）
+    ↓
+UI 显示矛盾：节点"已完成"但任务在"待开始"
+```
+
+**对比远程删除（正确实现）**：
+```typescript
+// deleteRemoteBatch 中 — 正确的两步转换
+sftpTransferStore.updateTaskStatus(task.id, 'scanning')     // ① pending → scanning ✅
+// ... 扫描操作 ...
+sftpTransferStore.updateTaskStatus(task.id, 'transferring') // ② scanning → transferring ✅
+```
+
+### 🟡 原因二（次要）：与 BUG-053 关联 — version 未递增导致 UI 不刷新
 
 当 `deleteSingleItem` 完成子节点删除时：
 
@@ -79,12 +117,26 @@ deleteFolderContent(父节点)
 
 ## 修复方案
 
-### 方案 A（首选）：BUG-053 修复后验证
+### ✅ 已实施：在 `deleteLocalBatch` 中补上缺失的 `scanning` 状态
 
-先应用 BUG-053 的修复（`updateTaskStatus` 添加 `version.value++`），然后重新测试本地删除：
+**修改文件**: [delete.ts#L276-L277](../../renderer/src/components/terminal/sftp/script/delete.ts#L276-L277)
 
-1. 如果子节点状态正确刷新 → BUG-054 可关闭（根因就是 BUG-053）
-2. 如果仍有问题 → 进入方案 B
+```typescript
+// 修复前（❌ FSM 拒绝 pending→transferring）
+sftpTransferStore.updateTaskStatus(task.id, 'transferring')
+
+// 修复后（✅ 合法的两步转换）
+sftpTransferStore.updateTaskStatus(task.id, 'scanning')      // ① pending → scanning
+sftpTransferStore.updateTaskStatus(task.id, 'transferring')  // ② scanning → transferring
+```
+
+### 对称性验证（远程删除已正确实现）
+
+| 删除类型 | scanning 状态 | transferring 状态 | 是否正确 |
+|---------|-------------|-----------------|---------|
+| 远程删除文件夹 | ✅ L423 | ✅ L445 | 正确 |
+| 远程删除文件 | ✅ L474 | ✅ L496 | 正确 |
+| **本地删除** | **❌ 缺失** | **L275（被 FSM 拒绝）** | **已修复** |
 
 ### 方案 B（备选）：确认子节点 mutateNode 调用链
 

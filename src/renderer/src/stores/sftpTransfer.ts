@@ -535,6 +535,36 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
   }
 
   /**
+   * 批量更新指定任务的所有节点状态（用于本地删除等一次性操作场景）
+   *
+   * 本地删除使用 fs.rm({recursive:true}) 一次性删除整个文件夹，
+   * 主进程只上报根节点进度，子节点不会被遍历更新。
+   * 此方法通过 nodeIndexMap 直接遍历该任务下所有节点，批量设置状态，
+   * 比递归遍历树结构更高效（O(n) vs O(n) 但无需函数调用栈）。
+   *
+   * @param taskId 任务 ID
+   * @param status 目标节点状态
+   * @param extraFields 额外要更新的字段（如 progress, endTime 等）
+   */
+  function mutateAllTaskNodes(taskId: string, status: TransferNode['status'], extraFields?: Partial<TransferNode>): void {
+    const prefix = `${taskId}::`
+    
+    // 遍历 nodeIndexMap 中属于该任务的所有节点，批量更新状态
+    for (const [key, node] of nodeIndexMap) {
+      if (!key.startsWith(prefix)) continue
+      
+      // 节点 FSM 校验：跳过非法转换（如 completed→transferring）
+      if (!shouldAllowNodeTransition(node, status, 'mutateAllTaskNodes')) continue
+      
+      // 合并状态和额外字段
+      Object.assign(node, { status, ...extraFields })
+    }
+    
+    // 递增版本号 → 触发 UI 刷新
+    version.value++
+  }
+
+  /**
    * 设置所有节点的展开状态
    * @param expanded 是否展开
    */
@@ -783,6 +813,7 @@ export const useSftpTransferStore = defineStore('sftpTransfer', () => {
     updateTaskRoot,
     // 节点状态更新方法（核心）
     mutateNode,             // O(1) 直接变异 + 响应式触发（配合 parent 链使用）
+    mutateAllTaskNodes,     // 批量更新任务下所有节点状态（用于本地删除等一次性操作）
     initNodeIndex,          // 扫描后初始化节点索引（只需调用一次）
 
     updateNodeStatus,       // 兼容旧接口（树遍历查找）
