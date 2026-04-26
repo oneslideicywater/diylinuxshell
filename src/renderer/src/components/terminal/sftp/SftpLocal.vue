@@ -61,6 +61,11 @@
       @dblclick="handleDblClick"
       @contextmenu.prevent="handleContextMenu"
     >
+      <!-- 骨架屏：本地目录加载中显示 -->
+      <FileListSkeleton
+        v-if="isLoadingLocal"
+        :rows="10"
+      />
       <div
         v-for="item in localFiles"
         :key="item.path"
@@ -241,6 +246,7 @@ import { useSftpSelectionStore } from '@/stores/sftpSelection'
 import { useSftpBrowserStore } from '@/stores/sftpBrowser'
 import { DRIVES_PATH } from './script/local'
 import AlertDialog from '@/components/common/AlertDialog.vue'
+import FileListSkeleton from '@/components/common/FileListSkeleton.vue'
 
 /**
  * Props 定义（v2 简化版）
@@ -359,6 +365,18 @@ watch(() => {
 const localFiles = computed(() => {
   const state = sftpBrowserStore.getState(props.connectionId)
   return state?.local?.localFiles || []
+})
+
+/**
+ * 本地目录加载中状态（用于控制骨架屏显示/隐藏）
+ * 
+ * 触发时机：
+ *   - 显示：用户双击进入子目录 / 点击上级 / 路径回车导航
+ *   - 隐藏：getDrives/getLocalFiles API 返回结果（无论成功或失败）
+ */
+const isLoadingLocal = computed(() => {
+  const state = sftpBrowserStore.getState(props.connectionId)
+  return state?.local?.isLoadingLocal ?? false
 })
 
 /**

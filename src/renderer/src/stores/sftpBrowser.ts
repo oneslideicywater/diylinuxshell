@@ -26,6 +26,8 @@ export const useSftpBrowserStore = defineStore('sftpBrowser', () => {
       localPath: string
       localFiles: any[]
       localFileCount: number
+      /** 本地目录加载中标志（用于骨架屏显示） */
+      isLoadingLocal: boolean
     }
     /** 远程文件浏览状态 */
     remote: {
@@ -49,7 +51,8 @@ export const useSftpBrowserStore = defineStore('sftpBrowser', () => {
         local: {
           localPath: '',
           localFiles: [],
-          localFileCount: 0
+          localFileCount: 0,
+          isLoadingLocal: false
         },
         remote: {
           remotePath: '/',
@@ -119,11 +122,19 @@ export const useSftpBrowserStore = defineStore('sftpBrowser', () => {
 
   /**
    * 加载本地文件列表
+   * 
+   * 加载流程：
+   *   1. 设置 isLoadingLocal = true（触发骨架屏显示）
+   *   2. 调用主进程 getDrives/getLocalFiles API
+   *   3. 无论成功/失败，finally 中设置 isLoadingLocal = false（隐藏骨架屏）
    * @param connectionId SFTP 连接标识符
    * @param drivesPath 盘符列表视图的特殊路径标识
    */
   async function loadLocalFiles(connectionId: string, drivesPath: string): Promise<void> {
     const state = getState(connectionId).local
+    
+    // 标记开始加载（UI 层显示骨架屏）
+    state.isLoadingLocal = true
     
     try {
       console.log(`[sftpBrowser] 加载本地文件列表 (${connectionId}):`, state.localPath)
@@ -153,6 +164,9 @@ export const useSftpBrowserStore = defineStore('sftpBrowser', () => {
         state.localFiles = result.data
         state.localFileCount = result.data.length
       }
+    } finally {
+      // 确保无论成功/失败都结束加载状态
+      state.isLoadingLocal = false
     }
   }
 
