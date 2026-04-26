@@ -358,7 +358,7 @@ if (node.isDirectory && node.children && node.children.length > 0) {
 
 #### 问题10：任务状态转换后 UI 不刷新 + 子节点状态卡住 ✅ BUG-053 已修复 / BUG-054 待验证
 
-**位置**: [sftpTransfer.ts](../../renderer/src/stores/sftpTransfer.ts) `updateTaskStatus()`
+**位置**: [sftpTransfer.ts](../../renderer/src/stores/sftpTransfer.ts) `updateTaskStatus()` + [download.ts](../../renderer/src/components/terminal/sftp/script/download.ts) + [upload.ts](../../renderer/src/components/terminal/sftp/script/upload.ts)
 
 > **核实结果**: **存在，BUG-053 已修复 (2026-04-26)，BUG-054 待验证**
 
@@ -366,34 +366,23 @@ if (node.isDirectory && node.children && node.children.length > 0) {
 
 **现象**：批量下载/上传/删除完成后，已完成任务仍显示在"传输中"列表中，切换筛选器不更新。
 
-**根因**：`updateTaskStatus()` 未递增 `version.value++`
-
-[sftpTransfer.ts](../../renderer/src/stores/sftpTransfer.ts) 中存在两条更新路径：
-
+**控制台日志铁证**：
 ```
-路径 A: mutateNode(taskId, nodeId, updates)
-    → version.value++          ✅ 节点属性变更时递增 → UI 刷新
-    
-路径 B: updateTaskStatus(taskId, status) 
-    → Object.assign(task, { status })  ❌ 状态变更时不递增 → UI 不刷新！
+🚫 状态机拒绝: 任务 xxx "completed" → "completed" 不在合法转换表中
+🚫 mutateNode 节点状态机拒绝: 节点 xxx "completed" → "completed" 不在 Node FSM 合法转换表中
 ```
 
-UI 组件 [SftpTransferTreeNode.vue](../../renderer/src/components/terminal/sftp/status/SftpTransferTreeNode.vue) 的 computed 属性**显式依赖 `store.version`**，当 version 不变时 computed 不重算。
+**根因（双重问题）**：
 
-**修复**（一行代码）：在 `updateTaskStatus()` 末尾添加 `version.value++`
+**原因 1**：`updateTaskStatus()` 未递增 `version.value++` → UI computed 不重算
+**原因 2（直接触发）**：[download.ts](../../renderer/src/components/terminal/sftp/script/download.ts) / [upload.ts](../../renderer/src/components/terminal/sftp/script/upload.ts) 完成处理器中先 `task.status = 'completed'` 直接赋值，再调用 `updateTaskStatus('completed')` → FSM 拒绝 `completed→completed` → version 不递增！
 
-```typescript
-function updateTaskStatus(taskId: string, status: TransferTask['status']): void {
-  if (!shouldAllowTransition(taskId, status)) return
-  
-  // 直接修改任务状态（绕过 updateTask 的 status 守卫）
-  const task = transferTasks.value.find(t => t.id === taskId)
-  if (task) { task.status = status }
-  
-  // 递增版本号 → 触发依赖 version 的 computed 重算（与 mutateNode 保持一致）
-  version.value++
-}
-```
+**修复内容**：
+1. **sftpTransfer.ts** — `updateTaskStatus()` 添加 `version.value++`
+2. **download.ts** — 6 处完成/错误处理器：删除 `task.status = 'xxx'` 直接赋值，改用 `updateTask()` (非状态字段) + `updateTaskStatus()` (状态字段)
+3. **upload.ts** — 同上，6 处完成/错误处理器
+
+详细记录见 [BUG-053](../../docs/bugs/sftp/ui/BUG-053-SFTP任务状态转换后树形列表不刷新.md)
 
 ### 🟡 问题10b：本地删除子节点 pending 状态不更新（BUG-054） 待验证
 

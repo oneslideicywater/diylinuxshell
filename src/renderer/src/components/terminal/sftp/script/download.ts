@@ -366,12 +366,17 @@ export async function downloadFile(
     
     // 更新任务状态和统计（若已被用户取消则跳过，避免覆盖 cancelled 状态）
     if (task.status === 'cancelled') return
-    task.status = 'completed'
-    task.completedAt = Date.now()
-    task.elapsedTime = Math.round((task.completedAt - task.createdAt) / 1000)
-    task.totalBytes = task.root!.size || 0
-    task.transferredBytes = task.root!.size || 0
     
+    // 使用 updateTask 更新非状态字段（completedAt/elapsedTime/totalBytes/transferredBytes）
+    sftpTransferStore.updateTask(task.id, {
+      completedAt: Date.now(),
+      elapsedTime: Math.round((Date.now() - task.createdAt) / 1000),
+      totalBytes: task.root!.size || 0,
+      transferredBytes: task.root!.size || 0
+    })
+    
+    // 使用 updateTaskStatus 更新任务状态（经过 FSM 校验 + version++ 触发 UI 刷新）
+    // 注意：不要先用 task.status='completed' 直接赋值，否则 FSM 会拒绝 completed→completed
     sftpTransferStore.updateTaskStatus(task.id, 'completed')
     
     console.log('[download] ✅ 文件下载完成！')
@@ -414,8 +419,7 @@ export async function downloadFolder(
   }
   
   try {
-    // ========== 两阶段策略 ==========
-    // 阶段1：先创建占位根节点，立即入 Store（UI 可即时显示）
+
     const folderName = remotePath.split('/').pop() || 'folder'
     const localBasePath = typeof localPath === 'string' 
       ? localPath 
@@ -508,16 +512,19 @@ export async function downloadFolder(
     
     // 更新任务状态和统计（若已被用户取消则跳过）
     if (task.status === 'cancelled') return
-    task.status = 'completed'
-    task.completedAt = Date.now()
-    task.elapsedTime = Math.round((task.completedAt - task.createdAt) / 1000)
-    task.transferredBytes = task.totalBytes
     
+    // 使用 updateTask 更新非状态字段
+    sftpTransferStore.updateTask(task.id, {
+      completedAt: Date.now(),
+      elapsedTime: Math.round((Date.now() - task.createdAt) / 1000),
+      transferredBytes: task.totalBytes
+    })
+    
+    // 使用 updateTaskStatus 更新任务状态（经过 FSM 校验 + version++ 触发 UI 刷新）
     sftpTransferStore.updateTaskStatus(task.id, 'completed')
     
-    // 更新根节点最终状态
+    // 更新根节点最终统计信息（节点 status 已在 downloadFolderContent 中设为 completed，此处只更新非状态字段）
     sftpTransferStore.mutateNode(task.id, task.root!.id, {
-      status: 'completed',
       progress: 100,
       speed: 0,
       transferredBytes: task.root!.size || 0,
@@ -665,7 +672,6 @@ export async function downloadBatch(
           } catch (scanError: any) {
             console.error(`[download] 扫描远程文件夹失败: ${remoteFilePath}`, scanError)
             sftpTransferStore.updateTaskStatus(task.id, 'error')
-            task.status = 'error'
           }
 
           continue
@@ -722,7 +728,6 @@ export async function downloadBatch(
           } catch (scanError: any) {
             console.error(`[download] 扫描远程文件失败: ${remoteFilePath}`, scanError)
             sftpTransferStore.updateTaskStatus(task.id, 'error')
-            task.status = 'error'
           }
         }
         
@@ -747,16 +752,20 @@ export async function downloadBatch(
         
         // 若已被用户取消则跳过，避免覆盖 cancelled 状态
         if (task.status === 'cancelled') continue
-        task.status = 'completed'
-        task.completedAt = Date.now()
-        task.elapsedTime = Math.round((task.completedAt - task.createdAt) / 1000)
-        task.transferredBytes = task.totalBytes
         
+        // 使用 updateTask 更新非状态字段（completedAt/elapsedTime/transferredBytes）
+        sftpTransferStore.updateTask(task.id, {
+          completedAt: Date.now(),
+          elapsedTime: Math.round((Date.now() - task.createdAt) / 1000),
+          transferredBytes: task.totalBytes
+        })
+        
+        // 使用 updateTaskStatus 更新任务状态（经过 FSM 校验 + version++ 触发 UI 刷新）
+        // 注意：不要先用 task.status='completed' 直接赋值，否则 FSM 会拒绝 completed→completed
         sftpTransferStore.updateTaskStatus(task.id, 'completed')
         
-        // 更新文件夹根节点最终状态
+        // 更新根节点最终统计信息（节点 status 已在 downloadFolderContent 中设为 completed，此处只更新非状态字段）
         sftpTransferStore.mutateNode(task.id, task.root!.id, {
-          status: 'completed',
           progress: 100,
           speed: 0,
           transferredBytes: task.root!.size || 0,
@@ -769,7 +778,6 @@ export async function downloadBatch(
       } catch (error: any) {
         console.error(`[download] ❌ 任务 ${i + 1} 失败: ${task.root!.name}`, error)
         
-        task.status = 'error'
         sftpTransferStore.updateTaskStatus(task.id, 'error')
       }
     }

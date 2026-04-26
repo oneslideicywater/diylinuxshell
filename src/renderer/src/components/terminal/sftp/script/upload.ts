@@ -318,12 +318,16 @@ export async function uploadFile(
     
     // 更新任务状态和统计（若已被用户取消则跳过，避免覆盖 cancelled 状态）
     if (task.status === 'cancelled') return
-    task.status = 'completed'
-    task.completedAt = Date.now()
-    task.elapsedTime = Math.round((task.completedAt - task.createdAt) / 1000)
-    task.totalBytes = task.root!.size || 0
-    task.transferredBytes = task.root!.size || 0
     
+    // 使用 updateTask 更新非状态字段（completedAt/elapsedTime/totalBytes/transferredBytes）
+    sftpTransferStore.updateTask(task.id, {
+      completedAt: Date.now(),
+      elapsedTime: Math.round((Date.now() - task.createdAt) / 1000),
+      totalBytes: task.root!.size || 0,
+      transferredBytes: task.root!.size || 0
+    })
+    
+    // 使用 updateTaskStatus 更新任务状态（经过 FSM 校验 + version++ 触发 UI 刷新）
     sftpTransferStore.updateTaskStatus(task.id, 'completed')
     
     console.log('[upload] 文件上传完成！')
@@ -444,16 +448,19 @@ export async function uploadFolder(
     
     // 第四步：更新任务状态（若已被用户取消则跳过）
     if (task.status === 'cancelled') return
-    task.status = 'completed'
-    task.completedAt = Date.now()
-    task.elapsedTime = Math.round((task.completedAt - task.createdAt) / 1000)
-    task.transferredBytes = task.totalBytes
     
+    // 使用 updateTask 更新非状态字段
+    sftpTransferStore.updateTask(task.id, {
+      completedAt: Date.now(),
+      elapsedTime: Math.round((Date.now() - task.createdAt) / 1000),
+      transferredBytes: task.totalBytes
+    })
+    
+    // 使用 updateTaskStatus 更新任务状态（经过 FSM 校验 + version++ 触发 UI 刷新）
     sftpTransferStore.updateTaskStatus(task.id, 'completed')
     
-    // 更新根节点最终状态
+    // 更新根节点最终统计信息（节点 status 已在 uploadFolderContent 中设为 completed，此处只更新非状态字段）
     sftpTransferStore.mutateNode(task.id, task.root!.id, {
-      status: 'completed',
       progress: 100,
       speed: 0,
       transferredBytes: task.root!.size || 0,
@@ -605,7 +612,6 @@ export async function uploadBatch(
             console.error(`[upload] 扫描文件夹失败: ${filePath}`, scanError)
 
             sftpTransferStore.updateTaskStatus(task.id, 'error')
-            task.status = 'error'
           }
 
           continue
@@ -668,7 +674,6 @@ export async function uploadBatch(
           } catch (scanError: any) {
             console.error(`[upload] 扫描文件失败: ${filePath}`, scanError)
             sftpTransferStore.updateTaskStatus(task.id, 'error')
-            task.status = 'error'
           }
         }
         
@@ -695,16 +700,19 @@ export async function uploadBatch(
         
         // 若已被用户取消则跳过，避免覆盖 cancelled 状态
         if (task.status === 'cancelled') continue
-        task.status = 'completed'
-        task.completedAt = Date.now()
-        task.elapsedTime = Math.round((task.completedAt - task.createdAt) / 1000)
-        task.transferredBytes = task.totalBytes
         
+        // 使用 updateTask 更新非状态字段（completedAt/elapsedTime/transferredBytes）
+        sftpTransferStore.updateTask(task.id, {
+          completedAt: Date.now(),
+          elapsedTime: Math.round((Date.now() - task.createdAt) / 1000),
+          transferredBytes: task.totalBytes
+        })
+        
+        // 使用 updateTaskStatus 更新任务状态（经过 FSM 校验 + version++ 触发 UI 刷新）
         sftpTransferStore.updateTaskStatus(task.id, 'completed')
         
-        // 更新文件夹根节点最终状态
+        // 更新根节点最终统计信息（节点 status 已在 uploadFolderContent 中设为 completed，此处只更新非状态字段）
         sftpTransferStore.mutateNode(task.id, task.root!.id, {
-          status: 'completed',
           progress: 100,
           speed: 0,
           transferredBytes: task.root!.size || 0,
@@ -718,7 +726,6 @@ export async function uploadBatch(
       } catch (error: any) {
         console.error(`[upload] ❌ 任务 ${i + 1} 失败: ${task.root!.name}`, error)
         
-        task.status = 'error'
         sftpTransferStore.updateTaskStatus(task.id, 'error')
       }
     }

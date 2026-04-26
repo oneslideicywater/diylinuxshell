@@ -27,35 +27,68 @@
 
 ## 根因分析
 
-### 🔴 根本原因：`updateTaskStatus` 未递增 `version` 字段
+### 🔴 根本原因（双重问题）
 
-[sftpTransfer.ts](../../renderer/src/stores/sftpTransfer.ts) 中有两个更新路径：
+#### 问题 1：`updateTaskStatus` 未递增 `version` 字段（已修复）
+
+[sftpTransfer.ts](../../renderer/src/stores/sftpTransfer.ts) 中有两条更新路径：
 
 ```
 路径 A: mutateNode() ──→ version.value++ ✅ （节点属性变更时递增）
-路径 B: updateTaskStatus() → updateTask() → Object.assign ❌ （未递增 version！）
+路径 B: updateTaskStatus() → Object.assign ❌ （未递增 version！）
 ```
 
-**关键代码对比**：
+**修复**：在 `updateTaskStatus()` 末尾添加 `version.value++` ✅
 
+#### 问题 2（真正触发 bug 的直接原因）：download.ts / upload.ts 完成时重复设置状态（已修复）
+
+**控制台日志铁证**：
+```
+🚫 状态机拒绝: 任务 xxx "completed" → "completed" 不在合法转换表中
+🚫 mutateNode 节点状态机拒绝: 节点 xxx "completed" → "completed" 不在 Node FSM 合法转换表中
+```
+
+**反模式代码**（download.ts/upload.ts 各 3 处完成处理器）：
 ```typescript
-// 路径 A：mutateNode — 有 version 递增
-function mutateNode(taskId, nodeId, updates) {
-  version.value++                    // ← ✅ 触发所有依赖 version 的 computed 重算
-  // ... 更新节点 ...
-}
+// ❌ 错误：先直接赋值（绕过 FSM，无 version++）
+task.status = 'completed'           // ← 任务状态变为 completed
+task.completedAt = Date.now()
+// ...
 
-// 路径 B：updateTaskStatus → updateTask — 无 version 递增
-function updateTaskStatus(taskId, status) {
-  if (!shouldAllowTransition(taskId, status)) return
-  updateTask(taskId, { status })     // ← 调用 updateTask
-}
+// ❌ 错误：再调用 updateTaskStatus，FSM 拒绝 completed→completed
+sftpTransferStore.updateTaskStatus(task.id, 'completed')  // ← 被拒绝！version 不递增！
 
-function updateTask(taskId, updates) {
-  if ('status' in updates) { /* 拒绝 */ return }
-  const task = transferTasks.value.find(t => t.id === taskId)
-  Object.assign(task, updates)       // ← ❌ 没有版本号递增！
-}
+// ❌ 错误：mutateNode 也重复设 status，节点 FSM 也拒绝
+sftpTransferStore.mutateNode(task.id, root.id, { status: 'completed' })  // ← 被拒绝！
+```
+
+**影响链**：
+```
+task.status = 'completed'          ← ① 直接赋值（绕过 FSM，无 version++）
+    ↓
+updateTaskStatus('completed')      ← ② FSM 拒绝 completed→completed，version 不递增！
+    ↓
+UI computed 不重算                 ← ③ 任务仍显示在"传输中"列表
+```
+
+**修复**（6 处 download.ts + 6 处 upload.ts）：
+```typescript
+// ✅ 正确：非状态字段用 updateTask()
+sftpTransferStore.updateTask(task.id, {
+  completedAt: Date.now(),
+  elapsedTime: ...,
+  transferredBytes: ...
+})
+
+// ✅ 正确：状态字段只用 updateTaskStatus（FSM 校验 + version++）
+sftpTransferStore.updateTaskStatus(task.id, 'completed')
+
+// ✅ 正确：mutateNode 不重复设 status（已在子流程中设好）
+sftpTransferStore.mutateNode(task.id, root.id, {
+  progress: 100,
+  speed: 0,
+  // status: 'completed'  ← 删除！避免节点 FSM 拒绝
+})
 ```
 
 ### 为什么会导致 UI 不刷新？
@@ -139,7 +172,13 @@ function updateTaskStatus(taskId: string, status: TransferTask['status']): void 
 ## 修改文件
 
 - [sftpTransfer.ts](../../renderer/src/stores/sftpTransfer.ts)
-  - `updateTaskStatus()`: 添加 `version.value++`
+  - `updateTaskStatus()`: 添加 `version.value++`，改为直接修改 task.status（绕过 updateTask 的 status 守卫）
+- [download.ts](../../renderer/src/components/terminal/sftp/script/download.ts)
+  - **3 处完成处理器**：删除 `task.status = 'completed'` 直接赋值，改用 `updateTask()` + `updateTaskStatus()` 分离
+  - **3 处错误处理**：删除 `task.status = 'error'` 直接赋值，仅保留 `updateTaskStatus('error')`
+  - **3 处 mutateNode**：移除重复的 `status: 'completed'` 字段（子流程已设置）
+- [upload.ts](../../renderer/src/components/terminal/sftp/script/upload.ts)
+  - 同 download.ts：**3 处完成处理器** + **3 处错误处理** + **3 处 mutateNode**
 
 ## 测试验证
 
