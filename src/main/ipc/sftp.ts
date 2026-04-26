@@ -565,10 +565,24 @@ async function getLocalDirectoryContents(dirPath: string): Promise<FileInfo[]> {
         
         try {
           const stats = fs.statSync(fullPath)
+          const isSymbolicLink = dirent.isSymbolicLink()
+          let linkTarget: string | undefined = undefined
+          
+          // 如果是符号链接，读取目标路径
+          if (isSymbolicLink) {
+            try {
+              linkTarget = fs.readlinkSync(fullPath)
+            } catch (error: any) {
+              console.warn(`[本地] 无法读取符号链接目标：${fullPath}`, error.message)
+            }
+          }
+          
           files.push({
             name: dirent.name,
             path: fullPath,
             isDirectory: dirent.isDirectory(),
+            isSymbolicLink,
+            linkTarget,
             size: stats.size,
             modifyTime: stats.mtime
           })

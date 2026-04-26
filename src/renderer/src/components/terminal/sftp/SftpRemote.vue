@@ -105,41 +105,99 @@
           :data-path="item.path"
           class="file-item"
           :class="{ selected: selectedRemotes.includes(item.path) }"
+          :title="item.isSymbolicLink ? `符号链接 → ${item.linkTarget || '未知'}` : item.path"
           @click="handleClick(item.path, $event)"
         >
-          <svg
-            v-if="item.isDirectory"
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            class="file-icon is-folder"
-          >
-            <path
-              d="M14 13.5C14 14.3284 13.3284 15 12.5 15H3.5C2.67157 15 2 14.3284 2 13.5V5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V13.5Z"
-              stroke="currentColor"
-              stroke-width="1.5"
-            />
-          </svg>
-          <svg
-            v-else
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            class="file-icon"
-          >
-            <path
-              d="M9 1H4C2.89543 1 2 1.89543 2 3V13C2 14.1046 2.89543 15 4 15H12C13.1046 15 14 14.1046 14 13V6L9 1Z"
-              stroke="currentColor"
-              stroke-width="1.5"
-            />
-            <path
-              d="M9 1V6H14"
-              stroke="currentColor"
-              stroke-width="1.5"
-            />
-          </svg>
+          <div class="file-icon-wrapper">
+            <!-- 符号链接文件夹图标 -->
+            <svg
+              v-if="item.isDirectory && item.isSymbolicLink"
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              class="file-icon is-folder is-symlink"
+            >
+              <path
+                d="M14 13.5C14 14.3284 13.3284 15 12.5 15H3.5C2.67157 15 2 14.3284 2 13.5V5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V13.5Z"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <!-- 符号链接链条标识 -->
+              <path
+                d="M11 9.5L9.5 11M9.5 11L11 12.5M9.5 11H7.5V9.5"
+                stroke="currentColor"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                opacity="0.8"
+              />
+            </svg>
+            <!-- 符号链接文件图标 -->
+            <svg
+              v-else-if="item.isSymbolicLink"
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              class="file-icon is-symlink"
+            >
+              <path
+                d="M9 1H4C2.89543 1 2 1.89543 2 3V13C2 14.1046 2.89543 15 4 15H12C13.1046 15 14 14.1046 14 13V6L9 1Z"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <path
+                d="M9 1V6H14"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <!-- 符号链接链条标识 -->
+              <path
+                d="M11 9.5L9.5 11M9.5 11L11 12.5M9.5 11H7.5V9.5"
+                stroke="currentColor"
+                stroke-width="1"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                opacity="0.8"
+              />
+            </svg>
+            <!-- 普通文件夹图标 -->
+            <svg
+              v-else-if="item.isDirectory"
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              class="file-icon is-folder"
+            >
+              <path
+                d="M14 13.5C14 14.3284 13.3284 15 12.5 15H3.5C2.67157 15 2 14.3284 2 13.5V5.5C2 4.67157 2.67157 4 3.5 4H6.5L7.5 5H12.5C13.3284 5 14 5.67157 14 6.5V13.5Z"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+            </svg>
+            <!-- 普通文件图标 -->
+            <svg
+              v-else
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              class="file-icon"
+            >
+              <path
+                d="M9 1H4C2.89543 1 2 1.89543 2 3V13C2 14.1046 2.89543 15 4 15H12C13.1046 15 14 14.1046 14 13V6L9 1Z"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+              <path
+                d="M9 1V6H14"
+                stroke="currentColor"
+                stroke-width="1.5"
+              />
+            </svg>
+          </div>
           <span class="file-name">{{ item.name }}</span>
           <span class="file-size">{{ formatSize(item.size) }}</span>
         </div>
@@ -791,12 +849,27 @@ defineExpose({
   background: var(--active-bg, rgba(64, 158, 255, 0.15));
 }
 
+.file-icon-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
 .file-icon {
   flex-shrink: 0;
   color: var(--primary-color, #409eff);
 }
 
 .file-icon.is-folder {
+  color: var(--warning-color, #e6a23c);
+}
+
+.file-icon.is-symlink {
+  color: var(--primary-color, #409eff);
+}
+
+.file-icon.is-folder.is-symlink {
   color: var(--warning-color, #e6a23c);
 }
 

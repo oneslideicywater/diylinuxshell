@@ -29,6 +29,8 @@ export interface FileInfo {
   name: string
   path: string
   isDirectory: boolean
+  isSymbolicLink?: boolean  // 符号链接标识
+  linkTarget?: string       // 符号链接目标路径
   size: number
   modifyTime: Date
 }
@@ -110,13 +112,53 @@ export class SFTPService {
             })
           }
 
-          // 处理文件列表
+          // 处理文件列表（修复符号链接显示问题）
           for (const item of list) {
             const fullPath = path.posix.join(remotePath, item.filename)
+            
+            // 默认使用 readdir 返回的属性
+            let isDirectory = item.attrs.isDirectory()
+            const isSymbolicLink = item.attrs.isSymbolicLink()
+            let linkTarget: string | undefined = undefined
+            
+            // 如果是符号链接，需要跟随链接判断目标类型并读取目标路径
+            // 修复：/bin、/lib64、/sbin 等符号链接目录显示为文件的问题
+            if (isSymbolicLink) {
+              try {
+                // 使用 stat 获取符号链接目标的属性（stat 会自动跟随符号链接）
+                const stats = await new Promise<any>((resolve, reject) => {
+                  this.sftpHandle.stat(fullPath, (err: Error, stats: any) => {
+                    if (err) reject(err)
+                    else resolve(stats)
+                  })
+                })
+                isDirectory = stats.isDirectory()
+                console.log(`[SFTP] 符号链接 ${fullPath} → 目标类型：${isDirectory ? '目录' : '文件'}`)
+              } catch (error: any) {
+                console.warn(`[SFTP] 无法获取符号链接目标类型：${fullPath}`, error.message)
+                // 如果 stat 失败（断链），保持原判断（显示为文件）
+              }
+              
+              // 读取符号链接的目标路径（用于 tooltip 显示）
+              try {
+                linkTarget = await new Promise<string>((resolve, reject) => {
+                  this.sftpHandle.readlink(fullPath, (err: Error, target: string) => {
+                    if (err) reject(err)
+                    else resolve(target)
+                  })
+                })
+                console.log(`[SFTP] 符号链接 ${fullPath} → ${linkTarget}`)
+              } catch (error: any) {
+                console.warn(`[SFTP] 无法读取符号链接目标：${fullPath}`, error.message)
+              }
+            }
+            
             files.push({
               name: item.filename,
               path: fullPath,
-              isDirectory: item.attrs.isDirectory(),
+              isDirectory,
+              isSymbolicLink,
+              linkTarget,
               size: item.attrs.size,
               modifyTime: new Date(item.attrs.mtime * 1000)
             })
