@@ -33,6 +33,8 @@ export const useSftpBrowserStore = defineStore('sftpBrowser', () => {
       remoteFiles: any[]
       remoteFileCount: number
       connectionId: string
+      /** 远程目录加载中标志（用于骨架屏显示） */
+      isLoadingRemote: boolean
     }
   }>>(new Map())
 
@@ -53,7 +55,8 @@ export const useSftpBrowserStore = defineStore('sftpBrowser', () => {
           remotePath: '/',
           remoteFiles: [],
           remoteFileCount: 0,
-          connectionId
+          connectionId,
+          isLoadingRemote: false
         }
       })
     }
@@ -296,9 +299,17 @@ export const useSftpBrowserStore = defineStore('sftpBrowser', () => {
 
   /**
    * 加载远程文件列表
+   * 
+   * 加载流程：
+   *   1. 设置 isLoadingRemote = true（触发骨架屏显示）
+   *   2. 调用主进程 listDir API 读取远程目录
+   *   3. 无论成功/失败，finally 中设置 isLoadingRemote = false（隐藏骨架屏）
    */
   async function loadRemoteFiles(connectionId: string): Promise<void> {
     const state = getState(connectionId).remote
+    
+    // 标记开始加载（UI 层显示骨架屏）
+    state.isLoadingRemote = true
     
     try {
       if (!state.connectionId) {
@@ -323,6 +334,9 @@ export const useSftpBrowserStore = defineStore('sftpBrowser', () => {
       console.error('加载远程文件异常:', error)
       state.remoteFiles = []
       state.remoteFileCount = 0
+    } finally {
+      // 确保无论成功/失败都结束加载状态
+      state.isLoadingRemote = false
     }
   }
 

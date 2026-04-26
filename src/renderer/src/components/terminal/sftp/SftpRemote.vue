@@ -98,6 +98,11 @@
         <span class="disconnected-text">SFTP 连接已断开</span>
         <span class="disconnected-hint">请右键标签页选择「重连会话」</span>
       </div>
+      <!-- 骨架屏：远程目录加载中显示（解决 P2 大目录访问等待体验问题） -->
+      <FileListSkeleton
+        v-else-if="isLoadingRemote"
+        :rows="10"
+      />
       <template v-else>
         <div
           v-for="item in remoteFiles"
@@ -277,6 +282,7 @@ import { useContextMenuStore } from '@/stores/contextMenu'
 import { useSftpSelectionStore } from '@/stores/sftpSelection'
 import { useSftpBrowserStore } from '@/stores/sftpBrowser'
 import AlertDialog from '@/components/common/AlertDialog.vue'
+import FileListSkeleton from '@/components/common/FileListSkeleton.vue'
 
 /**
  * Props 定义（v2 简化版）
@@ -406,6 +412,18 @@ watch(() => {
 const remoteFiles = computed(() => {
   const state = sftpBrowserStore.getState(props.connectionId)
   return state?.remote?.remoteFiles || []
+})
+
+/**
+ * 远程目录加载中状态（用于控制骨架屏显示/隐藏）
+ * 
+ * 触发时机：
+ *   - 显示：用户双击进入子目录 / 点击刷新 / 路径回车导航
+ *   - 隐藏：listDir API 返回结果（无论成功或失败）
+ */
+const isLoadingRemote = computed(() => {
+  const state = sftpBrowserStore.getState(props.connectionId)
+  return state?.remote?.isLoadingRemote ?? false
 })
 
 /**
