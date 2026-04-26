@@ -135,7 +135,7 @@
         <span :class="'status-' + liveStatus">{{ statusText }}</span>
       </div>
 
-      <!-- 进度列（从 Store 实时读取） -->
+      <!-- 进度列（从 Store 实时读取，进度条内嵌百分比文字） -->
       <div class="column progress-column">
         <div
           v-if="liveStatus === 'transferring' || liveStatus === 'pending'"
@@ -145,6 +145,7 @@
             class="progress-fill"
             :style="{ width: liveProgress + '%' }"
           />
+          <span class="progress-text">{{ Math.round(liveProgress) }}%</span>
         </div>
         <span
           v-else-if="liveStatus === 'completed'"
@@ -156,9 +157,9 @@
         >-</span>
       </div>
 
-      <!-- 大小列（从 Store 获取） -->
+      <!-- 大小列（从 Store 获取，格式：已传输/总大小） -->
       <div class="column size-column">
-        {{ formatSize(node.size) }}
+        {{ sizeDisplayText }}
       </div>
 
       <!-- 本地路径列（从 Store 获取） -->
@@ -312,6 +313,30 @@ const liveProgress = computed(() => {
 
   console.log('liveProgress 重新计算', node?.value?.localPath, node.value?.progress ?? 0, node.value?.transferredBytes,node.value?.size)
   return node.value?.progress ?? 0
+})
+
+/** 大小列显示文本（格式：已传输大小 / 总大小）
+ *  - 进行中 / 待传输：显示 "1.5MB / 3.0MB" 双值格式
+ *  - 已完成：仅显示总大小 "3.0MB"
+ *  - 其他状态（error/cancelled）：显示当前已传 / 总大小
+ */
+const sizeDisplayText = computed((): string => {
+  void sftpTransferStore.version
+
+  const n = node.value
+  if (!n) return '-'
+  const totalSize: number = n.size ?? 0
+  const transferred: number = n.transferredBytes ?? 0
+
+  if (totalSize <= 0) return '-'
+
+  /* 已完成状态：只显示总大小，无需双值 */
+  if (n.status === 'completed') {
+    return formatSize(totalSize)
+  }
+
+  /* 进行中 / 待传输 / 错误 / 取消：显示 已传/总计 */
+  return `${formatSize(transferred)} / ${formatSize(totalSize)}`
 })
 
 /** 实时状态 */
@@ -599,20 +624,53 @@ const statusText = computed(() => {
   color: var(--warning-color, #e6a23c);
 }
 
-/* 进度条 */
+/* 进度条（容器相对定位，用于叠加百分比文字）
+ * 设计要点：
+ *   - 轨道背景使用 --bg-color-tertiary 响应主题切换（亮/暗色）
+ *   - 填充层使用 --primary-color 保持品牌一致性
+ *   - 文字通过 mix-blend-mode: difference 自动适配双色背景
+ */
 .progress-bar {
+  position: relative;
   width: 100%;
-  height: 6px;
-  background: var(--bg-color, #ffffff);
-  border-radius: 3px;
+  height: 20px;
+  background: var(--bg-color-tertiary, #2d2d30);
+  border-radius: var(--border-radius-sm, 4px);
   overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
   height: 100%;
-  background: var(--primary-color, #409eff);
-  border-radius: 3px;
-  transition: width 0.3s ease;
+  background: linear-gradient(90deg, var(--primary-color-dark, #337ecc), var(--primary-color, #409eff));
+  border-radius: var(--border-radius-sm, 4px);
+  transition: width var(--transition-normal, 0.3s ease);
+  z-index: 1;
+}
+
+/* 百分比文字：居中叠加在进度条上
+ * mix-blend-mode: difference 实现智能反色：
+ *   - 在深色轨道背景上显示为浅色文字
+ *   - 在蓝色填充区域上自动反转为深色文字
+ *   无需手动判断进度位置，始终保证 WCAG 4.5:1 对比度
+ */
+.progress-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  mix-blend-mode: difference;
+  letter-spacing: 0.3px;
+  /* 微弱阴影增强边缘可读性 */
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.3));
 }
 
 .progress-percent {

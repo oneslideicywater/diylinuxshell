@@ -1125,12 +1125,19 @@ export class SFTPService {
           const results = await this!.runConcurrent(dirTasks, SFTPService.MAX_CONCURRENCY)
 
           // 汇聚统计信息并按名称排序插入 children（保持确定性顺序）
-          for (const result of results) {
-            if (!result.node) continue  // 跳过被过滤的系统目录
+          const sortedResults = results
+            .filter(r => r.node !== null)
+            .sort((a, b) => a.node!.name.localeCompare(b.node!.name))
+          for (const result of sortedResults) {
             totalFiles += result.files
             totalBytes += result.bytes
-            currentNode.children?.push(result.node)
+            currentNode.children?.push(result.node!)
           }
+        }
+
+        // 最终排序：文件和目录混合后统一按名称排序（保证确定性顺序）
+        if (currentNode.children && currentNode.children.length > 1) {
+          currentNode.children.sort((a, b) => a.name.localeCompare(b.name))
         }
 
         // 更新当前节点的统计信息
@@ -1356,6 +1363,11 @@ export class SFTPService {
             totalBytes += result.bytes
             currentNode.children?.push(result.node)
           }
+        }
+
+        // 最终排序：文件和目录混合后统一按名称排序（保证确定性顺序）
+        if (currentNode.children && currentNode.children.length > 1) {
+          currentNode.children.sort((a, b) => a.name.localeCompare(b.name))
         }
 
         // 更新当前节点的统计信息
