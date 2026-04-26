@@ -43,6 +43,9 @@ export class SFTPService {
   private sftpHandle: any = null
   private connected: boolean = false
   private uploadCancelled: boolean = false
+  
+  /** 并发传输的最大并行数（可配置，默认5） */
+  private static readonly MAX_CONCURRENCY: number = 5
 
   constructor() {
     this.client = new Client()
@@ -226,7 +229,18 @@ export class SFTPService {
 
           // 创建本地文件
           const writeStream = fs.createWriteStream(localPath)
-          const buffer = Buffer.alloc(32 * 1024) // 32KB buffer
+          
+          // ── 优化 P1：增大下载缓冲区（32KB → 256KB）────────────────────
+          // 原因：
+          //   - 32KB 在现代高带宽网络（100Mbps+）下太小
+          //   - 导致频繁的 sftpHandle.read 回调调用，CPU 浪费在调度上
+          //   - 无法充分利用网络带宽，小文件传输效率低
+          // 
+          // 为什么选 256KB 而不是更大（如 1MB）：
+          //   - SFTP 协议本身有包大小限制（通常 32KB-64KB）
+          //   - 过大的 buffer 会增加内存占用，对大文件场景不友好
+          //   - 256KB 是带宽利用率和内存占用的平衡点
+          const buffer = Buffer.alloc(256 * 1024) // 256KB buffer（原 32KB）
 
           const readChunk = () => {
             this.sftpHandle.read(
@@ -307,7 +321,23 @@ export class SFTPService {
   }
 
   /**
-   * 递归下载文件夹
+   * 递归下载文件夹（并发版本）
+   * 
+   * 优化说明（解决 P0 问题）：
+   *   - 原实现：for 循环 + await，文件完全串行传输
+   *   - 新实现：使用 runConcurrent 并发池，最多同时传输 5 个文件
+   *   - 性能提升：假设 100 个小文件（每个 1MB），RTT=50ms
+   *     串行：100 × (50ms + 传输时间) ≈ 5秒+ 纯等待开销
+   *     并发：100/5 × (50ms + 传输时间) ≈ 1秒+ 等待开销（5倍提升）
+   * 
+   * 为什么目录也要递归进入：
+   *   - 目录本身不传输数据，但需要先创建本地目录结构
+   *   - 子目录的文件可以与兄弟目录的文件并发执行
+   * 
+   * 进度回调机制保持不变：
+   *   - 文件夹本身不上报进度
+   *   - 叶子节点（文件）逐个触发 onProgress 回调
+   *   - 前端根据 taskId + node.id 聚合进度
    */
   async downloadFolder(
     taskId: string,
@@ -320,6 +350,7 @@ export class SFTPService {
 
     const localPath = node.localPath!
 
+    // 创建本地目录（必须同步完成，否则子文件写入可能失败）
     if (!fs.existsSync(localPath)) {
       fs.mkdirSync(localPath, { recursive: true })
     }
@@ -328,17 +359,24 @@ export class SFTPService {
       return
     }
 
-    // ── 遍历子节点：将同一 onProgress 回调透传给子文件/子文件夹 ─────
-    // 文件夹本身不上报进度，进度由叶子节点（文件）逐个触发回调后前端聚合
-    // ── 遍历子节点：将同一 onProgress 回调透传给子文件/子文件夹 ─────
-    // 与 downloadFolder 对称设计：文件夹不上报进度，叶子文件逐个触发
-    for (const child of node.children) {
-      if (child.isDirectory) {
-        await this.downloadFolder(taskId, child, onProgress)
-      } else {
-        await this.downloadFile(taskId, child, onProgress)
+    // ── 构建任务数组：将所有子节点的传输任务封装为函数 ────────────
+    // 使用函数包裹是为了延迟执行（runConcurrent 内部按需调用）
+    const tasks: (() => Promise<void>)[] = node.children.map((child) => {
+      return async () => {
+        if (child.isDirectory) {
+          // 目录：递归进入（内部也会并发处理其子节点）
+          await this.downloadFolder(taskId, child, onProgress)
+        } else {
+          // 文件：直接下载（单个文件的 chunk 仍然是串行的）
+          await this.downloadFile(taskId, child, onProgress)
+        }
       }
-    }
+    })
+
+    // ── 并发执行所有子节点任务（最大并行数 = MAX_CONCURRENCY=5）────
+    // runConcurrent 会自动控制并发数，避免同时打开过多 SFTP 连接
+    // 任一任务失败会立即 reject（与原串行行为的错误传播一致）
+    await this.runConcurrent(tasks)
   }
 
   /**
@@ -371,6 +409,54 @@ export class SFTPService {
     const now = Date.now()
     const timeDiff = (now - lastUpdateTime) / 1000
     return timeDiff > 0 ? (transferredBytes - lastTransferredBytes) / timeDiff : 0
+  }
+
+  /**
+   * 并发池执行器（Promise Pool）
+   * 
+   * 设计说明：
+   *   - 解决 P0 问题：将串行 await 改为受控并发执行
+   *   - 核心原理：维护一个运行队列，最多同时运行 N 个任务
+   *   - 当某个任务完成时，自动从等待队列取出下一个任务启动
+   *   - 相比 Promise.all() 的优势：不会一次性启动所有任务导致内存/连接压力过大
+   * 
+   * 时间线对比（3个文件，并发数=2）：
+   *   串行：[文件1完成] → [文件2完成] → [文件3完成]  总耗时：T1+T2+T3
+   *   并发：[文件1][文件2] → [文件3]                    总耗时：max(T1,T2) + T3
+   * 
+   * @param tasks - 任务数组（返回 Promise 的函数）
+   * @param concurrency - 最大并发数（默认使用 MAX_CONCURRENCY=5）
+   * @returns 所有任务完成的 Promise（任一失败则 reject）
+   */
+  private async runConcurrent<T>(
+    tasks: (() => Promise<T>)[],
+    concurrency: number = SFTPService.MAX_CONCURRENCY
+  ): Promise<T[]> {
+    const results: T[] = []
+    const executing: Set<Promise<void>> = new Set()
+
+    for (const task of tasks) {
+      // 创建任务包装器：执行任务并收集结果
+      const promise = task().then(result => {
+        results.push(result)
+        // 任务完成后从 executing 集合中移除（通过 finally 实现）
+      })
+
+      // 将当前任务加入执行集合
+      const promiseWrapper = promise.then(() => {
+        executing.delete(promiseWrapper)
+      })
+      executing.add(promiseWrapper)
+
+      // 达到并发上限时，等待任意一个任务完成后再继续
+      if (executing.size >= concurrency) {
+        await Promise.race(executing)
+      }
+    }
+
+    // 等待所有剩余任务完成
+    await Promise.all(executing)
+    return results
   }
 
   /**
@@ -541,7 +627,16 @@ export class SFTPService {
   }
 
   /**
-   * 递归上传目录
+   * 递归上传目录（并发版本）
+   * 
+   * 优化说明（解决 P0 问题）：
+   *   - 原实现：for 循环 + await，文件完全串行上传
+   *   - 新实现：使用 runConcurrent 并发池，最多同时上传 5 个文件
+   *   - 与 downloadFolder 对称设计，保持一致的并发策略
+   * 
+   * 取消机制保持不变：
+   *   - 每个任务开始前检查 this.uploadCancelled 标志
+   *   - uploadFile 内部也会检查该标志（细粒度取消）
    */
   private async uploadDirectoryRecursive(
     taskId: string,
@@ -554,6 +649,7 @@ export class SFTPService {
 
     const remoteDir = node.remotePath!
 
+    // 创建远程目录（必须同步完成，否则子文件上传可能失败）
     try {
       await this.mkdir(remoteDir)
     } catch (error: any) {
@@ -564,17 +660,26 @@ export class SFTPService {
       return
     }
 
-    for (const child of node.children) {
-      if (this.uploadCancelled) {
-        throw new Error('Upload cancelled')
-      }
+    // ── 构建任务数组：将所有子节点的上传任务封装为函数 ────────────
+    const tasks: (() => Promise<void>)[] = node.children.map((child) => {
+      return async () => {
+        // 检查是否被取消（在任务开始前）
+        if (this.uploadCancelled) {
+          throw new Error('Upload cancelled')
+        }
 
-      if (child.isDirectory) {
-        await this.uploadDirectoryRecursive(taskId, child, onProgress)
-      } else {
-        await this.uploadFile(taskId, child, onProgress)
+        if (child.isDirectory) {
+          // 目录：递归进入（内部也会并发处理其子节点）
+          await this.uploadDirectoryRecursive(taskId, child, onProgress)
+        } else {
+          // 文件：直接上传
+          await this.uploadFile(taskId, child, onProgress)
+        }
       }
-    }
+    })
+
+    // ── 并发执行所有子节点任务 ─────────────────────────────────────
+    await this.runConcurrent(tasks)
   }
 
   /**
@@ -610,13 +715,20 @@ export class SFTPService {
   }
 
   /**
-   * 删除远程文件或目录（递归）
+   * 删除远程文件或目录（递归，并发版本）
    * 
-   * 设计对齐 uploadFile/downloadFile 模式：
-   *   - 接收 TransferNode 而非 remotePath 字符串
-   *   - 回调签名统一为 (speed, transferredBytes, taskId, node)
-   *   - 文件：删除前 0%，删除完成 100%
-   *   - 目录：删除前 0%，递归删完子项后 100%
+   * 优化说明（解决 P2 问题）：
+   *   - 原实现：for 循环 + await，子项完全串行删除
+   *   - 新实现：使用 runConcurrent 并发池，最多同时删除 5 个子项
+   *   - 性能提升：假设 100 个文件，RTT=50ms
+   *     串行：100 × 50ms = 5秒 纯网络等待
+   *     并发：100/5 × 50ms = 1秒 网络等待（5倍提升）
+   * 
+   * 设计约束：
+   *   - 必须等所有子项删除完成后才能 rmdir（否则目录非空会失败）
+   *   - 进度上报调整为：开始0% → 完成100%（不再逐个上报中间进度）
+   *     原因：并发执行时，完成顺序不确定，按顺序上报中间进度无意义
+   *   - 错误传播机制保持不变：任一子项失败立即 reject
    */
   async deleteFile(
     taskId: string,
@@ -643,7 +755,7 @@ export class SFTPService {
         }
 
         if (stats.isDirectory()) {
-          // ── 目录：递归删除子项，完成后上报 100% ───────────────────
+          // ── 目录：并发删除子项，完成后上报 100% ───────────────────
           this.sftpHandle.readdir(remotePath, async (err: Error, entries: any[]) => {
             if (err) {
               console.error('SFTPService.deleteFile readdir 失败:', { remotePath, error: err.message })
@@ -653,73 +765,66 @@ export class SFTPService {
 
             // 过滤有效子项（排除 . 和 ..）
             const validEntries = entries.filter(e => e.filename !== '.' && e.filename !== '..')
-            const totalChildren = validEntries.length
 
-            // 删除所有子文件和子目录（通过 node.children 匹配子节点）
-            // 每完成一个子项，上报父节点中间进度（避免长时间卡在 0%）
-            for (let i = 0; i < validEntries.length; i++) {
-              const entry = validEntries[i]
-              
-              // 使用 path.posix.join 拼接远程路径（SFTP 服务器是 Linux，分隔符固定为 /）
-              // 注意：不能用 path.join！Windows 下 path.join 会输出 \ 分隔符，导致远程路径错误
-              // 例：path.posix.join('/tmp', 'file') → '/tmp/file' ✅
-              //     path.join('/tmp', 'file') (Windows) → '\tmp\file' ❌
-              const childPath = path.posix.join(remotePath, entry.filename)
-
-              // 在 TransferNode 树中查找匹配的子节点（扫描阶段已构建好的树结构）
-              const childNode = node.children?.find(c => c.remotePath === childPath)
-              
-              if (childNode) {
-                // ── 正常路径：子节点在树中找到了 ──────────────────────
-                // childNode 包含完整的 TransferNode 信息（id、size、name 等）
-                // 调用 deleteFile 时能正确传递 nodeId 给进度回调，
-                // 前端可以精确匹配到对应节点并更新其进度条
-                try {
-                  await this.deleteFile(taskId, childNode, onProgress)
-                } catch (error: any) {
-                  console.error('SFTPService.deleteFile 删除子项失败:', { childPath, error: error.message })
-                  reject(error)
-                  return
+            if (validEntries.length === 0) {
+              // ── 空目录：直接 rmdir ─────────────────────────────────
+              this.sftpHandle.rmdir(remotePath, (err: Error) => {
+                if (err) {
+                  console.error('SFTPService.deleteFile rmdir 失败:', { remotePath, error: err.message })
+                  reject(err)
+                } else {
+                  console.log('SFTPService.deleteFile 目录删除成功:', { remotePath})
+                  if (onProgress) {
+                    onProgress(0, node.size || 0, taskId, node)
+                  }
+                  resolve()
                 }
-              } else {
-                // ── 异常回退路径：子节点不在树中 ──────────────────────
-                // 触发场景：
-                //   1. 扫描目录树后，其他进程新建了文件/文件夹
-                //   2. 扫描时因权限不足跳过了某些隐藏文件
-                //   3. 符号链接等特殊文件类型未被收录到树中
-                // 此时没有对应的 TransferNode 对象，只能用纯路径字符串删除
-                // 进度会关联到 parentNode（父节点），而非具体的子节点
-                try {
-                  await this.deleteFileByPath(taskId, childPath, node, onProgress)
-                } catch (error: any) {
-                  console.error('SFTPService.deleteFile 删除子项失败(回退):', { childPath, error: error.message })
-                  reject(error)
-                  return
-                }
-              }
-
-              // 每删除完一个子项，上报父节点中间进度
-              // 进度 = (已完成数 / 总数) * 节点总大小，让父文件夹逐步推进而非卡在0%
-              if (onProgress && totalChildren > 0 && node.size) {
-                const completedRatio = (i + 1) / totalChildren
-                const intermediateBytes = Math.floor(node.size * completedRatio)
-                onProgress(0, intermediateBytes, taskId, node)
-              }
+              })
+              return
             }
 
-            // ── 所有子项删除完毕：rmdir 空目录 + 上报 100% ─────────────
-            this.sftpHandle.rmdir(remotePath, (err: Error) => {
-              if (err) {
-                console.error('SFTPService.deleteFile rmdir 失败:', { remotePath, error: err.message })
-                reject(err)
-              } else {
-                console.log('SFTPService.deleteFile 目录删除成功:', { remotePath})
-                if (onProgress) {
-                  onProgress(0, node.size || 0, taskId, node)
+            // ── 构建任务数组：将所有子项的删除任务封装为函数 ──────────
+            const tasks: (() => Promise<void>)[] = validEntries.map((entry) => {
+              return async () => {
+                // 使用 path.posix.join 拼接远程路径（SFTP 服务器是 Linux，分隔符固定为 /）
+                const childPath = path.posix.join(remotePath, entry.filename)
+
+                // 在 TransferNode 树中查找匹配的子节点（扫描阶段已构建好的树结构）
+                const childNode = node.children?.find(c => c.remotePath === childPath)
+                
+                if (childNode) {
+                  // ── 正常路径：子节点在树中找到了 ──────────────────────
+                  await this.deleteFile(taskId, childNode, onProgress)
+                } else {
+                  // ── 异常回退路径：子节点不在树中 ──────────────────────
+                  await this.deleteFileByPath(taskId, childPath, node, onProgress)
                 }
-                resolve()
               }
             })
+
+            try {
+              // ── 并发执行所有子项删除任务 ─────────────────────────────
+              // runConcurrent 会自动控制并发数（默认5），避免服务器压力过大
+              // 任一任务失败会抛出异常（与原串行行为的错误传播一致）
+              await this.runConcurrent(tasks)
+
+              // ── 所有子项删除完毕：rmdir 空目录 + 上报 100% ─────────────
+              this.sftpHandle.rmdir(remotePath, (err: Error) => {
+                if (err) {
+                  console.error('SFTPService.deleteFile rmdir 失败:', { remotePath, error: err.message })
+                  reject(err)
+                } else {
+                  console.log('SFTPService.deleteFile 目录删除成功:', { remotePath})
+                  if (onProgress) {
+                    onProgress(0, node.size || 0, taskId, node)
+                  }
+                  resolve()
+                }
+              })
+            } catch (error: any) {
+              console.error('SFTPService.deleteFile 并发删除子项失败:', { remotePath, error: error.message })
+              reject(error)
+            }
           })
         } else {
           // ── 文件：unlink + 上报 100% ────────────────────────────────
