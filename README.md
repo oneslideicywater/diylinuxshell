@@ -284,3 +284,17 @@ npm run test:e2e:ui
 ## License
 
 本项目采用 [Apache 2.0 License](LICENSE) 开源协议。
+
+## 📱 关注作者
+
+如果你觉得这个项目对你有帮助，欢迎扫码关注我的微信公众号，获取最新开发动态和技术分享：
+
+![微信公众号二维码](docs/images/weixin-public-qrcode.jpg)
+
+> 💬 公众号会不定期分享 **Electron 开发实战**、**运维技术**、**云原生** 等干货内容，欢迎一起交流学习！
+
+---
+
+<p align="center">
+  <strong>⭐ 如果这个项目对你有帮助，请给个 Star 支持一下！</strong>
+</p>

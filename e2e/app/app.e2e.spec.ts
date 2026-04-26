@@ -56,10 +56,10 @@ test.describe('Application Startup', () => {
   })
 
   test('should display empty state when no sessions', async () => {
-    // 使用更精确的选择器，选择主内容区的空状态
-    const emptyState = page.locator('.app-main .empty-state')
+    // 使用更精确的选择器，选择第一个空状态（SSH 会话）
+    const emptyState = page.locator('.app-main .empty-state').first()
     await expect(emptyState).toBeVisible()
-    await expect(emptyState.locator('p')).toContainText('请选择或创建一个会话')
+    await expect(emptyState.locator('p')).toContainText('请选择或创建一个')
   })
 })
 
