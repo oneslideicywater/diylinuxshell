@@ -609,16 +609,29 @@ export class SFTPService {
               return
             }
 
+            // 过滤有效子项（排除 . 和 ..）
+            const validEntries = entries.filter(e => e.filename !== '.' && e.filename !== '..')
+            const totalChildren = validEntries.length
+
             // 删除所有子文件和子目录（通过 node.children 匹配子节点）
-            for (const entry of entries) {
-              if (entry.filename === '.' || entry.filename === '..') {
-                continue
-              }
+            // 每完成一个子项，上报父节点中间进度（避免长时间卡在 0%）
+            for (let i = 0; i < validEntries.length; i++) {
+              const entry = validEntries[i]
+              
+              // 使用 path.posix.join 拼接远程路径（SFTP 服务器是 Linux，分隔符固定为 /）
+              // 注意：不能用 path.join！Windows 下 path.join 会输出 \ 分隔符，导致远程路径错误
+              // 例：path.posix.join('/tmp', 'file') → '/tmp/file' ✅
+              //     path.join('/tmp', 'file') (Windows) → '\tmp\file' ❌
               const childPath = path.posix.join(remotePath, entry.filename)
 
-              // 从 node.children 中查找匹配的子节点
+              // 在 TransferNode 树中查找匹配的子节点（扫描阶段已构建好的树结构）
               const childNode = node.children?.find(c => c.remotePath === childPath)
+              
               if (childNode) {
+                // ── 正常路径：子节点在树中找到了 ──────────────────────
+                // childNode 包含完整的 TransferNode 信息（id、size、name 等）
+                // 调用 deleteFile 时能正确传递 nodeId 给进度回调，
+                // 前端可以精确匹配到对应节点并更新其进度条
                 try {
                   await this.deleteFile(taskId, childNode, onProgress)
                 } catch (error: any) {
@@ -627,7 +640,13 @@ export class SFTPService {
                   return
                 }
               } else {
-                // 子节点不在 TransferNode 树中（异常情况），回退到路径删除
+                // ── 异常回退路径：子节点不在树中 ──────────────────────
+                // 触发场景：
+                //   1. 扫描目录树后，其他进程新建了文件/文件夹
+                //   2. 扫描时因权限不足跳过了某些隐藏文件
+                //   3. 符号链接等特殊文件类型未被收录到树中
+                // 此时没有对应的 TransferNode 对象，只能用纯路径字符串删除
+                // 进度会关联到 parentNode（父节点），而非具体的子节点
                 try {
                   await this.deleteFileByPath(taskId, childPath, node, onProgress)
                 } catch (error: any) {
@@ -635,6 +654,14 @@ export class SFTPService {
                   reject(error)
                   return
                 }
+              }
+
+              // 每删除完一个子项，上报父节点中间进度
+              // 进度 = (已完成数 / 总数) * 节点总大小，让父文件夹逐步推进而非卡在0%
+              if (onProgress && totalChildren > 0 && node.size) {
+                const completedRatio = (i + 1) / totalChildren
+                const intermediateBytes = Math.floor(node.size * completedRatio)
+                onProgress(0, intermediateBytes, taskId, node)
               }
             }
 
