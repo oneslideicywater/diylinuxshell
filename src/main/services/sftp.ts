@@ -993,126 +993,155 @@ export class SFTPService {
       children: []
     }
 
-    // 递归扫描函数（内部辅助函数）
+    // 递归扫描函数（内部辅助函数，并发版本）
+      // 设计思路：分类后并发（与 scanRemoteDir 一致）
       async function scanDir(
+        this: SFTPService,
         currentPath: string,
         currentNode: TransferNode,
         currentRemotePath: string
       ): Promise<{ files: number; bytes: number }> {
-        let files = 0
-        let bytes = 0
+        let totalFiles = 0
+        let totalBytes = 0
 
-        // 读取目录内容
+        // 读取目录内容（必须先获取完整列表才能分类）
         const entries = await fs.promises.readdir(currentPath, { withFileTypes: true })
 
+        // 分类：分离文件和目录条目
+        const fileEntries: typeof entries = []
+        const dirEntries: typeof entries = []
+
         for (const entry of entries) {
-          // 跳过 . 和 .. 目录项
           if (entry.name === '.' || entry.name === '..') {
             continue
           }
+          if (entry.isDirectory()) {
+            dirEntries.push(entry)
+          } else if (entry.isFile()) {
+            fileEntries.push(entry)
+          }
+        }
 
-          // 使用 path.join 拼接完整路径（屏蔽系统差异）
+        // 处理文件：纯内存操作，无需并发
+        for (const entry of fileEntries) {
           const fullPath = path.join(currentPath, entry.name)
           const fullRemotePath = path.posix.join(currentRemotePath, entry.name)
 
-          if (entry.isDirectory()) {
-            // 跳过 Windows 系统受保护目录
-            if (SFTPService.SYSTEM_PROTECTED_DIRS.includes(entry.name)) {
-              console.warn(`[scanLocalTree] 跳过系统受保护目录: ${entry.name}`)
-              continue
+          try {
+            const fileStat = await fs.promises.stat(fullPath)
+
+            const fileNode: TransferNode = {
+              id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              name: entry.name,
+              isDirectory: false,
+              type: 'upload',
+              status: 'pending',
+              progress: 0,
+              size: fileStat.size,
+              localPath: path.normalize(fullPath),
+              remotePath: fullRemotePath,
+              speed: 0,
+              transferredBytes: 0,
+              parentId: currentNode.id
             }
 
-            try {
-              // 创建子目录节点（设置 parentId 建立父子关系）
-              const subNode: TransferNode = {
-                id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                name: entry.name,
-                isDirectory: true,
-                type: 'upload',
-                status: 'pending',
-                progress: 0,
-                size: 0,
-                localPath: path.normalize(fullPath),
-                remotePath: fullRemotePath,
-                speed: 0,
-                transferredBytes: 0,
-                parentId: currentNode.id,
-                children: []
+            currentNode.children?.push(fileNode)
+            totalFiles++
+            totalBytes += fileStat.size
+
+          } catch (fileError: any) {
+            console.warn(`[scanLocalTree] 无法读取文件 ${fullPath}，已跳过:`, fileError.message)
+          }
+        }
+
+        // 处理目录：并发扫描（核心优化点）
+        if (dirEntries.length > 0) {
+          // 构建延迟执行任务数组：每个任务负责扫描一个子目录
+          const dirTasks: (() => Promise<{ files: number; bytes: number; node: TransferNode }>)[] =
+            dirEntries.map((entry) => {
+              return async () => {
+                const fullPath = path.join(currentPath, entry.name)
+                const fullRemotePath = path.posix.join(currentRemotePath, entry.name)
+
+                // 跳过 Windows 系统受保护目录
+                if (SFTPService.SYSTEM_PROTECTED_DIRS.includes(entry.name)) {
+                  console.warn(`[scanLocalTree] 跳过系统受保护目录: ${entry.name}`)
+                  return { files: 0, bytes: 0, node: null as unknown as TransferNode }
+                }
+
+                // 创建子目录节点
+                const subNode: TransferNode = {
+                  id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  name: entry.name,
+                  isDirectory: true,
+                  type: 'upload',
+                  status: 'pending',
+                  progress: 0,
+                  size: 0,
+                  localPath: path.normalize(fullPath),
+                  remotePath: fullRemotePath,
+                  speed: 0,
+                  transferredBytes: 0,
+                  parentId: currentNode.id,
+                  children: []
+                }
+
+                try {
+                  // 递归并发扫描子目录（内部也会对其子目录并发处理）
+                  const subResult = await scanDir.call(this, fullPath, subNode, fullRemotePath)
+
+                  // 更新子节点统计信息
+                  subNode.totalFiles = subResult.files
+                  subNode.size = subResult.bytes
+
+                  return { ...subResult, node: subNode }
+
+                } catch (subError: any) {
+                  console.warn(`[scanLocalTree] 无法访问子目录 ${fullPath}，已跳过:`, subError.message)
+
+                  // 扫描失败：创建错误节点，返回空统计
+                  const errorNode: TransferNode = {
+                    id: `node-error-${Date.now()}`,
+                    name: entry.name,
+                    isDirectory: true,
+                    type: 'upload',
+                    status: 'error',
+                    progress: 0,
+                    size: 0,
+                    localPath: path.normalize(fullPath),
+                    remotePath: fullRemotePath,
+                    speed: 0,
+                    transferredBytes: 0,
+                    parentId: currentNode.id,
+                    error: `无法访问: ${subError.message}`
+                  }
+
+                  return { files: 0, bytes: 0, node: errorNode }
+                }
               }
+            })
 
-              // 递归扫描子目录
-              const subResult = await scanDir(fullPath, subNode, fullRemotePath)
+          // 并发执行所有目录扫描任务
+          const results = await this!.runConcurrent(dirTasks, SFTPService.MAX_CONCURRENCY)
 
-              files += subResult.files
-              bytes += subResult.bytes
-
-              // 添加到当前节点的子节点列表
-              currentNode.children?.push(subNode)
-
-            } catch (subError: any) {
-              console.warn(`[scanLocalTree] 无法访问子目录 ${fullPath}，已跳过:`, subError.message)
-
-              // 创建错误节点
-              const errorNode: TransferNode = {
-                id: `node-error-${Date.now()}`,
-                name: entry.name,
-                isDirectory: true,
-                type: 'upload',
-                status: 'error',
-                progress: 0,
-                size: 0,
-                localPath: path.normalize(fullPath),
-                remotePath: fullRemotePath,
-                speed: 0,
-                transferredBytes: 0,
-                parentId: currentNode.id,
-                error: `无法访问: ${subError.message}`
-              }
-
-              currentNode.children?.push(errorNode)
-            }
-
-          } else if (entry.isFile()) {
-            try {
-              // 获取文件大小
-              const fileStat = await fs.promises.stat(fullPath)
-
-              // 创建文件节点（设置 parentId）
-              const fileNode: TransferNode = {
-                id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                name: entry.name,
-                isDirectory: false,
-                type: 'upload',
-                status: 'pending',
-                progress: 0,
-                size: fileStat.size,
-                localPath: path.normalize(fullPath),
-                remotePath: fullRemotePath,
-                speed: 0,
-                transferredBytes: 0,
-                parentId: currentNode.id
-              }
-
-              currentNode.children?.push(fileNode)
-
-              files++
-              bytes += fileStat.size
-
-            } catch (fileError: any) {
-              console.warn(`[scanLocalTree] 无法读取文件 ${fullPath}，已跳过:`, fileError.message)
-            }
+          // 汇聚统计信息并按名称排序插入 children（保持确定性顺序）
+          for (const result of results) {
+            if (!result.node) continue  // 跳过被过滤的系统目录
+            totalFiles += result.files
+            totalBytes += result.bytes
+            currentNode.children?.push(result.node)
           }
         }
 
         // 更新当前节点的统计信息
-        currentNode.totalFiles = files
-        currentNode.size = bytes
+        currentNode.totalFiles = totalFiles
+        currentNode.size = totalBytes
 
-        return { files, bytes }
+        return { files: totalFiles, bytes: totalBytes }
       }
 
-      // 开始递归扫描
-      await scanDir(normalizedFolderPath, rootNode, rootNode.remotePath || '')
+      // 开始递归扫描（绑定 this 上下文以访问 runConcurrent 实例方法）
+      await scanDir.call(this, normalizedFolderPath, rootNode, rootNode.remotePath || '')
 
       console.log(`[scanLocalTree] 扫描完成：${rootNode.totalFiles} 个文件，总大小 ${rootNode.size} 字节`)
 
@@ -1190,109 +1219,150 @@ export class SFTPService {
       children: []
     }
 
-    // 递归扫描函数（内部辅助函数）
+    // 递归扫描函数（内部辅助函数，并发版本）
+      // 设计思路：分类后并发
+      // 1. listDir 获取完整列表（必须串行）
+      // 2. 分离文件（纯内存，直接处理）和目录（需要网络，并发扫描）
+      // 3. 目录使用 runConcurrent 并发递归扫描
+      // 4. 所有子项完成后统一汇聚统计信息
       async function scanRemoteDir(
         this: SFTPService,
         currentRemotePath: string,
         currentNode: TransferNode,
         currentLocalBase: string
       ): Promise<{ files: number; bytes: number }> {
-        let files = 0
-        let bytes = 0
+        let totalFiles = 0
+        let totalBytes = 0
 
-        // 列出远程目录内容（使用实例方法 listDir）
+        // 列出远程目录内容（必须先获取完整列表才能分类）
         const entries = await this!.listDir(currentRemotePath)
+
+        // 分类：分离文件和目录条目
+        const fileEntries: typeof entries = []
+        const dirEntries: typeof entries = []
 
         for (const entry of entries) {
           if (entry.name === '.' || entry.name === '..') {
             continue
           }
+          if (entry.isDirectory) {
+            dirEntries.push(entry)
+          } else {
+            fileEntries.push(entry)
+          }
+        }
 
-          // 构建完整路径（远程使用 /，本地使用 path.join）
+        // 处理文件：纯内存操作（创建节点），无需并发
+        for (const entry of fileEntries) {
           const fullRemotePath = `${currentRemotePath}/${entry.name}`
           const fullLocalPath = path.normalize(path.join(currentLocalBase, entry.name))
 
-          if (entry.isDirectory) {
-            try {
-              // 创建子目录节点（设置 parentId）
-              const subNode: TransferNode = {
-                id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-                name: entry.name,
-                isDirectory: true,
-                type: localBasePath ? 'download' : 'delete',
-                status: 'pending',
-                progress: 0,
-                size: 0,
-                localPath: fullLocalPath,
-                remotePath: fullRemotePath,
-                speed: 0,
-                transferredBytes: 0,
-                parentId: currentNode.id,
-                children: [],
-                totalFiles: 0,
-                completedFiles: 0,
-                expanded: false
+          const fileNode: TransferNode = {
+            id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            name: entry.name,
+            isDirectory: false,
+            type: localBasePath ? 'download' : 'delete',
+            status: 'pending',
+            progress: 0,
+            size: entry.size || 0,
+            localPath: fullLocalPath,
+            remotePath: fullRemotePath,
+            speed: 0,
+            transferredBytes: 0,
+            parentId: currentNode.id
+          }
+
+          currentNode.children?.push(fileNode)
+          totalFiles++
+          totalBytes += entry.size || 0
+        }
+
+        // 处理目录：并发扫描（核心优化点）
+        if (dirEntries.length > 0) {
+          // 构建延迟执行任务数组：每个任务负责扫描一个子目录
+          const dirTasks: (() => Promise<{ files: number; bytes: number; node: TransferNode }>)[] =
+            dirEntries.map((entry) => {
+              return async () => {
+                const fullRemotePath = `${currentRemotePath}/${entry.name}`
+                const fullLocalPath = path.normalize(path.join(currentLocalBase, entry.name))
+
+                // 创建子目录节点
+                const subNode: TransferNode = {
+                  id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  name: entry.name,
+                  isDirectory: true,
+                  type: localBasePath ? 'download' : 'delete',
+                  status: 'pending',
+                  progress: 0,
+                  size: 0,
+                  localPath: fullLocalPath,
+                  remotePath: fullRemotePath,
+                  speed: 0,
+                  transferredBytes: 0,
+                  parentId: currentNode.id,
+                  children: [],
+                  totalFiles: 0,
+                  completedFiles: 0,
+                  expanded: false
+                }
+
+                try {
+                  // 递归并发扫描子目录（内部也会对其子目录并发处理）
+                  const subResult = await scanRemoteDir.call(
+                    this, fullRemotePath, subNode, fullLocalPath
+                  )
+
+                  // 更新子节点统计信息
+                  subNode.totalFiles = subResult.files
+                  subNode.size = subResult.bytes
+
+                  return { ...subResult, node: subNode }
+
+                } catch (subError: any) {
+                  console.warn(`[scanRemoteTree] 无法访问远程子目录 ${fullRemotePath}，已跳过:`, subError.message)
+
+                  // 扫描失败：创建错误节点，返回空统计
+                  const errorNode: TransferNode = {
+                    id: `node-error-${Date.now()}`,
+                    name: entry.name,
+                    isDirectory: true,
+                    type: localBasePath ? 'download' : 'delete',
+                    status: 'error',
+                    progress: 0,
+                    size: 0,
+                    localPath: fullLocalPath,
+                    remotePath: fullRemotePath,
+                    speed: 0,
+                    transferredBytes: 0,
+                    parentId: currentNode.id,
+                    error: `无法访问目录: ${subError.message}`,
+                    children: []
+                  }
+
+                  return { files: 0, bytes: 0, node: errorNode }
+                }
               }
+            })
 
-              // 递归扫描子目录
-              const subResult = await scanRemoteDir.call(this, fullRemotePath, subNode, fullLocalPath)
+          // 并发执行所有目录扫描任务，复用已有的 runConcurrent 方法
+          const results = await this!.runConcurrent(dirTasks, SFTPService.MAX_CONCURRENCY)
 
-              files += subResult.files
-              bytes += subResult.bytes
-
-              currentNode.children?.push(subNode)
-
-            } catch (subError: any) {
-              console.warn(`[scanRemoteTree] 无法访问远程子目录 ${fullRemotePath}，已跳过:`, subError.message)
-
-              const errorNode: TransferNode = {
-                id: `node-error-${Date.now()}`,
-                name: entry.name,
-                isDirectory: true,
-                type: localBasePath ? 'download' : 'delete',
-                status: 'error',
-                progress: 0,
-                size: 0,
-                localPath: fullLocalPath,
-                remotePath: fullRemotePath,
-                speed: 0,
-                transferredBytes: 0,
-                parentId: currentNode.id,
-                error: `无法访问目录: ${subError.message}`,
-                children: []
-              }
-
-              currentNode.children?.push(errorNode)
-            }
-          } else {
-            // 创建文件节点（设置 parentId）
-            const fileNode: TransferNode = {
-              id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              name: entry.name,
-              isDirectory: false,
-              type: localBasePath ? 'download' : 'delete',
-              status: 'pending',
-              progress: 0,
-              size: entry.size || 0,
-              localPath: fullLocalPath,
-              remotePath: fullRemotePath,
-              speed: 0,
-              transferredBytes: 0,
-              parentId: currentNode.id
-            }
-
-            currentNode.children?.push(fileNode)
-
-            files++
-            bytes += entry.size || 0
+          // 汇聚统计信息并按名称排序插入 children（保持确定性顺序）
+          const sortedResults = results.sort((a, b) =>
+            a.node.name.localeCompare(b.node.name)
+          )
+          for (const result of sortedResults) {
+            totalFiles += result.files
+            totalBytes += result.bytes
+            currentNode.children?.push(result.node)
           }
         }
 
         // 更新当前节点的统计信息
-        currentNode.totalFiles = files
-        currentNode.size = bytes
+        currentNode.totalFiles = totalFiles
+        currentNode.size = totalBytes
 
-        return { files, bytes }
+        return { files: totalFiles, bytes: totalBytes }
       }
 
       // 开始递归扫描（绑定 this 上下文）
